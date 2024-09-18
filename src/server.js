@@ -1,13 +1,14 @@
 // Import the framework and instantiate it
 import Fastify from "fastify";
+// Handler imports
+import welcomeHandler from "./handlers/welcome";
+
 const fastify = Fastify({
   logger: true,
 });
 
 // Declare a route
-fastify.get("/", async function handler(request, reply) {
-  return { hello: "world" };
-});
+fastify.get("/", welcomeHandler);
 
 // Run the server!
 try {
