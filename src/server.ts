@@ -8,6 +8,11 @@ const fastify = Fastify({
   logger: true,
 });
 
+// Add content type parsers
+fastify.addContentTypeParser('application/pdf', { parseAs: 'buffer' }, (req, body, done) => {
+  done(null, body);
+});
+
 // Routes
 fastify.get("/", welcomeHandler);
 fastify.post("/summarize", summarizeHandler);
