@@ -2,13 +2,15 @@
 import Fastify from "fastify";
 // Handler imports
 import welcomeHandler from "./handlers/welcome";
+import summarizeHandler from "./handlers/summarize";
 
 const fastify = Fastify({
   logger: true,
 });
 
-// Declare a route
+// Routes
 fastify.get("/", welcomeHandler);
+fastify.post("/summarize", summarizeHandler);
 
 // Run the server!
 try {

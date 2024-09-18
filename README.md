@@ -13,4 +13,12 @@ The server will listen on port `4242`.
 
 ## Handlers
 
-Place your handlers in the `src/handlers` directory
+Place API route handlers in the `src/handlers` directory, each handler in its own file.
+
+## Architecture
+
+We are using `S3`
+
+- to store the user uploaded files
+- to store the AI generated audio files
+- to store the user interaction memory
