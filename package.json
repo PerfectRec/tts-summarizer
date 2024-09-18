@@ -1,12 +1,15 @@
 {
   "type": "module",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.3",
+    "@mendable/firecrawl-js": "^1.4.5",
     "@types/aws-sdk": "^2.7.0",
     "@types/dotenv": "^8.2.0",
     "@types/node": "^22.5.5",
     "aws-sdk": "^2.1691.0",
     "dotenv": "^16.4.5",
     "fastify": "^5.0.0",
+    "openai": "^4.62.1",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2"
   },
