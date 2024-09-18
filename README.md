@@ -21,8 +21,12 @@ Place API route handlers in the `src/handlers` directory, each handler in its ow
 
 ## Architecture
 
-We are using `S3`
+We are using
 
-- to store the user uploaded files
-- to store the AI generated audio files
-- to store the user interaction memory
+- `fastify` as our primary Node framework.
+- `AWS S3`
+  - to store the user uploaded files.
+  - to store the AI generated audio files.
+  - to store the user interaction memory.
+- `AWS Polly` to convert generated text to audio.
+- `Anthropic` to generate the summries.
