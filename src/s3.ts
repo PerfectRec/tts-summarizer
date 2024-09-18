@@ -9,9 +9,17 @@ const s3 = new AWS.S3({
   region: process.env.AWS_REGION,
 });
 
-export const uploadFile = async (fileContent, fileName) => {
+const bucketName = process.env.AWS_BUCKET_NAME;
+if (!bucketName) {
+  throw new Error("AWS_BUCKET_NAME is not defined in environment variables");
+}
+
+export const uploadFile = async (
+  fileContent: Buffer,
+  fileName: string
+): Promise<string> => {
   const params = {
-    Bucket: process.env.AWS_BUCKET_NAME,
+    Bucket: bucketName,
     Key: fileName,
     Body: fileContent,
   };
@@ -21,7 +29,8 @@ export const uploadFile = async (fileContent, fileName) => {
     console.log(`File uploaded successfully. ${data.Location}`);
     return data.Location;
   } catch (err) {
-    console.error(`Error uploading file. ${err.message}`);
-    throw err;
+    const error = err as Error;
+    console.error(`Error uploading file. ${error.message}`);
+    throw error;
   }
 };
