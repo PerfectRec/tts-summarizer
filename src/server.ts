@@ -11,6 +11,9 @@ const fastify = Fastify({
 fastify.addContentTypeParser('application/pdf', { parseAs: 'buffer' }, (req, body, done) => {
   done(null, body);
 });
+fastify.addContentTypeParser('application/epub+zip', { parseAs: 'buffer' }, (req, body, done) => {
+  done(null, body);
+});
 
 // Routes
 fastify.post("/summarize", summarizeHandler);

@@ -17,5 +17,7 @@ export default async function handler(
   const { summarizationMethod } = request.query;
   const file = request.body;
 
+  console.log(file)
+
   return { message: "Processed file" };
 }
