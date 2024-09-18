@@ -17,5 +17,5 @@ export default async function handler(
   const { summarizationMethod } = request.query;
   const file = request.body;
 
-  return { message: "Welcome to the Audio Summarizer + TTS API" };
+  return { message: "Processed file" };
 }

@@ -7,7 +7,12 @@
     "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": "./src", // Set base URL to /src
+    "paths": {
+      "@aws/*": ["aws/*"], // Alias for /src/aws
+      "@handlers/*": ["handlers/*"] // Alias for /src/handlers
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules"]
