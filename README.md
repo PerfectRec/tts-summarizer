@@ -9,6 +9,10 @@ To start the server, run:
 
 `yarn start`
 
+To start the server in dev mode with HMR:
+
+`yarn dev`
+
 The server will listen on port `4242`.
 
 ## Handlers
