@@ -1,25 +1,23 @@
+# TTS Summarizer
+
 ## Requirements
 
 - Node.js version 20 or higher
-- Install packages with `yarn`
 
-## Starting the Server
+## Getting Started
 
-To start the server, run:
-
-`yarn start`
-
-To start the server in dev mode with HMR:
-
-`yarn dev`
+- Install dependencies with `yarn`
+- To start the server, run `yarn start`
+- To start the server in dev mode with HMR, run `yarn dev`
 
 The server will listen on port `4242`.
 
-## Handlers
+## Folder Structure
 
-Place API route handlers in the `src/handlers` directory, each handler in its own file.
+- Place API route handlers in the `src/handlers` directory, each handler in its own file.
+- AWS client interfaces are located in the `src/aws` directory.
 
-## Architecture
+## Dependencies
 
 We are using
 
