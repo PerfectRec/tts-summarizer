@@ -27,7 +27,7 @@ We are using
   - to store the AI generated audio files.
   - to store the user interaction memory.
 - `AWS Polly` to convert generated text to audio.
-- `Anthropic` to generate the summries.
+- `Anthropic` models to generate the summries.
 - `LlamaParse` to parse complex file types like `pdf` and `epub`
 
 ## Summarization Modes
