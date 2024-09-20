@@ -29,3 +29,11 @@ We are using
 - `AWS Polly` to convert generated text to audio.
 - `Anthropic` to generate the summries.
 - `LlamaParse` to parse complex file types like `pdf` and `epub`
+
+## Summarization Modes
+
+- `Contextual Abstract`: Generates a better and context aware abstract or blurb for the content
+- `Two-page`: Generates a standard two page summary of the content
+- `Chaptered`: Generates a chaptered summary of the content. Includes options to use existing chapters if any or generate new ones. Also can control if each chapter should be generated seperately, often leading to more detail.
+- `Tables, Figures & Equations Only`: Generates a copy of the original content with only the tables, figures and equations summarized and the summaries integrated into the original text at the optimal locations.
+- `Ultimate`: `Contextual Abstract` + `Tables, Figures & Equations Only`
