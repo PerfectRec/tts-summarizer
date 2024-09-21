@@ -60,13 +60,13 @@ export default async function handler(
   });
 
   // Load data from the temporary file
-  const documents = await reader.loadJson(tempFilePath);
-  const images = await reader.getImages(documents, tempImageDir);
+  const json = await reader.loadJson(tempFilePath);
+  const images = await reader.getImages(json, tempImageDir);
 
   // Clean up the temporary file
   //await fs.remove(tempFilePath);
 
-  return { message: "Processed file", documents, images };
+  return { message: "Processed file", json, images };
 }
 
 async function getAnthropicCompletion(

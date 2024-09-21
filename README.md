@@ -29,6 +29,7 @@ We are using
 - `AWS Polly` to convert generated text to audio.
 - `Anthropic` models to generate the summries.
 - `LlamaParse` to parse complex file types like `pdf` and `epub`
+- `FireCrawl` to scrape web context about the file.
 
 ## Summarization Modes
 
