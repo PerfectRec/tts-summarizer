@@ -107,7 +107,12 @@ export default async function handler(
     images.map((image: Image) => [image.name, image])
   );
 
+  let ttsText;
   if (summarizationMethod === "ultimate") {
+    let tableCounter = 0;
+    let imageCounter = 0;
+
+    //page processing loop
     for (const page of pages) {
       let title;
       let webContext;
@@ -144,6 +149,7 @@ export default async function handler(
 
         //process tables
         if (item.type === "table") {
+          tableCounter++;
           const tableSummary = await getAnthropicCompletion(
             "Summarize the following table content. Provide a concise summary that captures the key points and insights from the table. Use the entire page as context. Return the output in <tableSummary></tableSummary>",
             `Table:\n${item.md}\n\nEntire Page:\n${page.md}`,
@@ -153,11 +159,13 @@ export default async function handler(
           );
 
           item.summary = tableSummary;
+          item.tableNumber = tableCounter;
         }
       }
 
       //image loop
       for (const image of page.images) {
+        imageCounter++;
         const savedImage = imagesMap.get(image.name);
         if (savedImage) {
           const imagePath = savedImage.path;
@@ -171,8 +179,35 @@ export default async function handler(
           );
           image.summary = imageSummary;
         }
+        image.imageNumber = imageCounter;
       }
     }
+
+    //page combination loop
+    let combinedText = "";
+    for (const page of pages) {
+      for (const item of page.items) {
+        if (
+          item.type === "heading" &&
+          item.value?.toLocaleLowerCase().includes("abstract")
+        ) {
+          combinedText += item.betterMd + "\n\n" || item.md + "\n\n";
+        } else if (item.type === "table") {
+          combinedText += item.summary
+            ? `Table ${item.tableNumber}: ${item.summary}\n\n`
+            : item.md + "\n\n";
+        } else {
+          combinedText += item.md + "\n\n";
+        }
+      }
+
+      for (const image of page.images) {
+        combinedText += image.summary
+          ? `Image ${image.imageNumber}: ${image.summary}\n\n`
+          : "\n\n";
+      }
+    }
+    ttsText = combinedText;
   } else {
     return { message: "This summarization method is not supported yet!" };
   }
@@ -180,7 +215,7 @@ export default async function handler(
   // Clean up the temporary file
   //await fs.remove(tempFilePath);
 
-  return { message: "Generated audio file", pages, images };
+  return { message: "Generated audio file", ttsText: ttsText };
 }
 
 async function getAnthropicCompletion(
