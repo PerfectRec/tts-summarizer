@@ -6,8 +6,27 @@ import fastifyStatic from "@fastify/static";
 // Handler imports
 import summarizeHandler from "@handlers/summarize";
 
+const envToLogger = {
+  development: {
+    transport: {
+      target: "pino-pretty",
+      options: {
+        translateTime: "HH:MM:ss Z",
+        ignore: "pid,hostname",
+      },
+    },
+  },
+  production: true,
+  test: false,
+};
+
+type Environment = "development" | "production" | "test";
+
+const environment: Environment =
+  (process.env.NODE_ENV as Environment) || "development";
+
 const fastify = Fastify({
-  logger: true,
+  logger: envToLogger[environment] ?? true,
   bodyLimit: 10485760,
 });
 

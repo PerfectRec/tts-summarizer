@@ -42,6 +42,7 @@ function App() {
 
   return (
     <>
+      <h1 className="text-2xl font-bold mb-4">Text-to-speech Summarizer</h1>
       <form onSubmit={handleSubmit} className="flex flex-row gap-4">
         <input
           type="file"
