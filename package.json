@@ -6,10 +6,12 @@
     "@mendable/firecrawl-js": "^1.4.5",
     "@types/aws-sdk": "^2.7.0",
     "@types/dotenv": "^8.2.0",
+    "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.5.5",
     "aws-sdk": "^2.1691.0",
     "dotenv": "^16.4.5",
     "fastify": "^5.0.0",
+    "fs-extra": "^11.2.0",
     "llamaindex": "^0.6.4",
     "openai": "^4.62.1",
     "tsx": "^4.19.1",
@@ -17,7 +19,7 @@
   },
   "scripts": {
     "start": "yarn build:client && tsx src/server.ts",
-    "dev": "concurrently \"yarn build:client\" \"nodemon --watch src --exec tsx src/server.ts\"",
+    "dev": "concurrently \"nodemon --watch client/src --ext js,jsx,ts,tsx --exec yarn build:client\" \"nodemon --watch src --exec tsx src/server.ts\"",
     "build:client": "yarn --cwd client build"
   },
   "devDependencies": {

@@ -8,6 +8,7 @@ import summarizeHandler from "@handlers/summarize";
 
 const fastify = Fastify({
   logger: true,
+  bodyLimit: 10485760,
 });
 
 // Add content type parsers
@@ -35,6 +36,7 @@ fastify.register(fastifyStatic, {
   root: path.join(__dirname, "../client/dist"),
   prefix: "/", // optional: default '/'
 });
+
 // Routes
 fastify.post("/summarize", summarizeHandler);
 
