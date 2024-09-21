@@ -277,14 +277,17 @@ async function getWebContext(
   if ("data" in result) {
     const data: { url: string; markdown: string }[] = [];
 
-    result.data.forEach((item: { url: string; markdown: string }) => {
-      const cleanedMarkdown = item.markdown
-        .replace(/<br\s*\/?>/gi, "")
-        .replace(/\[.*?\]\(.*?\)/g, "")
-        .replace(/\s{2,}/g, " ")
-        .replace(/\n{2,}/g, "\n");
-      data.push({ url: item.url, markdown: cleanedMarkdown });
-    });
+    result.data
+      .filter((item: { url: string }) => !item.url.includes("youtube"))
+      .slice(0, 5)
+      .forEach((item: { url: string; markdown: string }) => {
+        const cleanedMarkdown = item.markdown
+          .replace(/<br\s*\/?>/gi, "")
+          .replace(/\[.*?\]\(.*?\)/g, "")
+          .replace(/\s{2,}/g, " ")
+          .replace(/\n{2,}/g, "\n");
+        data.push({ url: item.url, markdown: cleanedMarkdown });
+      });
 
     return data;
   } else {
