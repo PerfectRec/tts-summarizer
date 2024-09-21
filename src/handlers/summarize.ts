@@ -64,6 +64,7 @@ const ANTHROPIC_MODEL = "claude-3-5-sonnet-20240620";
 
 const firecrawl = new FirecrawlApp({
   apiKey: process.env.FIRECRAWL_API_KEY,
+  apiUrl: "https://api.firecrawl.dev/v0",
 });
 
 const anthropic = new Anthropic({
@@ -101,8 +102,9 @@ export default async function handler(
   });
 
   // Load data from the temporary file
-  const pages: Pages = await reader.loadJson(tempFilePath);
-  const images = await reader.getImages(pages, tempImageDir);
+  const json = await reader.loadJson(tempFilePath);
+  const pages: Pages = json[0].pages;
+  const images = await reader.getImages(json, tempImageDir);
   const imagesMap: Map<string, Image> = new Map(
     images.map((image: Image) => [image.name, image])
   );
@@ -126,7 +128,7 @@ export default async function handler(
           "title"
         );
 
-        webContext = await getWebContext(title);
+        webContext = await getWebContext(title + " signficance");
       }
 
       //item loop
