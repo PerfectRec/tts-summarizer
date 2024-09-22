@@ -258,7 +258,7 @@ export default async function handler(
         }
       }
     }
-    ttsText = combinedText;
+    ttsText = combinedText.replace(/#/g, '');
     console.log("combined text for TTS");
     const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
     fs.writeFileSync(ttsTextFilePath, ttsText);

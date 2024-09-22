@@ -43,6 +43,8 @@ We are using
   - Skip over tables, figures & expressions
 - `Ultimate`: `Contextual Abstract` + `Tables, Figures & Equations Only`
 
+Only the `Ultimate` mode is currently supported.
+
 ## Bug in dependency
 
 The `node_modules/llamaindex/cloud/dist/reader.js` file has a bug in it that causes the `fetchAndSaveImage` function to fail. The bug is that the `response.data` is not a buffer, it's a stream. We are using a local patch to fix the issue. Here is the correct version of the function:
