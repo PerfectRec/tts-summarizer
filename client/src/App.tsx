@@ -4,7 +4,7 @@ import "./App.css";
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [summarizationMethod, setSummarizationMethod] =
-    useState<string>("betterAbstract");
+    useState<string>("ultimate");
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -83,11 +83,15 @@ function App() {
       </form>
       {audioUrl && (
         <div className="mt-4">
-          <audio controls src={audioUrl} className="w-full mb-2"></audio>
+          <audio
+            controls
+            src={audioUrl}
+            className="w-full mb-2 rounded"
+          ></audio>
           <a
             href={audioUrl}
             download="summary.mp3"
-            className="p-2 bg-green-500 text-white rounded"
+            className="p-2 mt-2 bg-green-500 hover:bg-green-700 text-white rounded"
           >
             Download MP3
           </a>
