@@ -41,3 +41,26 @@ We are using
   - Skip over citations
   - Skip over tables, figures & expressions
 - `Ultimate`: `Contextual Abstract` + `Tables, Figures & Equations Only`
+
+## Bug in dependency
+
+The `node_modules/llamaindex/cloud/dist/reader.js` file has a bug in it that causes the `fetchAndSaveImage` function to fail. The bug is that the `response.data` is not a buffer, it's a stream. We are using a local patch to fix the issue. Here is the correct version of the function:
+
+```javascript
+async fetchAndSaveImage(imageName, imagePath, jobId) {
+        const response = await ParsingService.getJobImageResultApiV1ParsingJobJobIdResultImageNameGet({
+            client: this.#client,
+            path: {
+                job_id: jobId,
+                name: imageName
+            }
+        });
+        if (response.error) {
+            throw new Error(`Failed to download image: ${response.error.detail}`);
+        }
+        const arrayBuffer = await response.data.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        // Write the image buffer to the specified imagePath
+        await fs.writeFile(imagePath, buffer);
+    }
+```

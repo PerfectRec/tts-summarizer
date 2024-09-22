@@ -254,29 +254,34 @@ async function getAnthropicCompletion(
   xmlTag: string,
   imagePath?: string
 ) {
-  const messages: MessageParam[] = [
-    {
-      role: "user",
-      content: userPrompt,
-    },
-  ];
+  let messages: MessageParam[];
 
   if (imagePath) {
     const imageBuffer = fs.readFileSync(imagePath);
     const mediaType = mime.getType(imagePath);
-    messages.push({
-      role: "user",
-      content: [
-        {
-          type: "image",
-          source: {
-            data: imageBuffer.toString("base64"),
-            media_type: mediaType,
-            type: "base64",
-          },
-        } as ImageBlockParam,
-      ],
-    });
+    messages = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: userPrompt},
+          {
+            type: "image",
+            source: {
+              data: imageBuffer.toString("base64"),
+              media_type: mediaType,
+              type: "base64",
+            },
+          } as ImageBlockParam,
+        ],
+      },
+    ];
+  } else {
+    messages = [
+      {
+        role: "user",
+        content: userPrompt,
+      },
+    ];
   }
 
   const completion = await anthropic.messages.create({
