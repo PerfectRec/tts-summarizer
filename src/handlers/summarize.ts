@@ -104,6 +104,7 @@ export default async function handler(
 
   const tempImageDir = path.join(projectRoot, "images-temp");
   const audioOutputDir = path.join(projectRoot, "audio-output");
+  const ttsTextDir = path.join(projectRoot, "tts-text");
 
   // Ensure the image directory exists
   if (!fs.existsSync(tempImageDir)) {
@@ -115,6 +116,11 @@ export default async function handler(
     fs.mkdirSync(audioOutputDir);
   }
 
+  // Ensure the tts text directory exists
+  if (!fs.existsSync(ttsTextDir)) {
+    fs.mkdirSync(ttsTextDir);
+  }
+ 
   // Instantiate LlamaParseReader
   const reader = new LlamaParseReader({
     resultType: "json",
@@ -249,8 +255,11 @@ export default async function handler(
     }
     ttsText = combinedText;
     console.log("combined text for TTS");
+    const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
+    fs.writeFileSync(ttsTextFilePath, ttsText);
 
     try {
+      throw new Error("Audio generation skipped");
       const audioBuffer = await synthesizeSpeechInChunks(ttsText);
       console.log("Generated audio file");
 
