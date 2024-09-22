@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [summarizationMethod, setSummarizationMethod] =
     useState<string>("ultimate");
+  const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -23,6 +24,7 @@ function App() {
     if (!file) return;
 
     setAudioUrl(null);
+    setLoadingMessage("Improving abstract...");
 
     const fileBuffer = await file.arrayBuffer();
 
@@ -42,14 +44,32 @@ function App() {
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         console.log("Audio URL:", url);
+        setLoadingMessage(null);
         setAudioUrl(url);
       } else {
         console.error("Error:", response.statusText);
+        setLoadingMessage(null);
       }
     } catch (error) {
       console.error("Error:", error);
+      setLoadingMessage(null);
     }
   };
+
+  useEffect(() => {
+    if (loadingMessage === "Improving abstract...") {
+      const timer1 = setTimeout(() => {
+        setLoadingMessage("Processing images and tables...");
+      }, 3000);
+      const timer2 = setTimeout(() => {
+        setLoadingMessage("Converting text to speech...");
+      }, 15000);
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
+    }
+  }, [loadingMessage]);
 
   return (
     <>
@@ -81,6 +101,9 @@ function App() {
           Upload + Summarize
         </button>
       </form>
+      {loadingMessage && (
+        <p className="mt-4 text-lg text-white">{loadingMessage}</p>
+      )}
       {audioUrl && (
         <div className="mt-4">
           <audio

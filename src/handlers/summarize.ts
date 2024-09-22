@@ -235,6 +235,14 @@ export default async function handler(
     let combinedText = "";
     console.log("attempting to combine text for TTS");
     for (const page of pages) {
+
+      //image summaries should go first as they are usually first in the page
+      for (const image of page.images) {
+        combinedText += image.summary
+          ? `Image ${image.imageNumber}: ${image.summary}\n\n`
+          : "\n\n";
+      }
+
       for (const [index, item] of page.items.entries()) {
         if (
           page.items[index-1]?.type === "heading" &&
@@ -248,12 +256,6 @@ export default async function handler(
         } else {
           combinedText += item.md + "\n\n";
         }
-      }
-
-      for (const image of page.images) {
-        combinedText += image.summary
-          ? `Image ${image.imageNumber}: ${image.summary}\n\n`
-          : "\n\n";
       }
     }
     ttsText = combinedText;
