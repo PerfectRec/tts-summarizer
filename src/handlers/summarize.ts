@@ -65,14 +65,13 @@ const ANTHROPIC_MODEL = "claude-3-5-sonnet-20240620";
 
 const firecrawl = new FirecrawlApp({
   apiKey: process.env.FIRECRAWL_API_KEY,
-  apiUrl: "https://api.firecrawl.dev/v0/",
 });
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
   defaultHeaders: {
     "anthropic-beta":
-      "prompt-caching-2024-07-31,max-tokens-3-5-sonnet-2024-07-15",
+      "max-tokens-3-5-sonnet-2024-07-15",
   },
 });
 
@@ -143,9 +142,14 @@ export default async function handler(
 
         console.log("Detected title: ", title);
 
-        webContext = await getWebContext(title + " signficance");
-
-        console.log("Grabbed search results");
+        try {
+          webContext = await getWebContext(title + " signficance");
+          console.log("Grabbed search results");
+        } catch (error) {
+          console.log("Firecrawl crashed");
+          webContext = "";
+        }
+      
       }
 
       //item loop
@@ -293,7 +297,7 @@ async function getAnthropicCompletion(
   });
 
   const completionText = (completion.content[0] as Anthropic.TextBlock).text;
-  const regex = new RegExp(`<${xmlTag}>(.*?)</${xmlTag}>`);
+  const regex = new RegExp(`<${xmlTag}>([\\s\\S]*?)</${xmlTag}>`);
   const match = completionText.match(regex);
   const parsedCompletion = match ? match[1] : completionText;
 
@@ -303,6 +307,7 @@ async function getAnthropicCompletion(
 async function getWebContext(
   link: string
 ): Promise<string> {
+  console.log("Searching the web for: ", link);
   const result = await firecrawl.search(link);
 
   if (result.data) {
