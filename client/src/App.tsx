@@ -12,6 +12,8 @@ function App() {
     }
   };
 
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
   const handleMethodChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSummarizationMethod(event.target.value);
   };
@@ -33,8 +35,15 @@ function App() {
           body: fileBuffer,
         }
       );
-      const result = await response.json();
-      console.log(result);
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        console.log("Audio URL:", url);
+        setAudioUrl(url);
+      } else {
+        console.error("Error:", response.statusText);
+      }
     } catch (error) {
       console.error("Error:", error);
     }
@@ -65,6 +74,18 @@ function App() {
           Upload and Summarize
         </button>
       </form>
+      {audioUrl && (
+        <div className="mt-4">
+          <audio controls src={audioUrl} className="w-full mb-2"></audio>
+          <a
+            href={audioUrl}
+            download="summary.mp3"
+            className="p-2 bg-green-500 text-white rounded"
+          >
+            Download MP3
+          </a>
+        </div>
+      )}
     </>
   );
 }

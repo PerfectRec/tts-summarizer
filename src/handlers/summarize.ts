@@ -64,6 +64,8 @@ type Model = "claude-3-5-sonnet-20240620";
 const ANTHROPIC_TEMPERATURE = 0;
 const ANTHROPIC_MODEL = "claude-3-5-sonnet-20240620";
 
+const MAX_POLLY_CHAR_LIMIT = 1500;
+
 const firecrawl = new FirecrawlApp({
   apiKey: process.env.FIRECRAWL_API_KEY,
 });
@@ -101,10 +103,16 @@ export default async function handler(
   }
 
   const tempImageDir = path.join(projectRoot, "images-temp");
+  const audioOutputDir = path.join(projectRoot, "audio-output");
 
   // Ensure the image directory exists
   if (!fs.existsSync(tempImageDir)) {
     fs.mkdirSync(tempImageDir);
+  }
+
+  // Ensure the audio output directory exists
+  if (!fs.existsSync(audioOutputDir)) {
+    fs.mkdirSync(audioOutputDir);
   }
 
   // Instantiate LlamaParseReader
@@ -243,23 +251,22 @@ export default async function handler(
     console.log("combined text for TTS");
 
     try {
-      const audioBuffer = await synthesizeSpeech(ttsText);
+      const audioBuffer = await synthesizeSpeechInChunks(ttsText);
       console.log("Generated audio file");
 
+      const audioFilePath = path.join(audioOutputDir, "output.mp3");
+      fs.writeFileSync(audioFilePath, audioBuffer);
+      console.log("Saved audio file to", audioFilePath);
+
       // Send the audio file as a response
-      reply.type('audio/mpeg').send(audioBuffer);
+      return reply.type('audio/mpeg').send(audioBuffer);
     } catch (error) {
       console.error("Error generating audio file:", error);
-      reply.status(500).send({ message: "Error generating audio file" });
+      return reply.status(500).send({ message: "Error generating audio file" });
     }
   } else {
-    return { message: "This summarization method is not supported yet!" };
+    return reply.status(400).send({ message: "This summarization method is not supported yet!" });
   }
-
-  // Clean up the temporary file
-  //await fs.remove(tempFilePath);
-
-  return { message: "Generated audio file", ttsText: ttsText };
 }
 
 async function getAnthropicCompletion(
@@ -344,4 +351,37 @@ async function getWebContext(
   } else {
     throw new Error("Failed to scrape content");
   }
+}
+
+function splitTextIntoChunks(text: string, maxLength: number): string[] {
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+  const chunks: string[] = [];
+  let currentChunk = "";
+
+  for (const sentence of sentences) {
+    if ((currentChunk + sentence).length > maxLength) {
+      chunks.push(currentChunk.trim());
+      currentChunk = sentence;
+    } else {
+      currentChunk += sentence;
+    }
+  }
+
+  if (currentChunk) {
+    chunks.push(currentChunk.trim());
+  }
+
+  return chunks;
+}
+
+async function synthesizeSpeechInChunks(text: string): Promise<Buffer> {
+  const chunks = splitTextIntoChunks(text, MAX_POLLY_CHAR_LIMIT);
+  const audioBuffers: Buffer[] = [];
+
+  for (const chunk of chunks) {
+    const audioBuffer = await synthesizeSpeech(chunk);
+    audioBuffers.push(audioBuffer);
+  }
+
+  return Buffer.concat(audioBuffers);
 }
