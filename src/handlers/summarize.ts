@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { fileURLToPath } from "url";
 import { LlamaParseReader } from "llamaindex";
 import Anthropic from "@anthropic-ai/sdk";
-import FirecrawlApp from "@mendable/firecrawl-js";
+import FirecrawlApp, { FirecrawlDocument } from "@mendable/firecrawl-js";
 import "dotenv/config";
 import fs from "fs-extra";
 import path from "path";
@@ -300,21 +300,24 @@ async function getWebContext(
 ): Promise<{ url: string; markdown: string }[]> {
   const result = await firecrawl.search(link);
 
-  if ("data" in result) {
+  if (result.data) {
     const data: { url: string; markdown: string }[] = [];
 
     result.data
-      .filter((item: { url: string }) => !item.url.includes("youtube"))
+      .filter((item: { url?: string }) => item.url && !item.url.includes("youtube"))
       .slice(0, 5)
-      .forEach((item: { url: string; markdown: string }) => {
+      .forEach((item: FirecrawlDocument) => {
+        if (item.markdown) {
         const cleanedMarkdown = item.markdown
           .replace(/<br\s*\/?>/gi, "")
           .replace(/\[.*?\]\(.*?\)/g, "")
           .replace(/\s{2,}/g, " ")
           .replace(/\n{2,}/g, "\n");
-        data.push({ url: item.url, markdown: cleanedMarkdown });
+          if (item.url) {
+            data.push({ url: item.url, markdown: cleanedMarkdown });
+          }
+        }
       });
-
     return data;
   } else {
     throw new Error("Failed to scrape content");
