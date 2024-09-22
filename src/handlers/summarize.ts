@@ -170,13 +170,14 @@ export default async function handler(
       }
 
       //item loop
-      for (const item of page.items) {
+      for (const [index, item] of page.items.entries()) {
         //generate the better abstract using the previously collected web context and title
         if (
-          item.type === "heading" &&
-          item.value?.toLocaleLowerCase().includes("abstract")
+          page.items[index-1]?.type === "heading" &&
+          page.items[index-1]?.value?.toLocaleLowerCase().includes("abstract")
         ) {
           console.log("attempting to generate better abstract");
+
           const betterAbstract = await getAnthropicCompletion(
             "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Make sure to note if the paper is significant and why. Return the output in <betterAbstract></betterAbstract>",
             `Original abstract:\n${item.md}\n\nWeb context about ${title}:\n${webContext}`,
@@ -234,16 +235,16 @@ export default async function handler(
     let combinedText = "";
     console.log("attempting to combine text for TTS");
     for (const page of pages) {
-      for (const item of page.items) {
+      for (const [index, item] of page.items.entries()) {
         if (
-          item.type === "heading" &&
-          item.value?.toLocaleLowerCase().includes("abstract")
+          page.items[index-1]?.type === "heading" &&
+          page.items[index-1]?.value?.toLocaleLowerCase().includes("abstract")
         ) {
           combinedText += item.betterMd + "\n\n" || item.md + "\n\n";
         } else if (item.type === "table") {
           combinedText += item.summary
             ? `Table ${item.tableNumber}: ${item.summary}\n\n`
-            : item.md + "\n\n";
+            : item.value + "\n\n";
         } else {
           combinedText += item.md + "\n\n";
         }
@@ -339,6 +340,8 @@ async function getWebContext(
 ): Promise<string> {
   console.log("Searching the web for: ", link);
   const result = await firecrawl.search(link);
+
+  console.log(JSON.stringify(result, null, 2));
 
   if (result.data) {
     let combinedData = "";
