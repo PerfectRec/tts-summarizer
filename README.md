@@ -6,11 +6,12 @@
 
 ## Getting Started
 
-- Install dependencies with `yarn`
-- To start the server, run `yarn start`
-- To start the server in dev mode with HMR, run `yarn dev`
-
-The server will listen on port `4242`.
+- Install Node.js 20 or higher. On Linux/MacOS use `nvm`. On Windows, simply download it from the Node.js website.
+- From the root folder run `yarn`
+- From the `client` folder run `yarn`.
+- To start the server in dev mode with HMR, from the root folder run `yarn dev`
+- Go to `http://localhost:4242`
+- Upload a `pdf` or `epub` file.
 
 ## Folder Structure
 
