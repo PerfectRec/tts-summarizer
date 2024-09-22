@@ -23,11 +23,11 @@
 We are using
 
 - `fastify` as our primary Node framework.
-- `AWS S3`
+- `S3`
   - to store the user uploaded files.
   - to store the AI generated audio files.
   - to store the user interaction memory.
-- `AWS Polly` to convert generated text to audio.
+- `Polly` to convert generated text to audio.
 - `Anthropic` models to generate the summries.
 - `LlamaParse` to parse complex file types like `pdf` and `epub`
 - `FireCrawl` to scrape web context about the file.
