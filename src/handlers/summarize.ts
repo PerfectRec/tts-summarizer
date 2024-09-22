@@ -9,6 +9,7 @@ import path from "path";
 import os from "os";
 import { ImageBlockParam, MessageParam } from "@anthropic-ai/sdk/resources";
 import mime from "mime";
+import { synthesizeSpeech } from "@aws/polly";
 
 interface SummarizeRequestParams {
   summarizationMethod:
@@ -240,6 +241,17 @@ export default async function handler(
     }
     ttsText = combinedText;
     console.log("combined text for TTS");
+
+    try {
+      const audioBuffer = await synthesizeSpeech(ttsText);
+      console.log("Generated audio file");
+
+      // Send the audio file as a response
+      reply.type('audio/mpeg').send(audioBuffer);
+    } catch (error) {
+      console.error("Error generating audio file:", error);
+      reply.status(500).send({ message: "Error generating audio file" });
+    }
   } else {
     return { message: "This summarization method is not supported yet!" };
   }
