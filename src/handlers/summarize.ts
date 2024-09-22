@@ -264,7 +264,7 @@ export default async function handler(
     fs.writeFileSync(ttsTextFilePath, ttsText);
 
     try {
-      throw new Error("Audio generation skipped");
+      //throw new Error("Audio generation skipped");
       const audioBuffer = await synthesizeSpeechInChunks(ttsText);
       console.log("Generated audio file");
 
