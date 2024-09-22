@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from "fastify";
+import { fileURLToPath } from "url";
 import { LlamaParseReader } from "llamaindex";
 import Anthropic from "@anthropic-ai/sdk";
 import FirecrawlApp from "@mendable/firecrawl-js";
@@ -64,7 +65,7 @@ const ANTHROPIC_MODEL = "claude-3-5-sonnet-20240620";
 
 const firecrawl = new FirecrawlApp({
   apiKey: process.env.FIRECRAWL_API_KEY,
-  apiUrl: "https://api.firecrawl.dev/v0",
+  apiUrl: "https://api.firecrawl.dev/v0/",
 });
 
 const anthropic = new Anthropic({
@@ -84,8 +85,13 @@ export default async function handler(
   const { summarizationMethod } = request.query;
   const fileBuffer = request.body;
 
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+
+  const projectRoot = path.resolve(__dirname, "../..");
+
   // Create a temporary file path
-  const tempFilePath = path.join(os.tmpdir(), "tempfile");
+  const tempFilePath = path.join(projectRoot, "tempfile.pdf");
 
   // Write the buffer to the temporary file
   if (typeof fileBuffer === "string" || fileBuffer instanceof Buffer) {
@@ -94,7 +100,12 @@ export default async function handler(
     throw new Error("Invalid file buffer type");
   }
 
-  const tempImageDir = fs.mkdtempSync(path.join(os.tmpdir(), "images-"));
+  const tempImageDir = path.join(projectRoot, "images-temp");
+
+  // Ensure the image directory exists
+  if (!fs.existsSync(tempImageDir)) {
+    fs.mkdirSync(tempImageDir);
+  }
 
   // Instantiate LlamaParseReader
   const reader = new LlamaParseReader({
@@ -109,6 +120,8 @@ export default async function handler(
     images.map((image: Image) => [image.name, image])
   );
 
+  console.log("Converted to JSON and images");
+
   let ttsText;
   if (summarizationMethod === "ultimate") {
     let tableCounter = 0;
@@ -117,7 +130,7 @@ export default async function handler(
     //page processing loop
     for (const page of pages) {
       let title;
-      let webContext;
+      let webContext = "";
 
       if (page.page === 1) {
         title = await getAnthropicCompletion(
@@ -128,7 +141,11 @@ export default async function handler(
           "title"
         );
 
-        webContext = await getWebContext(title + " signficance");
+        console.log("Detected title: ", title);
+
+        //webContext = await getWebContext(title + " signficance");
+
+        console.log("Grabbed search results");
       }
 
       //item loop
@@ -138,6 +155,7 @@ export default async function handler(
           item.type === "heading" &&
           item.value?.toLocaleLowerCase().includes("abstract")
         ) {
+          console.log("attempting to generate better abstract");
           const betterAbstract = await getAnthropicCompletion(
             "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Make sure to note if the paper is significant and why. Return the output in <betterAbstract></betterAbstract>",
             `Original abstract:\n${item.md}\n\nWeb context about ${title}:\n${webContext}`,
@@ -147,11 +165,13 @@ export default async function handler(
           );
 
           item.betterMd = betterAbstract;
+          console.log("generated better abstract");
         }
 
         //process tables
         if (item.type === "table") {
           tableCounter++;
+          console.log("Attempting to summarize table ", tableCounter);
           const tableSummary = await getAnthropicCompletion(
             "Summarize the following table content. Provide a concise summary that captures the key points and insights from the table. Use the entire page as context. Return the output in <tableSummary></tableSummary>",
             `Table:\n${item.md}\n\nEntire Page:\n${page.md}`,
@@ -162,15 +182,18 @@ export default async function handler(
 
           item.summary = tableSummary;
           item.tableNumber = tableCounter;
+          console.log("Summarized table ", tableCounter);
         }
       }
 
       //image loop
       for (const image of page.images) {
         imageCounter++;
+        console.log("attempting to summarize image ", imageCounter);
         const savedImage = imagesMap.get(image.name);
         if (savedImage) {
           const imagePath = savedImage.path;
+          console.log(imagePath);
           const imageSummary = await getAnthropicCompletion(
             "Summarize the content of the following image. Provide a concise summary that captures the key points and insights from the image. Return the output in <imageSummary></imageSummary>",
             `Title: ${title}\n\nPage context:\n${page.md}`,
@@ -182,11 +205,13 @@ export default async function handler(
           image.summary = imageSummary;
         }
         image.imageNumber = imageCounter;
+        console.log("Summarized image ", imageCounter);
       }
     }
 
     //page combination loop
     let combinedText = "";
+    console.log("attempting to combine text for TTS");
     for (const page of pages) {
       for (const item of page.items) {
         if (
@@ -210,6 +235,7 @@ export default async function handler(
       }
     }
     ttsText = combinedText;
+    console.log("combined text for TTS");
   } else {
     return { message: "This summarization method is not supported yet!" };
   }
