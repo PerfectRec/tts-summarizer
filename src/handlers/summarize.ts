@@ -130,7 +130,7 @@ export default async function handler(
     //page processing loop
     for (const page of pages) {
       let title;
-      let webContext = "";
+      let webContext;
 
       if (page.page === 1) {
         title = await getAnthropicCompletion(
@@ -143,7 +143,7 @@ export default async function handler(
 
         console.log("Detected title: ", title);
 
-        //webContext = await getWebContext(title + " signficance");
+        webContext = await getWebContext(title + " signficance");
 
         console.log("Grabbed search results");
       }
@@ -302,28 +302,28 @@ async function getAnthropicCompletion(
 
 async function getWebContext(
   link: string
-): Promise<{ url: string; markdown: string }[]> {
+): Promise<string> {
   const result = await firecrawl.search(link);
 
   if (result.data) {
-    const data: { url: string; markdown: string }[] = [];
+    let combinedData = "";
 
     result.data
       .filter((item: { url?: string }) => item.url && !item.url.includes("youtube"))
       .slice(0, 5)
       .forEach((item: FirecrawlDocument) => {
         if (item.markdown) {
-        const cleanedMarkdown = item.markdown
-          .replace(/<br\s*\/?>/gi, "")
-          .replace(/\[.*?\]\(.*?\)/g, "")
-          .replace(/\s{2,}/g, " ")
-          .replace(/\n{2,}/g, "\n");
+          const cleanedMarkdown = item.markdown
+            .replace(/<br\s*\/?>/gi, "")
+            .replace(/\[.*?\]\(.*?\)/g, "")
+            .replace(/\s{2,}/g, " ")
+            .replace(/\n{2,}/g, "\n");
           if (item.url) {
-            data.push({ url: item.url, markdown: cleanedMarkdown });
+            combinedData += `${item.url}\n${cleanedMarkdown}\n\n`;
           }
         }
       });
-    return data;
+    return combinedData.trim();
   } else {
     throw new Error("Failed to scrape content");
   }
