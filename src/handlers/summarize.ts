@@ -71,10 +71,12 @@ const firecrawl = new FirecrawlApp({
 });
 
 const anthropic = new Anthropic({
+  baseURL: "https://anthropic.helicone.ai",
   apiKey: process.env.ANTHROPIC_API_KEY,
   defaultHeaders: {
     "anthropic-beta":
       "max-tokens-3-5-sonnet-2024-07-15",
+    "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`
   },
 });
 

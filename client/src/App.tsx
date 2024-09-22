@@ -22,6 +22,8 @@ function App() {
     event.preventDefault();
     if (!file) return;
 
+    setAudioUrl(null);
+
     const fileBuffer = await file.arrayBuffer();
 
     try {
@@ -68,10 +70,15 @@ function App() {
           <option value="twoPage">Two-page Summary</option>
           <option value="chaptered">Chaptered Summary</option>
           <option value="tablesAndFiguresOnly">Tables and Figures Only</option>
-          <option value="ultimate">Ultimate</option>
+          <option value="ultimate">
+            Better Abstract + Tables and Figures Only
+          </option>
         </select>
-        <button type="submit" className="p-2 bg-blue-500 text-white rounded">
-          Upload and Summarize
+        <button
+          type="submit"
+          className="p-2 bg-blue-500 text-white rounded hover:bg-blue-700"
+        >
+          Upload + Summarize
         </button>
       </form>
       {audioUrl && (

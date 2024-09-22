@@ -31,6 +31,7 @@ We are using
 - `Anthropic` models to generate the summries.
 - `LlamaParse` to parse complex file types like `pdf` and `epub`
 - `FireCrawl` to scrape web context about the file.
+- `Helicone` for logging and monitoring Claude API calls.
 
 ## Summarization Modes
 
