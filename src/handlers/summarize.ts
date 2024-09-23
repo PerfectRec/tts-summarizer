@@ -143,6 +143,7 @@ export default async function handler(
   let title;
   let webContext;
   let betterAbstract;
+  let abstractNotFoundInItems = true;
 
   if (summarizationMethod === "ultimate") {
     let tableCounter = 0;
@@ -180,7 +181,7 @@ export default async function handler(
           console.log("attempting to generate better abstract");
 
           betterAbstract = await getAnthropicCompletion(
-            "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Make sure to note if the paper is significant and why. Return the output in <betterAbstract></betterAbstract>",
+            "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Return the output in <betterAbstract></betterAbstract>",
             `Original abstract:\n${item.md}\n\nWeb context about ${title}:\n${webContext}\n\nEntire paper:\n${entirePaperMd}`,
             ANTHROPIC_MODEL,
             ANTHROPIC_TEMPERATURE,
@@ -189,6 +190,7 @@ export default async function handler(
 
           item.betterMd = betterAbstract;
           console.log("generated better abstract");
+          abstractNotFoundInItems = false;
         }
 
         //process tables
@@ -232,18 +234,16 @@ export default async function handler(
       }
     }
 
-    let abstractNotFoundInItems = false;
-    if (!betterAbstract) {
+    if (abstractNotFoundInItems) {
       for (const page of pages) {
-        if (page.md.toLocaleLowerCase().includes("abstract")) {
+        if (page.text.toLocaleLowerCase().includes("abstract")) {
           console.log(
-            "Abstract found in page markdown, generating better abstract"
+            "Abstract found in page text instead of markdown, generating better abstract"
           );
-          abstractNotFoundInItems = true;
 
           betterAbstract = await getAnthropicCompletion(
-            "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Make sure to note if the paper is significant and why. Return the output in <betterAbstract></betterAbstract>",
-            `Original abstract:\n${page.md}\n\nWeb context about ${title}:\n${webContext}\n\nEntire paper:\n${entirePaperMd}`,
+            "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Return the output in <betterAbstract></betterAbstract>",
+            `Original abstract:\n${page.text}\n\nWeb context about ${title}:\n${webContext}\n\nEntire paper:\n${entirePaperMd}`,
             ANTHROPIC_MODEL,
             ANTHROPIC_TEMPERATURE,
             "betterAbstract"
@@ -259,7 +259,7 @@ export default async function handler(
     let combinedText = "";
     console.log("attempting to combine text for TTS");
 
-    if (betterAbstract && abstractNotFoundInItems) {
+    if (abstractNotFoundInItems && betterAbstract) {
       combinedText += `Abstract: ${betterAbstract}\n\n`;
     }
 
@@ -292,7 +292,7 @@ export default async function handler(
     fs.writeFileSync(ttsTextFilePath, ttsText);
 
     try {
-      //throw new Error("Audio generation skipped");
+      throw new Error("Audio generation skipped");
       const audioBuffer = await synthesizeSpeechInChunks(ttsText);
       console.log("Generated audio file");
 
@@ -371,7 +371,7 @@ async function getWebContext(link: string): Promise<string> {
   console.log("Searching the web for: ", link);
   const result = await firecrawl.search(link);
 
-  console.log(JSON.stringify(result, null, 2));
+  //console.log(JSON.stringify(result, null, 2));
 
   if (result.data) {
     let combinedData = "";
