@@ -94,7 +94,7 @@ export default async function handler(
   const projectRoot = path.resolve(__dirname, "../..");
 
   // Create a temporary file path
-  const tempFilePath = path.join(projectRoot, "tempfile.pdf");
+  const tempFilePath = path.join(projectRoot, "tempfile");
 
   // Write the buffer to the temporary file
   if (typeof fileBuffer === "string" || fileBuffer instanceof Buffer) {
