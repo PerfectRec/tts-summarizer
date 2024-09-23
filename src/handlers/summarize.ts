@@ -74,9 +74,8 @@ const anthropic = new Anthropic({
   baseURL: "https://anthropic.helicone.ai",
   apiKey: process.env.ANTHROPIC_API_KEY,
   defaultHeaders: {
-    "anthropic-beta":
-      "max-tokens-3-5-sonnet-2024-07-15",
-    "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`
+    "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15",
+    "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`,
   },
 });
 
@@ -122,7 +121,7 @@ export default async function handler(
   if (!fs.existsSync(ttsTextDir)) {
     fs.mkdirSync(ttsTextDir);
   }
- 
+
   // Instantiate LlamaParseReader
   const reader = new LlamaParseReader({
     resultType: "json",
@@ -166,15 +165,14 @@ export default async function handler(
           console.log("Firecrawl crashed");
           webContext = "";
         }
-      
       }
 
       //item loop
       for (const [index, item] of page.items.entries()) {
         //generate the better abstract using the previously collected web context and title
         if (
-          page.items[index-1]?.type === "heading" &&
-          page.items[index-1]?.value?.toLocaleLowerCase().includes("abstract")
+          page.items[index - 1]?.type === "heading" &&
+          page.items[index - 1]?.value?.toLocaleLowerCase().includes("abstract")
         ) {
           console.log("attempting to generate better abstract");
 
@@ -235,7 +233,6 @@ export default async function handler(
     let combinedText = "";
     console.log("attempting to combine text for TTS");
     for (const page of pages) {
-
       //image summaries should go first as they are usually first in the page
       for (const image of page.images) {
         combinedText += image.summary
@@ -245,8 +242,8 @@ export default async function handler(
 
       for (const [index, item] of page.items.entries()) {
         if (
-          page.items[index-1]?.type === "heading" &&
-          page.items[index-1]?.value?.toLocaleLowerCase().includes("abstract")
+          page.items[index - 1]?.type === "heading" &&
+          page.items[index - 1]?.value?.toLocaleLowerCase().includes("abstract")
         ) {
           combinedText += item.betterMd + "\n\n" || item.md + "\n\n";
         } else if (item.type === "table") {
@@ -258,7 +255,7 @@ export default async function handler(
         }
       }
     }
-    ttsText = combinedText.replace(/#/g, '');
+    ttsText = combinedText.replace(/#/g, "");
     console.log("combined text for TTS");
     const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
     fs.writeFileSync(ttsTextFilePath, ttsText);
@@ -273,13 +270,15 @@ export default async function handler(
       console.log("Saved audio file to", audioFilePath);
 
       // Send the audio file as a response
-      return reply.type('audio/mpeg').send(audioBuffer);
+      return reply.type("audio/mpeg").send(audioBuffer);
     } catch (error) {
       console.error("Error generating audio file:", error);
       return reply.status(500).send({ message: "Error generating audio file" });
     }
   } else {
-    return reply.status(400).send({ message: "This summarization method is not supported yet!" });
+    return reply
+      .status(400)
+      .send({ message: "This summarization method is not supported yet!" });
   }
 }
 
@@ -300,7 +299,7 @@ async function getAnthropicCompletion(
       {
         role: "user",
         content: [
-          { type: "text", text: userPrompt},
+          { type: "text", text: userPrompt },
           {
             type: "image",
             source: {
@@ -337,9 +336,7 @@ async function getAnthropicCompletion(
   return parsedCompletion;
 }
 
-async function getWebContext(
-  link: string
-): Promise<string> {
+async function getWebContext(link: string): Promise<string> {
   console.log("Searching the web for: ", link);
   const result = await firecrawl.search(link);
 
@@ -349,7 +346,9 @@ async function getWebContext(
     let combinedData = "";
 
     result.data
-      .filter((item: { url?: string }) => item.url && !item.url.includes("youtube"))
+      .filter(
+        (item: { url?: string }) => item.url && !item.url.includes("youtube")
+      )
       .slice(0, 5)
       .forEach((item: FirecrawlDocument) => {
         if (item.markdown) {

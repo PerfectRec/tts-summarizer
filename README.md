@@ -7,7 +7,7 @@
 ## Getting Started
 
 - Install Node.js 20 or higher. On Linux/MacOS use `nvm`. On Windows, simply download it from the Node.js website.
-- From the root folder run `yarn`
+- From the root folder run `yarn` then `yarn upgrade`
 - From the `client` folder run `yarn`.
 - To start the server in dev mode with HMR, from the root folder run `yarn dev`
 - Go to `http://localhost:4242`
