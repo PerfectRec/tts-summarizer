@@ -135,6 +135,8 @@ export default async function handler(
     images.map((image: Image) => [image.name, image])
   );
 
+  const entirePaperMd = pages.map((page) => page.md).join("\n\n");
+
   console.log("Converted to JSON and images");
 
   let ttsText;
@@ -178,7 +180,7 @@ export default async function handler(
 
           const betterAbstract = await getAnthropicCompletion(
             "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Make sure to note if the paper is significant and why. Return the output in <betterAbstract></betterAbstract>",
-            `Original abstract:\n${item.md}\n\nWeb context about ${title}:\n${webContext}`,
+            `Original abstract:\n${item.md}\n\nWeb context about ${title}:\n${webContext}\n\nEntire paper:\n${entirePaperMd}`,
             ANTHROPIC_MODEL,
             ANTHROPIC_TEMPERATURE,
             "betterAbstract"
