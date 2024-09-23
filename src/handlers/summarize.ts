@@ -140,15 +140,16 @@ export default async function handler(
   console.log("Converted to JSON and images");
 
   let ttsText;
+  let title;
+  let webContext;
+  let betterAbstract;
+
   if (summarizationMethod === "ultimate") {
     let tableCounter = 0;
     let imageCounter = 0;
 
     //page processing loop
     for (const page of pages) {
-      let title;
-      let webContext;
-
       if (page.page === 1) {
         title = await getAnthropicCompletion(
           "Extract the title of the work from the following markdown content. Only return the title in <title></title>",
@@ -178,7 +179,7 @@ export default async function handler(
         ) {
           console.log("attempting to generate better abstract");
 
-          const betterAbstract = await getAnthropicCompletion(
+          betterAbstract = await getAnthropicCompletion(
             "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Make sure to note if the paper is significant and why. Return the output in <betterAbstract></betterAbstract>",
             `Original abstract:\n${item.md}\n\nWeb context about ${title}:\n${webContext}\n\nEntire paper:\n${entirePaperMd}`,
             ANTHROPIC_MODEL,
@@ -231,9 +232,37 @@ export default async function handler(
       }
     }
 
+    let abstractNotFoundInItems = false;
+    if (!betterAbstract) {
+      for (const page of pages) {
+        if (page.md.toLocaleLowerCase().includes("abstract")) {
+          console.log(
+            "Abstract found in page markdown, generating better abstract"
+          );
+          abstractNotFoundInItems = true;
+
+          betterAbstract = await getAnthropicCompletion(
+            "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Make sure to note if the paper is significant and why. Return the output in <betterAbstract></betterAbstract>",
+            `Original abstract:\n${page.md}\n\nWeb context about ${title}:\n${webContext}\n\nEntire paper:\n${entirePaperMd}`,
+            ANTHROPIC_MODEL,
+            ANTHROPIC_TEMPERATURE,
+            "betterAbstract"
+          );
+
+          console.log("Generated better abstract from page markdown");
+          break;
+        }
+      }
+    }
+
     //page combination loop
     let combinedText = "";
     console.log("attempting to combine text for TTS");
+
+    if (betterAbstract && abstractNotFoundInItems) {
+      combinedText += `Abstract: ${betterAbstract}\n\n`;
+    }
+
     for (const page of pages) {
       //image summaries should go first as they are usually first in the page
       for (const image of page.images) {
