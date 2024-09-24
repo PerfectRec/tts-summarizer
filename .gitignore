@@ -23,8 +23,4 @@ dist/
 Thumbs.db
 
 #special
-images-temp
-tempfile.pdf
-tempfile
-audio-output
-tts-text
+temp/

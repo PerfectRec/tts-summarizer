@@ -92,32 +92,24 @@ export default async function handler(
   const __dirname = path.dirname(__filename);
 
   const projectRoot = path.resolve(__dirname, "../..");
+  const tempDir = path.join(projectRoot, "temp");
 
-  // Create a temporary file path
-  const tempFilePath = path.join(projectRoot, "tempfile");
-
-  // Write the buffer to the temporary file
-  if (typeof fileBuffer === "string" || fileBuffer instanceof Buffer) {
-    fs.writeFileSync(tempFilePath, fileBuffer);
-  } else {
-    throw new Error("Invalid file buffer type");
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir);
   }
 
-  const tempImageDir = path.join(projectRoot, "images-temp");
-  const audioOutputDir = path.join(projectRoot, "audio-output");
-  const ttsTextDir = path.join(projectRoot, "tts-text");
+  const tempImageDir = path.join(tempDir, "images-temp");
+  const audioOutputDir = path.join(tempDir, "audio-output");
+  const ttsTextDir = path.join(tempDir, "tts-text");
 
-  // Ensure the image directory exists
   if (!fs.existsSync(tempImageDir)) {
     fs.mkdirSync(tempImageDir);
   }
 
-  // Ensure the audio output directory exists
   if (!fs.existsSync(audioOutputDir)) {
     fs.mkdirSync(audioOutputDir);
   }
 
-  // Ensure the tts text directory exists
   if (!fs.existsSync(ttsTextDir)) {
     fs.mkdirSync(ttsTextDir);
   }
@@ -128,7 +120,7 @@ export default async function handler(
   });
 
   // Load data from the temporary file
-  const json = await reader.loadJson(tempFilePath);
+  const json = await reader.loadJson(fileBuffer);
   const pages: Pages = json[0].pages;
   const images = await reader.getImages(json, tempImageDir);
   const imagesMap: Map<string, Image> = new Map(
