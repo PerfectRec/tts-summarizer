@@ -10,6 +10,7 @@ import os from "os";
 import { ImageBlockParam, MessageParam } from "@anthropic-ai/sdk/resources";
 import mime from "mime";
 import { synthesizeSpeech } from "@aws/polly";
+import { OpenAI } from "openai";
 
 interface SummarizeRequestParams {
   summarizationMethod:
@@ -78,6 +79,14 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
   defaultHeaders: {
     "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15",
+    "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`,
+  },
+});
+
+const openai = new OpenAI({
+  baseURL: "https://oai.helicone.ai/v1",
+  apiKey: process.env.OPENAI_API_KEY,
+  defaultHeaders: {
     "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`,
   },
 });
