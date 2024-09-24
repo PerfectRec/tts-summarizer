@@ -59,10 +59,13 @@ export interface Image {
 
 type Pages = Page[];
 
-type Model = "claude-3-5-sonnet-20240620";
+type Model = "claude-3-5-sonnet-20240620" | "gpt-4o-2024-08-06" | "gpt-4o-mini-2024-07-18" | "claude-3-haiku-20240307";
 
-const ANTHROPIC_TEMPERATURE = 0;
-const ANTHROPIC_MODEL = "claude-3-5-sonnet-20240620";
+const BIG_MODEL_TEMPERATURE = 0;
+const BIG_MODEL = "gpt-4o-2024-08-06";
+
+const SMALL_MODEL_TEMPERATURE = 0;
+const SMALL_MODEL = "gpt-4o-mini-2024-07-18";
 
 const MAX_POLLY_CHAR_LIMIT = 1500;
 
@@ -147,8 +150,8 @@ export default async function handler(
         title = await getAnthropicCompletion(
           "Extract the title of the work from the following markdown content. Only return the title in <title></title>",
           page.md,
-          ANTHROPIC_MODEL,
-          ANTHROPIC_TEMPERATURE,
+          BIG_MODEL,
+          BIG_MODEL_TEMPERATURE,
           "title"
         );
 
@@ -175,8 +178,8 @@ export default async function handler(
           betterAbstract = await getAnthropicCompletion(
             "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Return the output in <betterAbstract></betterAbstract>",
             `Original abstract:\n${item.md}\n\nWeb context about ${title}:\n${webContext}\n\nEntire paper:\n${entirePaperMd}`,
-            ANTHROPIC_MODEL,
-            ANTHROPIC_TEMPERATURE,
+            BIG_MODEL,
+            BIG_MODEL_TEMPERATURE,
             "betterAbstract"
           );
 
@@ -192,8 +195,8 @@ export default async function handler(
           const tableSummary = await getAnthropicCompletion(
             "Summarize the following table content. Provide a concise summary that captures the key points and insights from the table. Use the entire page as context. Return the output in <tableSummary></tableSummary>",
             `Table:\n${item.md}\n\nEntire Page:\n${page.md}`,
-            ANTHROPIC_MODEL,
-            ANTHROPIC_TEMPERATURE,
+            BIG_MODEL,
+            BIG_MODEL_TEMPERATURE,
             "tableSummary"
           );
 
@@ -214,8 +217,8 @@ export default async function handler(
           const imageSummary = await getAnthropicCompletion(
             "Summarize the content of the following image. Provide a concise summary that captures the key points and insights from the image. Return the output in <imageSummary></imageSummary>",
             `Title: ${title}\n\nPage context:\n${page.md}`,
-            ANTHROPIC_MODEL,
-            ANTHROPIC_TEMPERATURE,
+            BIG_MODEL,
+            BIG_MODEL_TEMPERATURE,
             "imageSummary",
             imagePath
           );
@@ -236,8 +239,8 @@ export default async function handler(
           betterAbstract = await getAnthropicCompletion(
             "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Return the output in <betterAbstract></betterAbstract>",
             `Original abstract:\n${page.text}\n\nWeb context about ${title}:\n${webContext}\n\nEntire paper:\n${entirePaperMd}`,
-            ANTHROPIC_MODEL,
-            ANTHROPIC_TEMPERATURE,
+            BIG_MODEL,
+            BIG_MODEL_TEMPERATURE,
             "betterAbstract"
           );
 
