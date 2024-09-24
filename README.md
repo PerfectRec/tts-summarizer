@@ -9,7 +9,7 @@
 - Install Node.js 20 or higher. On Linux/MacOS use `nvm`. On Windows, simply download it from the Node.js website.
 - From the root folder run `yarn` then `yarn upgrade`
 - From the `client` folder run `yarn`.
-- Go to node_modules/@llamaindex/cloud/dist/reader.js and apply the patch mentioned below.
+- Go to `node_modules/@llamaindex/cloud/dist/reader.js` and apply the patch mentioned below.
 - To start the server in dev mode with HMR, from the root folder run `yarn dev`
 - Go to `http://localhost:4242`
 - Upload a `pdf` or `epub` file.
