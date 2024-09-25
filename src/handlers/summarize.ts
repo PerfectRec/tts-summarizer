@@ -12,6 +12,8 @@ import mime from "mime";
 import { synthesizeSpeech } from "@aws/polly";
 import { OpenAI } from "openai";
 import { ChatCompletionMessageParam } from "openai/resources";
+import { zodResponseFormat } from "openai/helpers/zod";
+import { z } from "zod";
 
 interface SummarizeRequestParams {
   summarizationMethod:
@@ -526,5 +528,37 @@ async function getCompletion(
     );
   } else {
     throw new Error("Unsupported model type");
+  }
+}
+
+async function getStructuredOpenAICompletion(
+  systemPrompt: string,
+  userPrompt: string,
+  model: string,
+  temperature: number,
+  schema: z.AnyZodObject
+) {
+  const completion = await openai.beta.chat.completions.parse({
+    model: model,
+    temperature: temperature,
+    messages: [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+      {
+        role: "user",
+        content: userPrompt,
+      },
+    ],
+    response_format: zodResponseFormat(schema, "schema"),
+  });
+
+  const response = completion.choices[0].message;
+
+  if (response.refusal) {
+    throw new Error(response.refusal);
+  } else {
+    return response.parsed;
   }
 }
