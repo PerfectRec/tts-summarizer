@@ -11,6 +11,7 @@ import { ImageBlockParam, MessageParam } from "@anthropic-ai/sdk/resources";
 import mime from "mime";
 import { synthesizeSpeech } from "@aws/polly";
 import { OpenAI } from "openai";
+import { ChatCompletionMessageParam } from "openai/resources";
 
 interface SummarizeRequestParams {
   summarizationMethod:
@@ -60,7 +61,11 @@ export interface Image {
 
 type Pages = Page[];
 
-type Model = "claude-3-5-sonnet-20240620" | "gpt-4o-2024-08-06" | "gpt-4o-mini-2024-07-18" | "claude-3-haiku-20240307";
+type Model =
+  | "claude-3-5-sonnet-20240620"
+  | "gpt-4o-2024-08-06"
+  | "gpt-4o-mini-2024-07-18"
+  | "claude-3-haiku-20240307";
 
 const BIG_MODEL_TEMPERATURE = 0;
 const BIG_MODEL = "gpt-4o-2024-08-06";
@@ -156,7 +161,7 @@ export default async function handler(
     //page processing loop
     for (const page of pages) {
       if (page.page === 1) {
-        title = await getAnthropicCompletion(
+        title = await getCompletion(
           "Extract the title of the work from the following markdown content. Only return the title in <title></title>",
           page.md,
           BIG_MODEL,
@@ -184,7 +189,7 @@ export default async function handler(
         ) {
           console.log("attempting to generate better abstract");
 
-          betterAbstract = await getAnthropicCompletion(
+          betterAbstract = await getCompletion(
             "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Return the output in <betterAbstract></betterAbstract>",
             `Original abstract:\n${item.md}\n\nWeb context about ${title}:\n${webContext}\n\nEntire paper:\n${entirePaperMd}`,
             BIG_MODEL,
@@ -201,7 +206,7 @@ export default async function handler(
         if (item.type === "table") {
           tableCounter++;
           console.log("Attempting to summarize table ", tableCounter);
-          const tableSummary = await getAnthropicCompletion(
+          const tableSummary = await getCompletion(
             "Summarize the following table content. Provide a concise summary that captures the key points and insights from the table. Use the entire page as context. Return the output in <tableSummary></tableSummary>",
             `Table:\n${item.md}\n\nEntire Page:\n${page.md}`,
             BIG_MODEL,
@@ -223,7 +228,7 @@ export default async function handler(
         if (savedImage) {
           const imagePath = savedImage.path;
           console.log(imagePath);
-          const imageSummary = await getAnthropicCompletion(
+          const imageSummary = await getCompletion(
             "Summarize the content of the following image. Provide a concise summary that captures the key points and insights from the image. Return the output in <imageSummary></imageSummary>",
             `Title: ${title}\n\nPage context:\n${page.md}`,
             BIG_MODEL,
@@ -245,7 +250,7 @@ export default async function handler(
             "Abstract found in page text instead of markdown, generating better abstract"
           );
 
-          betterAbstract = await getAnthropicCompletion(
+          betterAbstract = await getCompletion(
             "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Return the output in <betterAbstract></betterAbstract>",
             `Original abstract:\n${page.text}\n\nWeb context about ${title}:\n${webContext}\n\nEntire paper:\n${entirePaperMd}`,
             BIG_MODEL,
@@ -317,60 +322,6 @@ export default async function handler(
   }
 }
 
-async function getAnthropicCompletion(
-  systemPrompt: string,
-  userPrompt: string,
-  model: string,
-  temperature: number,
-  xmlTag: string,
-  imagePath?: string
-) {
-  let messages: MessageParam[];
-
-  if (imagePath) {
-    const imageBuffer = fs.readFileSync(imagePath);
-    const mediaType = mime.getType(imagePath);
-    messages = [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: userPrompt },
-          {
-            type: "image",
-            source: {
-              data: imageBuffer.toString("base64"),
-              media_type: mediaType,
-              type: "base64",
-            },
-          } as ImageBlockParam,
-        ],
-      },
-    ];
-  } else {
-    messages = [
-      {
-        role: "user",
-        content: userPrompt,
-      },
-    ];
-  }
-
-  const completion = await anthropic.messages.create({
-    max_tokens: 8192,
-    system: [{ type: "text", text: systemPrompt }],
-    model: model,
-    temperature: temperature,
-    messages: messages,
-  });
-
-  const completionText = (completion.content[0] as Anthropic.TextBlock).text;
-  const regex = new RegExp(`<${xmlTag}>([\\s\\S]*?)</${xmlTag}>`);
-  const match = completionText.match(regex);
-  const parsedCompletion = match ? match[1] : completionText;
-
-  return parsedCompletion;
-}
-
 async function getWebContext(link: string): Promise<string> {
   console.log("Searching the web for: ", link);
   const result = await firecrawl.search(link);
@@ -434,4 +385,146 @@ async function synthesizeSpeechInChunks(text: string): Promise<Buffer> {
   }
 
   return Buffer.concat(audioBuffers);
+}
+
+async function getAnthropicCompletion(
+  systemPrompt: string,
+  userPrompt: string,
+  model: string,
+  temperature: number,
+  xmlTag: string,
+  imagePath?: string
+) {
+  let messages: MessageParam[];
+
+  if (imagePath) {
+    const imageBuffer = fs.readFileSync(imagePath);
+    const mediaType = mime.getType(imagePath);
+    messages = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: userPrompt },
+          {
+            type: "image",
+            source: {
+              data: imageBuffer.toString("base64"),
+              media_type: mediaType,
+              type: "base64",
+            },
+          } as ImageBlockParam,
+        ],
+      },
+    ];
+  } else {
+    messages = [
+      {
+        role: "user",
+        content: userPrompt,
+      },
+    ];
+  }
+
+  const completion = await anthropic.messages.create({
+    max_tokens: 8192,
+    system: [{ type: "text", text: systemPrompt }],
+    model: model,
+    temperature: temperature,
+    messages: messages,
+  });
+
+  const completionText = (completion.content[0] as Anthropic.TextBlock).text;
+  const regex = new RegExp(`<${xmlTag}>([\\s\\S]*?)</${xmlTag}>`);
+  const match = completionText.match(regex);
+  const parsedCompletion = match ? match[1] : completionText;
+
+  return parsedCompletion;
+}
+
+async function getOpenAICompletion(
+  systemPrompt: string,
+  userPrompt: string,
+  model: string,
+  temperature: number,
+  xmlTag: string,
+  imagePath?: string
+) {
+  let messages: ChatCompletionMessageParam[];
+
+  if (imagePath) {
+    const imageBuffer = fs.readFileSync(imagePath);
+    const mediaType = mime.getType(imagePath);
+    const base64Image = imageBuffer.toString("base64");
+    messages = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: userPrompt },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:${mediaType};base64,${base64Image}`,
+            },
+          },
+        ],
+      },
+    ];
+  } else {
+    messages = [
+      {
+        role: "user",
+        content: userPrompt,
+      },
+    ];
+  }
+
+  const completion = await openai.chat.completions.create({
+    messages: [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+      ...messages,
+    ],
+    model: model,
+    temperature: temperature,
+  });
+
+  const completionText = completion.choices[0].message.content!;
+  const regex = new RegExp(`<${xmlTag}>([\\s\\S]*?)</${xmlTag}>`);
+  const match = completionText.match(regex);
+  const parsedCompletion = match ? match[1] : completionText;
+
+  return parsedCompletion;
+}
+
+async function getCompletion(
+  systemPrompt: string,
+  userPrompt: string,
+  model: string,
+  temperature: number,
+  xmlTag: string,
+  imagePath?: string
+) {
+  if (model.includes("gpt")) {
+    return getOpenAICompletion(
+      systemPrompt,
+      userPrompt,
+      model,
+      temperature,
+      xmlTag,
+      imagePath
+    );
+  } else if (model.includes("claude")) {
+    return getAnthropicCompletion(
+      systemPrompt,
+      userPrompt,
+      model,
+      temperature,
+      xmlTag,
+      imagePath
+    );
+  } else {
+    throw new Error("Unsupported model type");
+  }
 }
