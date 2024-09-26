@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import fastifyStatic from "@fastify/static";
 // Handler imports
 import summarizeHandler from "@handlers/summarize";
+import highQualitySummarizeHandler from "@handlers/highQualitySummarize";
 
 const envToLogger = {
   development: {
@@ -57,7 +58,7 @@ fastify.register(fastifyStatic, {
 });
 
 // Routes
-fastify.post("/summarize", summarizeHandler);
+fastify.post("/summarize", highQualitySummarizeHandler);
 
 // Run the server!
 try {
