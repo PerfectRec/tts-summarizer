@@ -69,11 +69,11 @@ type Model =
   | "gpt-4o-mini-2024-07-18"
   | "claude-3-haiku-20240307";
 
-const BIG_MODEL_TEMPERATURE = 0;
-const BIG_MODEL = "claude-3-5-sonnet-20240620";
+const EDITING_MODEL_TEMPERATURE = 0;
+const EDITING_MODEL = "claude-3-5-sonnet-20240620";
 
-const SMALL_MODEL_TEMPERATURE = 0;
-const SMALL_MODEL = "gpt-4o-mini-2024-07-18";
+const IMAGE_PROCESSING_MODEL_TEMPERATURE = 0;
+const IMAGE_PROCESSING_MODEL = "gpt-4o-2024-08-06";
 
 const MAX_POLLY_CHAR_LIMIT = 1500;
 
@@ -122,6 +122,8 @@ export default async function handler(
   const ttsTextDir = path.join(tempDir, "tts-text");
   const tempObjectsDir = path.join(tempDir, "objects");
 
+  clearDirectory(tempImageDir);
+
   if (!fs.existsSync(tempImageDir)) {
     fs.mkdirSync(tempImageDir);
   }
@@ -141,7 +143,7 @@ export default async function handler(
   // Instantiate LlamaParseReader
   const reader = new LlamaParseReader({
     resultType: "json",
-    parsingInstruction: PARSING_PROMPT_FOR_LLAMAPARSE,
+    //parsingInstruction: PARSING_PROMPT_FOR_LLAMAPARSE,
   });
 
   // Load data from the temporary file
@@ -159,7 +161,7 @@ export default async function handler(
   const rewrittenChunks: string[] = [];
 
   if (summarizationMethod === "ultimate") {
-    const pageChunks = chunkArray(pages, 5);
+    const pageChunks = chunkArray(pages);
     for (const [index, chunk] of pageChunks.entries()) {
       for (const page of chunk) {
         for (const image of page.images) {
@@ -171,8 +173,8 @@ export default async function handler(
             const imageSummary = await getCompletion(
               IMAGE_SUMMARIZATION_SYSTEM_PROMPT,
               `Page context:\n${page.md}`,
-              BIG_MODEL,
-              BIG_MODEL_TEMPERATURE,
+              IMAGE_PROCESSING_MODEL,
+              IMAGE_PROCESSING_MODEL_TEMPERATURE,
               "imageSummary",
               imagePath
             );
@@ -182,17 +184,25 @@ export default async function handler(
         }
       }
 
-      console.log(`editing pages ${index * 5 + 1} to ${index * 5 + 5}`);
+      console.log(
+        index === 0
+          ? `editing pages ${index * 5 + 1} to ${index * 5 + 5}`
+          : `editing page ${index + 5}`
+      );
 
       const rewrittenChunk = await getCompletion(
         PAGE_EDIT_SYSTEM_PROMPT,
         `Pages:${JSON.stringify(chunk)}`,
-        BIG_MODEL,
-        BIG_MODEL_TEMPERATURE,
+        EDITING_MODEL,
+        EDITING_MODEL_TEMPERATURE,
         "editedPages"
       );
 
-      console.log(`edited pages ${index * 5 + 1} to ${index * 5 + 5}`);
+      console.log(
+        index === 0
+          ? `edited pages ${index * 5 + 1} to ${index * 5 + 5}`
+          : `edited page ${index + 5}`
+      );
 
       rewrittenChunks.push(rewrittenChunk);
     }
@@ -472,12 +482,29 @@ async function getStructuredOpenAICompletion(
   }
 }
 
-function chunkArray<T>(array: T[], size: number): T[][] {
+function chunkArray<T>(array: T[]): T[][] {
   const chunkedArray: T[][] = [];
-  for (let i = 0; i < array.length; i += size) {
-    chunkedArray.push(array.slice(i, i + size));
+  if (array.length > 0) {
+    chunkedArray.push(array.slice(0, 5)); // First chunk with 5 pages
+  }
+  for (let i = 5; i < array.length; i++) {
+    chunkedArray.push(array.slice(i, i + 1)); // Subsequent chunks with 1 page each
   }
   return chunkedArray;
+}
+
+function clearDirectory(directoryPath: string) {
+  if (fs.existsSync(directoryPath)) {
+    fs.readdirSync(directoryPath).forEach((file) => {
+      const filePath = path.join(directoryPath, file);
+      if (fs.lstatSync(filePath).isDirectory()) {
+        clearDirectory(filePath);
+        fs.rmdirSync(filePath);
+      } else {
+        fs.unlinkSync(filePath);
+      }
+    });
+  }
 }
 
 /*PROMPTS*/
@@ -489,12 +516,12 @@ const PARSING_PROMPT_FOR_LLAMAPARSE =
 const IMAGE_SUMMARIZATION_SYSTEM_PROMPT =
   "Summarize the content of the following image. Provide a concise summary that captures the key points and insights from the image. Return the output in <imageSummary></imageSummary>";
 
-const PAGE_EDIT_SYSTEM_PROMPT = `Edit the given pages to be more suitable for audio. Remove elements that would be unpleasant to listen to. Remove unnecessary meta information while focusing on the main content. 
+const PAGE_EDIT_SYSTEM_PROMPT = `Edit all the given pages to be more suitable for audio. Remove elements that would be unpleasant to listen to. Remove unnecessary meta information while focusing on the main content. 
 
 For papers, make sure to remove any unnecessary stuff before the abstract. Only keep the title, authors' names and affiliations. Note that it is important to extract the affiliation of each author.
 Remove references section but keep stuff after it. Keep one or two line equations but remove if there are multiple lines of equations. 
 
-Make sure to summarize tables. Do not include the table contents. For images, the summary will be provided to you, use that to determine if it should be included or not. For table and image summaries make sure to provide a heading that matches the number in the original work like "Figure 1" or "Table 1".
+Do not include the table contents but do include summarized text for the tables. For images, the summary will be provided to you, use that to determine if it should be included or not. For table and image summaries make sure to provide a heading that matches the number in the original work like "Figure 1" or "Table 1".
 
 However, reproduce other valid text one to one without changing anything. Just leave our markdown artifacts like # and *.
 
