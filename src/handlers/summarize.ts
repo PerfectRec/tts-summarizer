@@ -141,6 +141,7 @@ export default async function handler(
   // Instantiate LlamaParseReader
   const reader = new LlamaParseReader({
     resultType: "json",
+    parsingInstruction: "Please parse images, tables and equations correctly.",
   });
 
   // Load data from the temporary file
@@ -277,10 +278,22 @@ export default async function handler(
 
     for (const page of pages) {
       console.log(`Checking page ${page.page}`);
-      for (const item of page.items) {
+      for (const [index, item] of page.items.entries()) {
+        const contextItems = [
+          page.items[index - 2],
+          page.items[index - 1],
+          item,
+          page.items[index + 1],
+          page.items[index + 2],
+        ].filter(Boolean);
+
+        const contextMd = contextItems
+          .map((contextItem) => contextItem.md)
+          .join("\n\n");
+
         const keepItem = await getStructuredOpenAICompletion(
-          "The following item is a part of an parsed document. The document will be converted to audio for the user to listen to. Determine if the following item is relevant for the audio conversion. An item may be irrelevant if it contains meta information about publisher, journal or organization. We do consider personal info about the authors themselves as relevant. Return 'true' or 'false'",
-          `Item content:\n${item.md}`,
+          "The following item is a part of an parsed document. The document will be converted to audio for the user to listen to. Determine if the following item is relevant for the audio conversion. An item may be irrelevant if it contains meta information about publisher, journal, organization or authors. For authors only the name and organization tey are affiliated with are important. Keep items that are headings for other relevant items. Anything that seems like noisy data that wold not be pleasing to listen to should be removed. Return 'true' or 'false'",
+          `Item content:\n${item.md}\n\nContext:\n${contextMd}`,
           SMALL_MODEL,
           SMALL_MODEL_TEMPERATURE,
           keepItemResponse
@@ -291,7 +304,7 @@ export default async function handler(
 
       for (const image of page.images) {
         const keepImage = await getStructuredOpenAICompletion(
-          "The following item is a part of an parsed document. The document will be converted to audio for the user to listen to. Determine if the following image is relevant for the audio conversion. An item may be irrelevant if it contains meta information about publisher, journal or organization. We do consider personal info about the authors themselves as relevant. Return 'true' or 'false'",
+          "The following image is a part of an parsed document. The document will be converted to audio for the user to listen to. Determine if the following image is relevant for the audio conversion based on the provided summary.An item may be irrelevant if it contains meta information about publisher, journal, organization or authors. For authors only the name and organization tey are affiliated with are important. Return 'true' or 'false'",
           `Image summary:\n${image.summary}`,
           SMALL_MODEL,
           SMALL_MODEL_TEMPERATURE,
