@@ -279,9 +279,22 @@ export default async function handler(
     for (const page of pages) {
       console.log(`Checking page ${page.page}`);
       for (const [index, item] of page.items.entries()) {
+        const previousPages = pages.slice(
+          Math.max(0, page.page - 2),
+          page.page - 1
+        );
+        const nextPages = pages.slice(
+          page.page,
+          Math.min(pages.length, page.page + 2)
+        );
+        const contextPages = [...previousPages, page, ...nextPages];
+        const contextItems = contextPages.flatMap((p) => p.items);
+
         const keepItem = await getStructuredOpenAICompletion(
           ITEM_RETENTION_SYSTEM_PROMPT,
-          `Item content:\n${item.md}\n\nContext:\n${page.md}`,
+          `Item content:\n${JSON.stringify(item)}\n\nContext:\n${JSON.stringify(
+            contextItems
+          )}`,
           SMALL_MODEL,
           SMALL_MODEL_TEMPERATURE,
           keepItemResponse
@@ -615,7 +628,7 @@ async function getStructuredOpenAICompletion(
 
 /*This prompt is very important*/
 const PARSING_PROMPT_FOR_LLAMAPARSE =
-  "Extract tables, images and math properly.";
+  "Please parse images, tables and equations correctly.";
 
 const TITLE_EXTRACTION_SYSTEM_PROMPT =
   "Extract the title of the work from the following markdown content. Only return the title in <title></title>";
@@ -630,8 +643,16 @@ const IMAGE_SUMMARIZATION_SYSTEM_PROMPT =
   "Summarize the content of the following image. Provide a concise summary that captures the key points and insights from the image. Return the output in <imageSummary></imageSummary>";
 
 /*This prompt is very important*/
-const ITEM_RETENTION_SYSTEM_PROMPT =
-  "The following item is a part of an parsed document. The document will be converted to audio for the user to listen to. Determine if the following item is relevant for the audio conversion. An item may be irrelevant if it contains meta information about publisher, journal, organization or authors. Keep items that are headings for other relevant items. Usually stuff before the abstract is unnecessary excpet for the authors' names and organizations. Anything that looks like code should be removed.  Return 'true' or 'false'";
+const ITEM_RETENTION_SYSTEM_PROMPT = `The following item is a part of an parsed document that will be converted to audio. Other items on that page will also be provided to you as context. Determine if the following item's content is suitable for conversion to audio.
 
-const IMAGE_RETENTION_SYSTEM_PROMPT =
-  "The following image is a part of an parsed document. The document will be converted to audio for the user to listen to. Determine if the following image is relevant for the audio conversion based on the provided summary.An item may be irrelevant if it contains meta information about publisher, journal, organization or authors. For authors only the name and organization they are affiliated with are important. Usually stuff before the abstract is unnecessary. Return 'true' or 'false'";
+PAPERS
+Before the abstract only the paper title, authors' name, affiliations, and the abstract are important.
+
+Return 'true' or 'false'`;
+
+const IMAGE_RETENTION_SYSTEM_PROMPT = `The following image is a part of an parsed document. The document will be converted to audio for the user to listen to. Determine if the following image is relevant for the audio conversion based on the provided summary. An image may be irrelevant if it contains meta information about publisher, journal, organization or authors. 
+  
+PAPERS
+1. Usually images before the abstract that are not labeled figures in the work are unnecessary. 
+  
+Return 'true' or 'false'`;
