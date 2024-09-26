@@ -440,3 +440,6 @@ async function getStructuredOpenAICompletion(
 /*This prompt is very important*/
 const PARSING_PROMPT_FOR_LLAMAPARSE =
   "Please parse images, tables and equations correctly.";
+
+const IMAGE_SUMMARIZATION_SYSTEM_PROMPT =
+  "Summarize the content of the following image. Provide a concise summary that captures the key points and insights from the image. Return the output in <imageSummary></imageSummary>";
