@@ -141,7 +141,7 @@ export default async function handler(
   // Instantiate LlamaParseReader
   const reader = new LlamaParseReader({
     resultType: "json",
-    parsingInstruction: "Please parse images, tables and equations correctly.",
+    parsingInstruction: PARSING_PROMPT_FOR_LLAMAPARSE,
   });
 
   // Load data from the temporary file
@@ -170,7 +170,7 @@ export default async function handler(
     for (const page of pages) {
       if (page.page === 1) {
         title = await getCompletion(
-          "Extract the title of the work from the following markdown content. Only return the title in <title></title>",
+          TITLE_EXTRACTION_SYSTEM_PROMPT,
           page.md,
           BIG_MODEL,
           BIG_MODEL_TEMPERATURE,
@@ -198,7 +198,7 @@ export default async function handler(
           console.log("attempting to generate better abstract");
 
           betterAbstract = await getCompletion(
-            "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Return the output in <betterAbstract></betterAbstract>",
+            ABSTRACT_IMPROVEMENT_SYSTEM_PROMPT,
             `Original abstract:\n${item.md}\n\nWeb context about ${title}:\n${webContext}\n\nEntire paper:\n${entirePaperMd}`,
             BIG_MODEL,
             BIG_MODEL_TEMPERATURE,
@@ -215,7 +215,7 @@ export default async function handler(
           tableCounter++;
           console.log("Attempting to summarize table ", tableCounter);
           const tableSummary = await getCompletion(
-            "Summarize the following table content. Provide a concise summary that captures the key points and insights from the table. Use the entire page as context. Return the output in <tableSummary></tableSummary>",
+            TABLE_SUMMARIZATION_SYSTEM_PROMPT,
             `Table:\n${item.md}\n\nEntire Page:\n${page.md}`,
             BIG_MODEL,
             BIG_MODEL_TEMPERATURE,
@@ -237,7 +237,7 @@ export default async function handler(
           const imagePath = savedImage.path;
           console.log(imagePath);
           const imageSummary = await getCompletion(
-            "Summarize the content of the following image. Provide a concise summary that captures the key points and insights from the image. Return the output in <imageSummary></imageSummary>",
+            IMAGE_SUMMARIZATION_SYSTEM_PROMPT,
             `Title: ${title}\n\nPage context:\n${page.md}`,
             BIG_MODEL,
             BIG_MODEL_TEMPERATURE,
@@ -259,7 +259,7 @@ export default async function handler(
           );
 
           betterAbstract = await getCompletion(
-            "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Return the output in <betterAbstract></betterAbstract>",
+            ABSTRACT_IMPROVEMENT_SYSTEM_PROMPT,
             `Original abstract:\n${page.text}\n\nWeb context about ${title}:\n${webContext}\n\nEntire paper:\n${entirePaperMd}`,
             BIG_MODEL,
             BIG_MODEL_TEMPERATURE,
@@ -280,7 +280,7 @@ export default async function handler(
       console.log(`Checking page ${page.page}`);
       for (const [index, item] of page.items.entries()) {
         const keepItem = await getStructuredOpenAICompletion(
-          "The following item is a part of an parsed document. The document will be converted to audio for the user to listen to. Determine if the following item is relevant for the audio conversion. An item may be irrelevant if it contains meta information about publisher, journal, organization or authors. Keep items that are headings for other relevant items. Usually stuff before the abstract is unnecessary excpet for the authors' names and organizations. Anything that looks like code should be removed.  Return 'true' or 'false'",
+          ITEM_RETENTION_SYSTEM_PROMPT,
           `Item content:\n${item.md}\n\nContext:\n${page.md}`,
           SMALL_MODEL,
           SMALL_MODEL_TEMPERATURE,
@@ -292,7 +292,7 @@ export default async function handler(
 
       for (const image of page.images) {
         const keepImage = await getStructuredOpenAICompletion(
-          "The following image is a part of an parsed document. The document will be converted to audio for the user to listen to. Determine if the following image is relevant for the audio conversion based on the provided summary.An item may be irrelevant if it contains meta information about publisher, journal, organization or authors. For authors only the name and organization they are affiliated with are important. Usually stuff before the abstract is unnecessary. Return 'true' or 'false'",
+          IMAGE_RETENTION_SYSTEM_PROMPT,
           `Image summary:\n${image.summary}`,
           SMALL_MODEL,
           SMALL_MODEL_TEMPERATURE,
@@ -610,3 +610,28 @@ async function getStructuredOpenAICompletion(
     return response.parsed;
   }
 }
+
+/*PROMPTS*/
+
+/*This prompt is very important*/
+const PARSING_PROMPT_FOR_LLAMAPARSE =
+  "Extract tables, images and math properly.";
+
+const TITLE_EXTRACTION_SYSTEM_PROMPT =
+  "Extract the title of the work from the following markdown content. Only return the title in <title></title>";
+
+const ABSTRACT_IMPROVEMENT_SYSTEM_PROMPT =
+  "Based on the original extract and web context about the given work, generate a better and more contextual abstract that does a better job of introducing the reader to the work. Return the output in <betterAbstract></betterAbstract>";
+
+const TABLE_SUMMARIZATION_SYSTEM_PROMPT =
+  "Summarize the following table content. Provide a concise summary that captures the key points and insights from the table. Use the entire page as context. Return the output in <tableSummary></tableSummary>";
+
+const IMAGE_SUMMARIZATION_SYSTEM_PROMPT =
+  "Summarize the content of the following image. Provide a concise summary that captures the key points and insights from the image. Return the output in <imageSummary></imageSummary>";
+
+/*This prompt is very important*/
+const ITEM_RETENTION_SYSTEM_PROMPT =
+  "The following item is a part of an parsed document. The document will be converted to audio for the user to listen to. Determine if the following item is relevant for the audio conversion. An item may be irrelevant if it contains meta information about publisher, journal, organization or authors. Keep items that are headings for other relevant items. Usually stuff before the abstract is unnecessary excpet for the authors' names and organizations. Anything that looks like code should be removed.  Return 'true' or 'false'";
+
+const IMAGE_RETENTION_SYSTEM_PROMPT =
+  "The following image is a part of an parsed document. The document will be converted to audio for the user to listen to. Determine if the following image is relevant for the audio conversion based on the provided summary.An item may be irrelevant if it contains meta information about publisher, journal, organization or authors. For authors only the name and organization they are affiliated with are important. Usually stuff before the abstract is unnecessary. Return 'true' or 'false'";
