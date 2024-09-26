@@ -120,6 +120,7 @@ export default async function handler(
   const tempImageDir = path.join(tempDir, "images-temp");
   const audioOutputDir = path.join(tempDir, "audio-output");
   const ttsTextDir = path.join(tempDir, "tts-text");
+  const tempObjectsDir = path.join(tempDir, "objects");
 
   if (!fs.existsSync(tempImageDir)) {
     fs.mkdirSync(tempImageDir);
@@ -131,6 +132,10 @@ export default async function handler(
 
   if (!fs.existsSync(ttsTextDir)) {
     fs.mkdirSync(ttsTextDir);
+  }
+
+  if (!fs.existsSync(tempObjectsDir)) {
+    fs.mkdirSync(tempObjectsDir);
   }
 
   // Instantiate LlamaParseReader
@@ -266,6 +271,42 @@ export default async function handler(
       }
     }
 
+    const keepItemResponse = z.object({
+      keep: z.boolean(),
+    });
+
+    for (const page of pages) {
+      console.log(`Checking page ${page.page}`);
+      for (const item of page.items) {
+        const keepItem = await getStructuredOpenAICompletion(
+          "The following item is a part of an parsed document. The document will be converted to audio for the user to listen to. Determine if the following item is relevant for the audio conversion. An item may be irrelevant if it contains meta information about publisher, journal or organization. We do consider personal info about the authors themselves as relevant. Return 'true' or 'false'",
+          `Item content:\n${item.md}`,
+          SMALL_MODEL,
+          SMALL_MODEL_TEMPERATURE,
+          keepItemResponse
+        );
+        item.keep = keepItem?.keep;
+        console.log("tagged item");
+      }
+
+      for (const image of page.images) {
+        const keepImage = await getStructuredOpenAICompletion(
+          "The following item is a part of an parsed document. The document will be converted to audio for the user to listen to. Determine if the following image is relevant for the audio conversion. An item may be irrelevant if it contains meta information about publisher, journal or organization. We do consider personal info about the authors themselves as relevant. Return 'true' or 'false'",
+          `Image summary:\n${image.summary}`,
+          SMALL_MODEL,
+          SMALL_MODEL_TEMPERATURE,
+          keepItemResponse
+        );
+        image.keep = keepImage?.keep;
+        console.log("tagged image");
+      }
+    }
+
+    fs.writeFileSync(
+      path.join(tempObjectsDir, "pages.json"),
+      JSON.stringify(pages, null, 2)
+    );
+
     //page combination loop
     let combinedText = "";
     console.log("attempting to combine text for TTS");
@@ -277,23 +318,29 @@ export default async function handler(
     for (const page of pages) {
       //image summaries should go first as they are usually first in the page
       for (const image of page.images) {
-        combinedText += image.summary
-          ? `Image ${image.imageNumber}: ${image.summary}\n\n`
-          : "\n\n";
+        if (image.keep) {
+          combinedText += image.summary
+            ? `Image ${image.imageNumber}: ${image.summary}\n\n`
+            : "\n\n";
+        }
       }
 
       for (const [index, item] of page.items.entries()) {
-        if (
-          page.items[index - 1]?.type === "heading" &&
-          page.items[index - 1]?.value?.toLocaleLowerCase().includes("abstract")
-        ) {
-          combinedText += item.betterMd + "\n\n" || item.md + "\n\n";
-        } else if (item.type === "table") {
-          combinedText += item.summary
-            ? `Table ${item.tableNumber}: ${item.summary}\n\n`
-            : item.value + "\n\n";
-        } else {
-          combinedText += item.md + "\n\n";
+        if (item.keep) {
+          if (
+            page.items[index - 1]?.type === "heading" &&
+            page.items[index - 1]?.value
+              ?.toLocaleLowerCase()
+              .includes("abstract")
+          ) {
+            combinedText += item.betterMd + "\n\n" || item.md + "\n\n";
+          } else if (item.type === "table") {
+            combinedText += item.summary
+              ? `Table ${item.tableNumber}: ${item.summary}\n\n`
+              : item.value + "\n\n";
+          } else {
+            combinedText += item.md + "\n\n";
+          }
         }
       }
     }
