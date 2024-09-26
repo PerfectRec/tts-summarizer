@@ -143,7 +143,7 @@ export default async function handler(
   // Instantiate LlamaParseReader
   const reader = new LlamaParseReader({
     resultType: "json",
-    //parsingInstruction: PARSING_PROMPT_FOR_LLAMAPARSE,
+    parsingInstruction: PARSING_PROMPT_FOR_LLAMAPARSE,
   });
 
   // Load data from the temporary file
@@ -511,7 +511,7 @@ function clearDirectory(directoryPath: string) {
 
 /*This prompt is very important*/
 const PARSING_PROMPT_FOR_LLAMAPARSE =
-  "Please parse images, tables and equations correctly.";
+  "Do not add headings or any other text that does not exist in the source. Do not cut off words at the end and start of pages.";
 
 const IMAGE_SUMMARIZATION_SYSTEM_PROMPT =
   "Summarize the content of the following image. Provide a concise summary that captures the key points and insights from the image. Return the output in <imageSummary></imageSummary>";
@@ -521,7 +521,7 @@ const PAGE_EDIT_SYSTEM_PROMPT = `Edit all the given pages to be more suitable fo
 For papers, make sure to remove any unnecessary stuff before the abstract. Only keep the title, authors' names and affiliations. Note that it is important to extract the affiliation of each author.
 Remove references section but keep stuff after it. Keep one or two line equations but remove if there are multiple lines of equations. 
 
-Do not include the table contents but do include summarized text for the tables. For images, the summary will be provided to you, use that to determine if it should be included or not. For table and image summaries make sure to provide a heading that matches the number in the original work like "Figure 1" or "Table 1".
+Do not include the table contents but do include summarized text for the tables. For images, the summary will be provided to you, use that to determine if it should be included or not. For table and image summaries make sure to provide a heading that matches the number in the original work like "Figure 1" or "Table 1". Keep notes or captions below the images or tables as-is without summarizing.
 
 However, reproduce other valid text one to one without changing anything. Just leave our markdown artifacts like # and *.
 
