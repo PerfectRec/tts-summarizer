@@ -3750,10 +3750,31 @@ path-scurry@^2.0.0:
     lru-cache "^11.0.0"
     minipass "^7.1.2"
 
+path2d@^0.2.1:
+  version "0.2.1"
+  resolved "https://registry.yarnpkg.com/path2d/-/path2d-0.2.1.tgz#faf98e5e2222541805a6ac232adc026332330765"
+  integrity sha512-Fl2z/BHvkTNvkuBzYTpTuirHZg6wW9z8+4SND/3mDTEcYbbNKWAy21dz9D3ePNNwrrK8pqZO5vLPZ1hLF6T7XA==
+
 pathe@^1.1.2:
   version "1.1.2"
   resolved "https://registry.yarnpkg.com/pathe/-/pathe-1.1.2.tgz#6c4cb47a945692e48a1ddd6e4094d170516437ec"
   integrity sha512-whLdWMYL2TwI08hn8/ZqAbrVemu0LNaNNJZX73O6qaIdCTfXutsLhMkjdENX0qhsQ9uIimo4/aQOmXkoon2nDQ==
+
+pdf-to-png-converter@^3.3.0:
+  version "3.3.0"
+  resolved "https://registry.yarnpkg.com/pdf-to-png-converter/-/pdf-to-png-converter-3.3.0.tgz#4b473393ceab27dd2271a7fb91b80523ec26a33f"
+  integrity sha512-MfmJ5f8ue76bcI+3iDxadLW2E8ynivEHknlv26ui9GUj9NRfMVZrq2tVH3IpkUFHXJyEwpEXgTPOfxtNq/8J/w==
+  dependencies:
+    canvas "^2.11.2"
+    pdfjs-dist "^4.5.136"
+
+pdfjs-dist@^4.5.136:
+  version "4.6.82"
+  resolved "https://registry.yarnpkg.com/pdfjs-dist/-/pdfjs-dist-4.6.82.tgz#4f171289f1810f324cd17c58bc59bd5bd0e0db7e"
+  integrity sha512-BUOryeRFwvbLe0lOU6NhkJNuVQUp06WxlJVVCsxdmJ4y5cU3O3s3/0DunVdK1PMm7v2MUw52qKYaidhDH1Z9+w==
+  optionalDependencies:
+    canvas "^2.11.2"
+    path2d "^0.2.1"
 
 pg-int8@1.0.1:
   version "1.0.1"

@@ -14,6 +14,7 @@ import { OpenAI } from "openai";
 import { ChatCompletionMessageParam } from "openai/resources";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
+import { pdfToPng } from "pdf-to-png-converter";
 
 interface SummarizeRequestParams {
   summarizationMethod:
@@ -73,7 +74,7 @@ const EDITING_MODEL_TEMPERATURE = 0;
 const EDITING_MODEL = "claude-3-5-sonnet-20240620";
 
 const IMAGE_PROCESSING_MODEL_TEMPERATURE = 0;
-const IMAGE_PROCESSING_MODEL = "gpt-4o-2024-08-06";
+const IMAGE_PROCESSING_MODEL = "claude-3-5-sonnet-20240620";
 
 const MAX_POLLY_CHAR_LIMIT = 1500;
 
@@ -105,7 +106,7 @@ export default async function handler(
   reply: FastifyReply
 ) {
   const { summarizationMethod } = request.query;
-  const fileBuffer = request.body;
+  const fileBuffer = request.body as Buffer;
 
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -140,83 +141,32 @@ export default async function handler(
     fs.mkdirSync(tempObjectsDir);
   }
 
-  // Instantiate LlamaParseReader
-  const reader = new LlamaParseReader({
-    resultType: "json",
-    parsingInstruction: PARSING_PROMPT_FOR_LLAMAPARSE,
+  console.log("attempting to convert pdf pages to images");
+  const pngPages = await pdfToPng(fileBuffer, {
+    viewportScale: 1.0,
+    outputFolder: tempImageDir,
   });
-
-  // Load data from the temporary file
-  const json = await reader.loadJson(fileBuffer);
-  const pages: Pages = json[0].pages;
-  const images = await reader.getImages(json, tempImageDir);
-  const imagesMap: Map<string, Image> = new Map(
-    images.map((image: Image) => [image.name, image])
-  );
-
-  console.log("Converted to JSON and images");
-
-  let ttsText;
-  let webContext;
-  const rewrittenChunks: string[] = [];
+  console.log("converted pdf pages to images");
 
   if (summarizationMethod === "ultimate") {
-    const pageChunks = chunkArray(pages);
-    for (const [index, chunk] of pageChunks.entries()) {
-      for (const page of chunk) {
-        for (const image of page.images) {
-          console.log("attempting to summarize image ");
-          const savedImage = imagesMap.get(image.name);
-          if (savedImage) {
-            const imagePath = savedImage.path;
-            console.log(imagePath);
-            const imageSummary = await getCompletion(
-              IMAGE_SUMMARIZATION_SYSTEM_PROMPT,
-              `Page context:\n${page.md}`,
-              IMAGE_PROCESSING_MODEL,
-              IMAGE_PROCESSING_MODEL_TEMPERATURE,
-              "imageSummary",
-              imagePath
-            );
-            image.summary = imageSummary;
-          }
-          console.log("Summarized image");
-        }
-      }
-
-      console.log(
-        index === 0
-          ? `editing pages ${index * 5 + 1} to ${index * 5 + 5}`
-          : `editing page ${index + 5}`
+    let pageText: string[] = [];
+    for (const [index, pngPage] of pngPages.entries()) {
+      console.log("processing page ", index + 1);
+      const pagePath = pngPage.path;
+      const pageContent = await getCompletion(
+        PAGE_IMAGE_PARSING_PROMPT,
+        `Here is the page`,
+        IMAGE_PROCESSING_MODEL,
+        IMAGE_PROCESSING_MODEL_TEMPERATURE,
+        "page",
+        pagePath
       );
-
-      const rewrittenChunk = await getCompletion(
-        PAGE_EDIT_SYSTEM_PROMPT,
-        `Pages:${JSON.stringify(chunk)}`,
-        EDITING_MODEL,
-        EDITING_MODEL_TEMPERATURE,
-        "editedPages"
-      );
-
-      console.log(
-        index === 0
-          ? `edited pages ${index * 5 + 1} to ${index * 5 + 5}`
-          : `edited page ${index + 5}`
-      );
-
-      rewrittenChunks.push(rewrittenChunk);
+      pageText.push(pageContent);
+      console.log("processed page ", index + 1);
     }
 
-    fs.writeFileSync(
-      path.join(tempObjectsDir, "pages.json"),
-      JSON.stringify(pages, null, 2)
-    );
-
-    //page combination loop
     console.log("attempting to combine text for TTS");
-    let combinedText = rewrittenChunks.join("\n");
-
-    ttsText = combinedText.replace(/#/g, "");
+    const ttsText = pageText.join("\n");
     console.log("combined text for TTS");
     const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
     fs.writeFileSync(ttsTextFilePath, ttsText);
@@ -482,17 +432,6 @@ async function getStructuredOpenAICompletion(
   }
 }
 
-function chunkArray<T>(array: T[]): T[][] {
-  const chunkedArray: T[][] = [];
-  if (array.length > 0) {
-    chunkedArray.push(array.slice(0, 5)); // First chunk with 5 pages
-  }
-  for (let i = 5; i < array.length; i++) {
-    chunkedArray.push(array.slice(i, i + 1)); // Subsequent chunks with 1 page each
-  }
-  return chunkedArray;
-}
-
 function clearDirectory(directoryPath: string) {
   if (fs.existsSync(directoryPath)) {
     fs.readdirSync(directoryPath).forEach((file) => {
@@ -509,20 +448,14 @@ function clearDirectory(directoryPath: string) {
 
 /*PROMPTS*/
 
-/*This prompt is very important*/
-const PARSING_PROMPT_FOR_LLAMAPARSE =
-  "Do not add headings or any other text that does not exist in the source. Do not cut off words at the end and start of pages.";
+const PAGE_IMAGE_PARSING_PROMPT = `Extract the text of this page one to one. I want the entire text. 
 
-const IMAGE_SUMMARIZATION_SYSTEM_PROMPT =
-  "Summarize the content of the following image. Provide a concise summary that captures the key points and insights from the image. Return the output in <imageSummary></imageSummary>";
+For images, figures and tables, instead of the raw content, write a summary in <image-x>, <table-x> or <figure-x> xml tags where x is the number given to the image, table or figure in the original doc. The summary should be detailed and describe what the image or table is trying to convey. Do not include the caption/note below or above the figure,image or table written by the author as it does not make sense along with the summary. 
 
-const PAGE_EDIT_SYSTEM_PROMPT = `Edit all the given pages to be more suitable for audio. Remove elements that would be unpleasant to listen to. Remove unnecessary meta information while focusing on the main content. 
+For papers, before the abstract, only the title, authors' names and affiliations are important. Each author's name should be followed by their affiliation instead of grouping all the author names together.
 
-For papers, make sure to remove any unnecessary stuff before the abstract. Only keep the title, authors' names and affiliations. Note that it is important to extract the affiliation of each author.
-Remove references section but keep stuff after it. Keep one or two line equations but remove if there are multiple lines of equations. 
+Include cut off sentences or words at the edge. Do not include the page numbers.
 
-Do not include the table contents but do include summarized text for the tables. For images, the summary will be provided to you, use that to determine if it should be included or not. For table and image summaries make sure to provide a heading that matches the number in the original work like "Figure 1" or "Table 1". Keep notes or captions below the images or tables as-is without summarizing.
+Equations must be written in a way that is pleasant to hear. For example, implied multiplication must be written as "times". Make any other changes you think are necessary.
 
-However, reproduce other valid text one to one without changing anything. Just leave our markdown artifacts like # and *.
-
-Return the improved audio optimized page in <editedPages></editedPages> xml tags.`;
+Put the entire output in <page> xml tags.`;
