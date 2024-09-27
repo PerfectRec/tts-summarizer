@@ -143,7 +143,7 @@ export default async function handler(
 
   console.log("attempting to convert pdf pages to images");
   const pngPages = await pdfToPng(fileBuffer, {
-    viewportScale: 1.0,
+    viewportScale: 2.0,
     outputFolder: tempImageDir,
   });
   console.log("converted pdf pages to images");
@@ -161,7 +161,18 @@ export default async function handler(
         "page",
         pagePath
       );
-      pageText.push(pageContent);
+
+      console.log("improving page", index + 1);
+      const improvedPageContent = await getCompletion(
+        PAGE_IMPROVEMENT_PROMPT,
+        pageContent,
+        IMAGE_PROCESSING_MODEL,
+        IMAGE_PROCESSING_MODEL_TEMPERATURE,
+        "page",
+        pagePath
+      );
+
+      pageText.push(improvedPageContent);
       console.log("processed page ", index + 1);
     }
 
@@ -448,7 +459,7 @@ function clearDirectory(directoryPath: string) {
 
 /*PROMPTS*/
 
-const PAGE_IMAGE_PARSING_PROMPT = `Extract the text of this page one to one. I want the entire text. 
+const PAGE_IMAGE_PARSING_PROMPT = `Extract the text of this page accurately. I want the entire text. 
 
 For images, figures and tables, instead of the raw content, write a summary in <image-x>, <table-x> or <figure-x> xml tags where x is the number given to the image, table or figure in the original doc. The summary should be detailed and describe what the image or table is trying to convey. Do not include the caption/note below or above the figure,image or table written by the author as it does not make sense along with the summary. 
 
@@ -456,6 +467,21 @@ For papers, before the abstract, only the title, authors' names and affiliations
 
 Include cut off sentences or words at the edge. Do not include the page numbers.
 
-Equations must be written in a way that is pleasant to hear. For example, implied multiplication must be written as "times". Make any other changes you think are necessary.
-
 Put the entire output in <page> xml tags.`;
+
+const PAGE_IMPROVEMENT_PROMPT = `The user will provide you with a page and its text extract. The given text extract will converted to audio. It may have multiple issues that prevent it from being suitable for audio that you need to fix.
+
+1. If it is a paper, remove anything before the abstract that is not the title, authors' names or affiliations. Remove any meta-information.
+2. Remove superscripts and subscripts from text that is not part of math expression.
+3. Remove citation numbers like [x]. In general, remove any artifacts from the output that will degrade the audio experience. 
+4. Fix any inaccuracies in parsing the text.
+5. Unhyphenate words that are split between lines
+6. If you see any <figure>, <table> or <image> elements, reposition them in a more appropriate place like when it is first mentioned. Do this if these elements split a paragraph in the middle as well. This will make more sense when the user is listening.
+7. Improve the <figure>, <table> or <image> elements which are summaries of the raw images, figures or tables in the page. 
+8. Mathematical expressions are really hard to listen to. You need to convert it to words as much as possible. For example, multiplication is often implied however for listening you should add "times" where necessary to improve the experience. 
+9. Make sure the <figure>, <table> or <image> numbers are accurate.
+10. If there is any figure, table or image caption/note from the original text still remaining remove them as they do not make sense with respect to the summarized elements.
+11. Remove the references section.
+
+Return the improved page extract in <page> xml tags.
+`;
