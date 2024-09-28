@@ -463,7 +463,7 @@ const PAGE_IMAGE_PARSING_PROMPT = `Extract the text of this page accurately. I w
 
 For images, figures and tables, instead of the raw content, write a summary in <image-x>, <table-x> or <figure-x> xml tags where x is the number given to the image, table or figure in the original doc. The summary should be detailed and describe what the image or table is trying to convey. Do not include the caption/note below or above the figure,image or table written by the author as it does not make sense along with the summary. 
 
-For papers, before the abstract, only the title, authors' names and affiliations are important. Each author's name should be followed by their affiliation instead of grouping all the author names together.
+For papers, before the abstract, only the title, authors' names and affiliations are important.
 
 Include cut off sentences or words at the edge. Do not include the page numbers.
 
@@ -471,17 +471,18 @@ Put the entire output in <page> xml tags.`;
 
 const PAGE_IMPROVEMENT_PROMPT = `The user will provide you with a page and its text extract. The given text extract will converted to audio. It may have multiple issues that prevent it from being suitable for audio that you need to fix.
 
-1. If it is a paper, remove anything before the abstract that is not the title, authors' names or affiliations. Remove any meta-information.
-2. Remove superscripts and subscripts from text that is not part of math expression.
-3. Remove citation numbers like [x]. In general, remove any artifacts from the output that will degrade the audio experience. 
-4. Fix any inaccuracies in parsing the text.
-5. Unhyphenate words that are split between lines
-6. If you see any <figure>, <table> or <image> elements, reposition them in a more appropriate place like when it is first mentioned. Do this if these elements split a paragraph in the middle as well. This will make more sense when the user is listening.
-7. Improve the <figure>, <table> or <image> elements which are summaries of the raw images, figures or tables in the page. 
-8. Mathematical expressions are really hard to listen to. You need to convert it to words as much as possible. For example, multiplication is often implied however for listening you should add "times" where necessary to improve the experience. 
-9. Make sure the <figure>, <table> or <image> numbers are accurate.
-10. If there is any figure, table or image caption/note from the original text still remaining remove them as they do not make sense with respect to the summarized elements.
-11. Remove the references section.
+- If it is a paper, remove anything before the abstract that is not the title, authors' names or affiliations. Remove any meta-information.
+- Each author's name should be followed by their affiliation instead of grouping all the author names together
+- Remove superscripts and subscripts from text that is not part of math expression.
+- Remove citation numbers like [x]. In general, remove any artifacts from the output that will degrade the audio experience. 
+- Fix any inaccuracies in parsing the text.
+- Unhyphenate words that are split between lines
+- If you see any <figure>, <table> or <image> elements, reposition them in a more appropriate place like when it is first mentioned. Do this if these elements split a paragraph in the middle as well. This will make more sense when the user is listening.
+- Improve the <figure>, <table> or <image> elements which are summaries of the raw images, figures or tables in the page. 
+- Mathematical expressions are really hard to listen to. You need to convert it to words as much as possible. For example, multiplication is often implied however for listening you should add "times" where necessary to improve the experience. 
+- Make sure the <figure>, <table> or <image> numbers are accurate.
+- If there is any figure, table or image caption/note from the original text still remaining remove them as they do not make sense with respect to the summarized elements.
+- Remove the references section.
 
 Return the improved page extract in <page> xml tags.
 `;
