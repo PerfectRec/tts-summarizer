@@ -141,49 +141,67 @@ export default async function handler(
     fs.mkdirSync(tempObjectsDir);
   }
 
-  console.log("attempting to convert pdf pages to images");
-  const pngPages = await pdfToPng(fileBuffer, {
-    viewportScale: 2.0,
-    outputFolder: tempImageDir,
-  });
-  console.log("converted pdf pages to images");
+  // console.log("attempting to convert pdf pages to images");
+  // const pngPages = await pdfToPng(fileBuffer, {
+  //   viewportScale: 2.0,
+  //   outputFolder: tempImageDir,
+  // });
+  // console.log("converted pdf pages to images");
 
   if (summarizationMethod === "ultimate") {
-    let pageText: string[] = [];
-    for (const [index, pngPage] of pngPages.entries()) {
-      console.log("processing page ", index + 1);
-      const pagePath = pngPage.path;
-      const pageContent = await getCompletion(
-        PAGE_IMAGE_PARSING_PROMPT,
-        `Here is the page`,
-        IMAGE_PROCESSING_MODEL,
-        IMAGE_PROCESSING_MODEL_TEMPERATURE,
-        "page",
-        pagePath
-      );
+    // let pageText: string[] = [];
+    // for (const [index, pngPage] of pngPages.entries()) {
+    //   console.log("processing page ", index + 1);
+    //   const pagePath = pngPage.path;
+    //   const pageContent = await getCompletion(
+    //     PAGE_IMAGE_PARSING_PROMPT,
+    //     `Here is the page`,
+    //     IMAGE_PROCESSING_MODEL,
+    //     IMAGE_PROCESSING_MODEL_TEMPERATURE,
+    //     "page",
+    //     pagePath
+    //   );
 
-      console.log("improving page", index + 1);
-      const improvedPageContent = await getCompletion(
-        PAGE_IMPROVEMENT_PROMPT,
-        pageContent,
-        IMAGE_PROCESSING_MODEL,
-        IMAGE_PROCESSING_MODEL_TEMPERATURE,
-        "page",
-        pagePath
-      );
+    //   console.log("improving page", index + 1);
+    //   const improvedPageContent = await getCompletion(
+    //     PAGE_IMPROVEMENT_PROMPT,
+    //     pageContent,
+    //     IMAGE_PROCESSING_MODEL,
+    //     IMAGE_PROCESSING_MODEL_TEMPERATURE,
+    //     "page",
+    //     pagePath
+    //   );
 
-      pageText.push(improvedPageContent);
-      console.log("processed page ", index + 1);
-    }
+    //   pageText.push(improvedPageContent);
+    //   console.log("processed page ", index + 1);
+    // }
 
-    console.log("attempting to combine text for TTS");
-    const ttsText = pageText.join("\n");
-    console.log("combined text for TTS");
+    // console.log("attempting to combine text for TTS");
+    // let ttsText = pageText.join("\n");
+
+    // // Replace <figure-x>, <table-x>, and <image-x> tags with "Figure X summary:"
+    // ttsText = ttsText.replace(
+    //   /<figure-(\d+)>(.*?)<\/figure-\d+>/gs,
+    //   "Figure $1 summary: $2"
+    // );
+    // ttsText = ttsText.replace(
+    //   /<table-(\d+)>(.*?)<\/table-\d+>/gs,
+    //   "Table $1 summary: $2"
+    // );
+    // ttsText = ttsText.replace(
+    //   /<image-(\d+)>(.*?)<\/image-\d+>/gs,
+    //   "Image $1 summary: $2"
+    // );
+
+    // console.log("combined text for TTS");
+    // const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
+    // fs.writeFileSync(ttsTextFilePath, ttsText);
+
     const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
-    fs.writeFileSync(ttsTextFilePath, ttsText);
+    const ttsText = fs.readFileSync(ttsTextFilePath, "utf-8");
 
     try {
-      throw new Error("Audio generation skipped");
+      //throw new Error("Audio generation skipped");
       const audioBuffer = await synthesizeSpeechInChunks(ttsText);
       console.log("Generated audio file");
 
