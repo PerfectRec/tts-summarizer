@@ -25,56 +25,31 @@ interface SummarizeRequestParams {
     | "ultimate";
 }
 
-//Types for the LlamaParse JSON output
-interface BoundingBox {
-  x: number | null;
-  y: number;
-  w: number;
-  h: number;
-}
-
-interface Item {
-  type: string;
-  value?: string;
-  md: string;
-  bBox: BoundingBox;
-  lvl?: number;
-  [key: string]: any; // Allow for additional properties
-}
-
-interface Page {
-  page: number;
-  items: Item[];
-  [key: string]: any; // Allow for additional properties
-}
-
-export interface Image {
-  name: string;
-  height: number;
-  width: number;
-  x: number;
-  y: number;
-  original_width: number;
-  original_height: number;
-  path: string;
-  job_id: string;
-  original_pdf_path: string;
-  page_number: number;
-}
-
-type Pages = Page[];
-
 type Model =
   | "claude-3-5-sonnet-20240620"
   | "gpt-4o-2024-08-06"
   | "gpt-4o-mini-2024-07-18"
   | "claude-3-haiku-20240307";
 
-const EDITING_MODEL_TEMPERATURE = 0;
-const EDITING_MODEL = "claude-3-5-sonnet-20240620";
+const modelConfig: {[task: string]: {temperature: number, model: Model}} = {
+  extraction: {
+    temperature: 0.5,
+    model: "claude-3-5-sonnet-20240620"
+  },
+  summarization: {
+    temperature: 1,
+    model: "gpt-4o-2024-08-06"
+  },
+  cleanup: {
+    temperature: 0,
+    model: "gpt-4o-2024-08-06"
+  },
+  math: {
+    temperature: 0,
+    model: "claude-3-5-sonnet-20240620"
+  }
 
-const IMAGE_PROCESSING_MODEL_TEMPERATURE = 0;
-const IMAGE_PROCESSING_MODEL = "claude-3-5-sonnet-20240620";
+}
 
 const MAX_POLLY_CHAR_LIMIT = 1500;
 
@@ -98,6 +73,14 @@ const openai = new OpenAI({
     "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`,
   },
 });
+
+/*
+Algorithm:
+1. Extract raw text 
+2. Summarize figures/tables
+3. Insert figures/tables at the right spot
+4. Clean up
+*/
 
 export default async function handler(
   request: FastifyRequest<{
@@ -149,25 +132,27 @@ export default async function handler(
   console.log("converted pdf pages to images");
 
   if (summarizationMethod === "ultimate") {
+
+    //extract
     let pageText: string[] = [];
     for (const [index, pngPage] of pngPages.entries()) {
       console.log("processing page ", index + 1);
       const pagePath = pngPage.path;
       const pageContent = await getCompletion(
-        PAGE_IMAGE_PARSING_PROMPT,
+        EXTRACT_PROMPT,
         `Here is the page`,
-        IMAGE_PROCESSING_MODEL,
-        IMAGE_PROCESSING_MODEL_TEMPERATURE,
+        modelConfig.extraction.model,
+        modelConfig.extraction.temperature,
         "page",
         pagePath
       );
 
-      // console.log("improving page", index + 1);
+      // console.log("cleaning up page", index + 1);
       // const improvedPageContent = await getCompletion(
-      //   PAGE_IMPROVEMENT_PROMPT,
+      //   CLEANUP_PROMPT,
       //   pageContent,
-      //   IMAGE_PROCESSING_MODEL,
-      //   IMAGE_PROCESSING_MODEL_TEMPERATURE,
+      //   modelConfig.cleanup.model,
+      //   modelConfig.cleanup.temperature,
       //   "page",
       //   pagePath
       // );
@@ -177,22 +162,72 @@ export default async function handler(
       console.log("processed page ", index + 1);
     }
 
-    console.log("attempting to combine text for TTS");
-    let ttsText = pageText.join("\n");
+    const pageTextString = pageText.join("")
 
-    // Replace <figure-x>, <table-x>, and <image-x> tags with "Figure X summary:"
-    ttsText = ttsText.replace(
-      /<figure-(\d+)>(.*?)<\/figure-\d+>/gs,
-      "Figure $1 summary: $2"
-    );
-    ttsText = ttsText.replace(
-      /<table-(\d+)>(.*?)<\/table-\d+>/gs,
-      "Table $1 summary: $2"
-    );
-    ttsText = ttsText.replace(
-      /<image-(\d+)>(.*?)<\/image-\d+>/gs,
-      "Image $1 summary: $2"
-    );
+    const rawTextFilePath = path.join(ttsTextDir, "raw-textract.txt");
+    fs.writeFileSync(rawTextFilePath, pageTextString);
+    console.log("Saved raw text extract to", rawTextFilePath);
+
+    //summarize
+    const summarizationSchema = z.object({ summarizedItems: z.array(
+      z.object({
+        keywords: z.array(z.string()),
+        label: z.string(),
+        summary: z.string(),
+      })
+    )});
+
+    const imagePaths = pngPages.map(page => page.path)
+
+    const summarizationCompletion = await getStructuredOpenAICompletion(
+      SUMMARIZATION_PROMPT,
+      "",
+      modelConfig.summarization.model,
+      modelConfig.summarization.temperature,
+      summarizationSchema,
+      imagePaths
+    )
+
+    const summarizedItems = summarizationCompletion?.summarizedItems
+    const summarizedItemsFilePath = path.join(tempObjectsDir, "summarizedItems.json");
+    fs.writeFileSync(summarizedItemsFilePath, JSON.stringify(summarizedItems, null, 2));
+    console.log("Saved summarized items to", summarizedItemsFilePath);
+
+    //place
+    let paragraphs = pageTextString.split(/\n{2,}/); //not exact paragraphs
+    for (const item of summarizedItems) {
+      const label = item.label;
+      const summary = item.summary;
+      const keywords = item.keywords.map((keyword: string) => keyword.toLowerCase());
+    
+      let placed = false;
+      for (let i = 0; i < paragraphs.length; i++) {
+        if (paragraphs[i].toLowerCase().includes(label.toLowerCase())) {
+          paragraphs[i] = `${label} summary:\n${summary}\n\n${paragraphs[i]}`;
+          placed = true;
+          break; // Stop after placing the summary once
+        }
+      }
+    
+      if (!placed) {
+        for (let i = 0; i < paragraphs.length; i++) {
+          if (keywords.some((keyword: string) => paragraphs[i].toLowerCase().includes(keyword))) {
+            paragraphs.splice(i, 0, `${label} summary:\n${summary}`);
+            break; // Stop after placing the summary once
+          }
+        }
+      }
+    }
+    
+    // Join paragraphs back into a single string
+    const pageTextStringWithItems = paragraphs.join('\n\n');
+
+    //cleanup
+
+
+
+    console.log("attempting to combine text for TTS");
+    let ttsText = pageTextStringWithItems;
 
     console.log("combined text for TTS");
     const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
@@ -435,8 +470,27 @@ async function getStructuredOpenAICompletion(
   userPrompt: string,
   model: string,
   temperature: number,
-  schema: z.AnyZodObject
+  schema: z.AnyZodObject,
+  imagePaths: string[] = []
 ) {
+  const imageMessages: ChatCompletionMessageParam[] = imagePaths.map((imagePath) => {
+    const imageBuffer = fs.readFileSync(imagePath);
+    const mediaType = mime.getType(imagePath);
+    const base64Image = imageBuffer.toString("base64");
+    return {
+      role: "user",
+      content: [
+        { type: "text", text: userPrompt },
+        {
+          type: "image_url",
+          image_url: {
+            url: `data:${mediaType};base64,${base64Image}`,
+          },
+        },
+      ],
+    };
+  });
+
   const completion = await openai.beta.chat.completions.parse({
     model: model,
     temperature: temperature,
@@ -445,10 +499,7 @@ async function getStructuredOpenAICompletion(
         role: "system",
         content: systemPrompt,
       },
-      {
-        role: "user",
-        content: userPrompt,
-      },
+      ...imageMessages,
     ],
     response_format: zodResponseFormat(schema, "schema"),
   });
@@ -478,25 +529,28 @@ function clearDirectory(directoryPath: string) {
 
 /*PROMPTS*/
 
-// const PAGE_IMAGE_PARSING_PROMPT = `Extract the text of this page accurately. I want the entire text.
-
-// For images, figures and tables, instead of the raw content, write a summary in <image-x>, <table-x> or <figure-x> xml tags where x is the number given to the image, table or figure in the original doc. The summary should be detailed and describe what the image or table is trying to convey. Do not include the caption/note below or above the figure,image or table written by the author as it does not make sense along with the summary.
-
-// For papers, before the abstract, only the title, authors' names and affiliations are important.
-
-// Include cut off sentences or words at the edge. Do not include the page numbers.
-
-// Put the entire output in <page> xml tags.`;
-
-const PAGE_IMAGE_PARSING_PROMPT = `Extract the text of this page accurately. I want the entire text. 
-
-Exclude images, tables and figures. Exclude any captions, descriptions or notes for the images, tables or figures. 
-
+const EXTRACT_PROMPT = `Extract the text of this page accurately. I want the entire text.
+Exclude images, tables and figures. Exclude any captions, descriptions or notes for the images, tables or figures.
 Include cut off sentences or words at the bottom and top edge of the page. Do not include the page numbers.
-
 Put the entire output in <page> xml tags.`;
 
-const IMAGE_TABLE_IN_PAGE_SUMMARIZAION_PROMPT = ``;
+const SUMMARIZATION_PROMPT = `Summarize the tables and figures in the provided pages. The summary should be detailed and describe what the figure or table is trying to convey. Also make sure to grab the correct label.`;
+
+const CLEANUP_PROMPT = `The given page will be converted to audio. It may have multiple issues that prevent it from being suitable for audio that you need to fix. Please clean up the given page in the following ways:
+
+- Remove anything before the abstract other than the tite, author's name or affiliations.
+- Remove any meta-information.
+- Each author's name should be followed by their affiliation, do not group the names together followed by grouped affiliations.
+- If there are too many mathematical expressions in a section replace it with a summary under the heading "The following section had too many math expressions making it unsuitable for audio, so here is a summary: ".
+- If there are just one or two equations then don't summarize it. Instead, enclose all variables and constant letters in the math expression within "" and convert it to words as much as possible. For example, add "times" where multiplication is implied.
+- Remove superscripts and subscripts outside math expressions
+- Remove the references section.
+- Unhyphenate words that are split between lines
+- If you see any <figure>, <table> or <image> elements, reposition them in a more appropriate place. Do this if these elements split a paragraph in the middle as well. This will make more sense when the user is listening.
+- If there is any figure, table or image caption/note/description from the original text still remaining remove them. I only want tags.
+- Remove citation numbers like [x] or in any other format.
+
+Return the improved page extract in <page> xml tags.`;
 
 const PAGE_IMPROVEMENT_PROMPT = `The user will provide you with a page and its text extract. The given text extract will converted to audio. It may have multiple issues that prevent it from being suitable for audio that you need to fix.
 
