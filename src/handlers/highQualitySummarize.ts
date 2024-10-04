@@ -33,7 +33,7 @@ type Model =
 
 const modelConfig: {[task: string]: {temperature: number, model: Model}} = {
   extraction: {
-    temperature: 0,
+    temperature: 0.1,
     model: "gpt-4o-2024-08-06"
   },
 }
@@ -111,15 +111,24 @@ export default async function handler(
   console.log("converted pdf pages to images");
 
   if (summarizationMethod === "ultimate") {
-
-    //extract
+    /* Algorithm:
+    - Convert the pdf pages to custom JSON (LLM)
+    - Process the pages again to process images and tables to generate better summaries (LLM)
+    - Try to place the image/figure entry above the text entry where it is mentioned for the first time. (code)
+    - Remove redundant items. Replace math with disclaimer. (code)
+    - Process items again to make them audio optimized. (LLM)
+    - Join the items. (code)
+    */
+    
+    //convert to JSON
     let allItems: any[] = [];
-    for (const [index, pngPage] of pngPages.entries()) {
+    let abstract_detected = false
+    for (const [index, pngPage] of pngPages.slice(0,5).entries()) {
       console.log("processing page ", index + 1);
 
       const extractSchema = z.object({
         items: z.array(z.object({
-          type: z.enum(["text", "heading", "image", "image_caption_or_heading", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info", "references", "references_heading", "math", "table_of_contents", "table_of_contents_item", "abstract_heading", "abstract_content"]),
+          type: z.enum(["main_title", "text", "heading", "figure_image", "figure_caption_or_heading", "figure_note", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info", "references", "references_heading", "math", "table_of_contents_heading", "table_of_contents_item", "abstract_heading", "abstract_content"]),
           content: z.string()
         }))
       })
@@ -134,7 +143,10 @@ export default async function handler(
         [pagePath]
       );
 
-      allItems.push(...pageItems?.items);
+      const items = pageItems?.items
+
+
+      allItems.push(...items);
       console.log("processed page ", index + 1);
     }
 
@@ -457,16 +469,3 @@ function clearDirectory(directoryPath: string) {
 const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
 
 Include math expressions. Include partial items cut off at the start or end of the page.`;
-
-
-const temp = `Please extract all the items in the page in the correct order in the following JSON format:
-
-{
-items: {
-  type: heading | text | image | image_caption | table_rows | table_description | author_info
-  content: string
-  detailedSummary?: string (only for "table_rows")
-}[]
-}
-
-Include math expressions. Include partial items cut off at the start or end of the page. `
