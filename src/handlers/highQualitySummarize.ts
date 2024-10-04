@@ -116,6 +116,7 @@ export default async function handler(
     - Process the pages again to process images and tables to generate better summaries (LLM)
     - Try to place the image/figure entry above the text entry where it is mentioned for the first time. (code)
     - Remove redundant items. Replace math with disclaimer. (code)
+      - Remove everything before the abstract heading that is not author_info or main_title
     - Process items again to make them audio optimized. (LLM)
     - Join the items. (code)
     */
@@ -125,6 +126,10 @@ export default async function handler(
     let abstract_detected = false
     for (const [index, pngPage] of pngPages.slice(0,5).entries()) {
       console.log("processing page ", index + 1);
+
+      const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
+
+Include math expressions. Include partial items cut off at the start or end of the page.`;
 
       const extractSchema = z.object({
         items: z.array(z.object({
@@ -464,8 +469,3 @@ function clearDirectory(directoryPath: string) {
     });
   }
 }
-
-/*PROMPTS*/
-const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
-
-Include math expressions. Include partial items cut off at the start or end of the page.`;
