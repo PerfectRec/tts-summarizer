@@ -119,7 +119,7 @@ export default async function handler(
 
       const extractSchema = z.object({
         items: z.array(z.object({
-          type: z.enum(["text", "heading", "image", "image_caption_or_heading", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info", "references", "references_heading", "math"]),
+          type: z.enum(["text", "heading", "image", "image_caption_or_heading", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info", "references", "references_heading", "math", "table_of_contents", "table_of_contents_item", "abstract_heading", "abstract_content"]),
           content: z.string()
         }))
       })
