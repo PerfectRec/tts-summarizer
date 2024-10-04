@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import FirecrawlApp, { FirecrawlDocument } from "@mendable/firecrawl-js";
 import "dotenv/config";
 import fs from "fs-extra";
-import path from "path";
+import path, { parse } from "path";
 import os from "os";
 import { ImageBlockParam, MessageParam } from "@anthropic-ai/sdk/resources";
 import mime from "mime";
@@ -33,22 +33,9 @@ type Model =
 
 const modelConfig: {[task: string]: {temperature: number, model: Model}} = {
   extraction: {
-    temperature: 0.5,
-    model: "claude-3-5-sonnet-20240620"
-  },
-  summarization: {
-    temperature: 1,
-    model: "gpt-4o-2024-08-06"
-  },
-  cleanup: {
     temperature: 0,
     model: "gpt-4o-2024-08-06"
   },
-  math: {
-    temperature: 0,
-    model: "claude-3-5-sonnet-20240620"
-  }
-
 }
 
 const MAX_POLLY_CHAR_LIMIT = 1500;
@@ -74,14 +61,6 @@ const openai = new OpenAI({
   },
 });
 
-/*
-Algorithm:
-1. Extract raw text 
-2. Summarize figures/tables
-3. Insert figures/tables at the right spot
-4. Clean up
-*/
-
 export default async function handler(
   request: FastifyRequest<{
     Querystring: SummarizeRequestParams;
@@ -101,9 +80,9 @@ export default async function handler(
     fs.mkdirSync(tempDir);
   }
 
-  const tempImageDir = path.join(tempDir, "images-temp");
-  const audioOutputDir = path.join(tempDir, "audio-output");
-  const ttsTextDir = path.join(tempDir, "tts-text");
+  const tempImageDir = path.join(tempDir, "images");
+  const audioOutputDir = path.join(tempDir, "audio");
+  const ttsTextDir = path.join(tempDir, "text");
   const tempObjectsDir = path.join(tempDir, "objects");
 
   clearDirectory(tempImageDir);
@@ -134,104 +113,51 @@ export default async function handler(
   if (summarizationMethod === "ultimate") {
 
     //extract
-    let pageText: string[] = [];
+    let allItems: any[] = [];
     for (const [index, pngPage] of pngPages.entries()) {
       console.log("processing page ", index + 1);
+
+      const extractSchema = z.object({
+        items: z.array(z.object({
+          type: z.enum(["text", "heading", "image", "image_caption_or_heading", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info", "references", "references_heading"]),
+          content: z.string()
+        }))
+      })
+
       const pagePath = pngPage.path;
-      const pageContent = await getCompletion(
+      const pageItems = await getStructuredOpenAICompletion(
         EXTRACT_PROMPT,
-        `Here is the page`,
+        ``,
         modelConfig.extraction.model,
         modelConfig.extraction.temperature,
-        "page",
-        pagePath
+        extractSchema,
+        [pagePath]
       );
 
-      // console.log("cleaning up page", index + 1);
-      // const improvedPageContent = await getCompletion(
-      //   CLEANUP_PROMPT,
-      //   pageContent,
-      //   modelConfig.cleanup.model,
-      //   modelConfig.cleanup.temperature,
-      //   "page",
-      //   pagePath
-      // );
-
-      // pageText.push(improvedPageContent);
-      pageText.push(pageContent);
+      allItems.push(...pageItems?.items);
       console.log("processed page ", index + 1);
     }
 
-    const pageTextString = pageText.join("")
 
-    const rawTextFilePath = path.join(ttsTextDir, "raw-textract.txt");
-    fs.writeFileSync(rawTextFilePath, pageTextString);
-    console.log("Saved raw text extract to", rawTextFilePath);
+    const parsedItemsPath = path.join(tempObjectsDir, "parsedItems.json");
+    fs.writeFileSync(parsedItemsPath, JSON.stringify(allItems, null, 2));
+    console.log("Saved raw text extract to", parsedItemsPath);
 
-    //summarize
-    const summarizationSchema = z.object({ summarizedItems: z.array(
-      z.object({
-        keywords: z.array(z.string()),
-        label: z.string(),
-        summary: z.string(),
-      })
-    )});
-
-    const imagePaths = pngPages.map(page => page.path)
-
-    const summarizationCompletion = await getStructuredOpenAICompletion(
-      SUMMARIZATION_PROMPT,
-      "",
-      modelConfig.summarization.model,
-      modelConfig.summarization.temperature,
-      summarizationSchema,
-      imagePaths
-    )
-
-    const summarizedItems = summarizationCompletion?.summarizedItems
-    const summarizedItemsFilePath = path.join(tempObjectsDir, "summarizedItems.json");
-    fs.writeFileSync(summarizedItemsFilePath, JSON.stringify(summarizedItems, null, 2));
-    console.log("Saved summarized items to", summarizedItemsFilePath);
-
-    //place
-    let paragraphs = pageTextString.split(/\n{2,}/); //not exact paragraphs
-    for (const item of summarizedItems) {
-      const label = item.label;
-      const summary = item.summary;
-      const keywords = item.keywords.map((keyword: string) => keyword.toLowerCase());
-    
-      let placed = false;
-      for (let i = 0; i < paragraphs.length; i++) {
-        if (paragraphs[i].toLowerCase().includes(label.toLowerCase())) {
-          paragraphs[i] = `${label} summary:\n${summary}\n\n${paragraphs[i]}`;
-          placed = true;
-          break; // Stop after placing the summary once
-        }
-      }
-    
-      if (!placed) {
-        for (let i = 0; i < paragraphs.length; i++) {
-          if (keywords.some((keyword: string) => paragraphs[i].toLowerCase().includes(keyword))) {
-            paragraphs.splice(i, 0, `${label} summary:\n${summary}`);
-            break; // Stop after placing the summary once
-          }
-        }
-      }
-    }
-    
+  
     // Join paragraphs back into a single string
-    const pageTextStringWithItems = paragraphs.join('\n\n');
+    // const pageTextStringWithItems = paragraphs.join('\n\n');
 
     //cleanup
 
 
 
     console.log("attempting to combine text for TTS");
-    let ttsText = pageTextStringWithItems;
+    //let ttsText = pageTextStringWithItems;
+    let ttsText;
 
     console.log("combined text for TTS");
-    const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
-    fs.writeFileSync(ttsTextFilePath, ttsText);
+    //const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
+    //fs.writeFileSync(ttsTextFilePath, ttsText);
 
     // const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
     // const ttsText = fs.readFileSync(ttsTextFilePath, "utf-8");
@@ -528,44 +454,19 @@ function clearDirectory(directoryPath: string) {
 }
 
 /*PROMPTS*/
+const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
 
-const EXTRACT_PROMPT = `Extract the text of this page accurately. I want the entire text.
-Exclude images, tables and figures. Exclude any captions, descriptions or notes for the images, tables or figures.
-Include cut off sentences or words at the bottom and top edge of the page. Do not include the page numbers.
-Put the entire output in <page> xml tags.`;
+Include math expressions. Include partial items cut off at the start or end of the page.`;
 
-const SUMMARIZATION_PROMPT = `Summarize the tables and figures in the provided pages. The summary should be detailed and describe what the figure or table is trying to convey. Also make sure to grab the correct label.`;
 
-const CLEANUP_PROMPT = `The given page will be converted to audio. It may have multiple issues that prevent it from being suitable for audio that you need to fix. Please clean up the given page in the following ways:
+const temp = `Please extract all the items in the page in the correct order in the following JSON format:
 
-- Remove anything before the abstract other than the tite, author's name or affiliations.
-- Remove any meta-information.
-- Each author's name should be followed by their affiliation, do not group the names together followed by grouped affiliations.
-- If there are too many mathematical expressions in a section replace it with a summary under the heading "The following section had too many math expressions making it unsuitable for audio, so here is a summary: ".
-- If there are just one or two equations then don't summarize it. Instead, enclose all variables and constant letters in the math expression within "" and convert it to words as much as possible. For example, add "times" where multiplication is implied.
-- Remove superscripts and subscripts outside math expressions
-- Remove the references section.
-- Unhyphenate words that are split between lines
-- If you see any <figure>, <table> or <image> elements, reposition them in a more appropriate place. Do this if these elements split a paragraph in the middle as well. This will make more sense when the user is listening.
-- If there is any figure, table or image caption/note/description from the original text still remaining remove them. I only want tags.
-- Remove citation numbers like [x] or in any other format.
+{
+items: {
+  type: heading | text | image | image_caption | table_rows | table_description | author_info
+  content: string
+  detailedSummary?: string (only for "table_rows")
+}[]
+}
 
-Return the improved page extract in <page> xml tags.`;
-
-const PAGE_IMPROVEMENT_PROMPT = `The user will provide you with a page and its text extract. The given text extract will converted to audio. It may have multiple issues that prevent it from being suitable for audio that you need to fix.
-
-- If it is a paper, remove anything before the abstract that is not the title, authors' names or affiliations. Remove any meta-information.
-- Each author's name should be followed by their affiliation instead of grouping all the author names together
-- Remove superscripts and subscripts from text that is not part of math expression.
-- Remove citation numbers like [x]. In general, remove any artifacts from the output that will degrade the audio experience. 
-- Fix any inaccuracies in parsing the text.
-- Unhyphenate words that are split between lines
-- If you see any <figure>, <table> or <image> elements, reposition them in a more appropriate place like when it is first mentioned. Do this if these elements split a paragraph in the middle as well. This will make more sense when the user is listening.
-- Improve the <figure>, <table> or <image> elements which are summaries of the raw images, figures or tables in the page. 
-- Mathematical expressions are really hard to listen to. You need to convert it to words as much as possible. For example, multiplication is often implied however for listening you should add "times" where necessary to improve the experience. 
-- Make sure the <figure>, <table> or <image> numbers are accurate.
-- If there is any figure, table or image caption/note from the original text still remaining remove them as they do not make sense with respect to the summarized elements.
-- Remove the references section.
-
-Return the improved page extract in <page> xml tags.
-`;
+Include math expressions. Include partial items cut off at the start or end of the page. `
