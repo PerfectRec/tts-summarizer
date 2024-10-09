@@ -41,7 +41,7 @@ const modelConfig: {[task: string]: {temperature: number, model: Model}} = {
     model: "gpt-4o-2024-08-06"
   },
   authorInfoEditor: {
-    temperature: 0,
+    temperature: 0.2,
     model: "gpt-4o-2024-08-06"
   }
 }
@@ -136,7 +136,7 @@ export default async function handler(
     let abstractDetected = false;
     let authorInfoContents = ""
 
-    for (const [index, pngPage] of pngPages.slice(0,6).entries()) {
+    for (const [index, pngPage] of pngPages.slice(0,14).entries()) {
       console.log("processing page ", index + 1);
 
       const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
@@ -311,7 +311,7 @@ Include math expressions. Include partial items cut off at the start or end of t
     // const ttsText = fs.readFileSync(ttsTextFilePath, "utf-8");
 
     try {
-      throw new Error("Audio generation skipped");
+      //throw new Error("Audio generation skipped");
       const audioBuffer = await synthesizeSpeechInChunks(filteredItems);
       console.log("Generated audio file");
 
@@ -393,7 +393,7 @@ async function synthesizeSpeechInChunks(items: {type: string, content: string, l
   const audioBuffers: Buffer[] = [];
 
   for (const item of items) {
-    const voiceId = ["figure_image", "table_rows", "heading", "abstract_heading","main_title"].includes(item.type) ? "Gregory" : "Ruth";
+    const voiceId = ["figure_image", "table_rows"].includes(item.type) ? "Gregory" : "Ruth";
     const chunks = splitTextIntoChunks(item.content + "\n\n", MAX_POLLY_CHAR_LIMIT);
 
     for (const chunk of chunks) {
