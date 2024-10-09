@@ -17,7 +17,7 @@ export const synthesizeSpeech = async (
     Text: text,
     OutputFormat: "mp3",
     VoiceId: voiceId,
-    Engine: "long-form",
+    Engine: "generative",
   };
 
   try {

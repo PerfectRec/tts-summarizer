@@ -11,10 +11,11 @@ import { ImageBlockParam, MessageParam } from "@anthropic-ai/sdk/resources";
 import mime from "mime";
 import { synthesizeSpeech } from "@aws/polly";
 import { OpenAI } from "openai";
-import { ChatCompletionMessageParam } from "openai/resources";
+import { ChatCompletionContentPart, ChatCompletionMessageParam } from "openai/resources";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { pdfToPng } from "pdf-to-png-converter";
+import { timeStamp } from "console";
 
 interface SummarizeRequestParams {
   summarizationMethod:
@@ -43,12 +44,17 @@ const modelConfig: {[task: string]: {temperature: number, model: Model}} = {
   authorInfoEditor: {
     temperature: 0.2,
     model: "gpt-4o-2024-08-06"
+  },
+  mathExplainer: {
+    temperature: 0,
+    model: "gpt-4o-2024-08-06"
   }
 }
 
-const MAX_POLLY_CHAR_LIMIT = 1500;
+const MAX_POLLY_CHAR_LIMIT = 3000;
 
 type PollyLongFormVoices = "Ruth" | "Gregory" | "Danielle"
+type PollyGenerativeVoices = "Ruth" | "Matthew"
 
 const firecrawl = new FirecrawlApp({
   apiKey: process.env.FIRECRAWL_API_KEY,
@@ -94,6 +100,8 @@ export default async function handler(
   const audioOutputDir = path.join(tempDir, "audio");
   const ttsTextDir = path.join(tempDir, "text");
   const tempObjectsDir = path.join(tempDir, "objects");
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const timestampedDir = path.join(tempObjectsDir, timestamp);
 
   clearDirectory(tempImageDir);
 
@@ -113,8 +121,12 @@ export default async function handler(
     fs.mkdirSync(tempObjectsDir);
   }
 
+  if (!fs.existsSync(timestampedDir)) {
+    fs.mkdirSync(timestampedDir, { recursive: true });
+  }
+
   console.log("attempting to convert pdf pages to images");
-  const pngPages = await pdfToPng(fileBuffer, {
+  const pngPagesOriginal = await pdfToPng(fileBuffer, {
     viewportScale: 2.0,
     outputFolder: tempImageDir,
   });
@@ -132,79 +144,125 @@ export default async function handler(
     */
     
     //convert to JSON
+    const batchSize = 10;
     let allItems: any[] = [];
     let abstractDetected = false;
     let authorInfoContents = ""
+    const pngPages = pngPagesOriginal.slice(0,14)
 
-    for (const [index, pngPage] of pngPages.slice(0,14).entries()) {
-      console.log("processing page ", index + 1);
+    for (let i = 0; i < pngPages.length; i += batchSize) {
+      const batch = pngPages.slice(i, i + batchSize);
 
-      const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
+      const batchResults = await Promise.all(
+        batch.map(async (pngPage, index) => {
+          console.log("processing page ", i + index + 1);
 
-Include math expressions. Include partial items cut off at the start or end of the page. Combine all rows of a table into a single table_rows item.`;
+          const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
 
-      const extractSchema = z.object({
-        items: z.array(z.object({
-          type: z.enum(["main_title", "text", "heading", "figure_image", "figure_caption_or_heading", "figure_note", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info",  "references_heading", "references_item", "math", "table_of_contents_heading", "table_of_contents_item", "abstract_heading", "abstract_content", "page_number"]),
-          content: z.string()
-        }))
-      })
+          Include math expressions in plain text. Do not use LaTeX or any other special formatting for math. Instead using the english version, for example "\\geq" means "greater than or equal to". Include partial items cut off at the start or end of the page. Combine all rows of a table into a single table_rows item.
+          
+          Please use your best judgement to determine the abstract even if it is not explicitly labeled as such.`;
 
-      const pagePath = pngPage.path;
-      const pageItems = await getStructuredOpenAICompletion(
-        EXTRACT_PROMPT,
-        ``,
-        modelConfig.extraction.model,
-        modelConfig.extraction.temperature,
-        extractSchema,
-        [pagePath]
+          const extractSchema = z.object({
+            items: z.array(z.object({
+              type: z.enum(["main_title", "text", "heading", "figure_image", "figure_caption_or_heading", "figure_note", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info",  "references_heading", "references_item", "math", "table_of_contents_heading", "table_of_contents_item", "abstract_heading", "abstract_content", "page_number"]),
+              content: z.string()
+            }))
+          });
+
+          const pagePath = pngPage.path;
+          const pageItems = await getStructuredOpenAICompletion(
+            EXTRACT_PROMPT,
+            ``,
+            modelConfig.extraction.model,
+            modelConfig.extraction.temperature,
+            extractSchema,
+            [pagePath]
+          );
+
+          const items = pageItems?.items;
+
+          console.log("processed page ", i + index + 1);
+
+          for (const item of items) {
+            item.content = item.content.replace(/https?:\/\/[^\s]+/g, 'See URL in paper.');
+
+            if (item.type === "author_info" && i < 5) {
+              authorInfoContents += `\n\n${item.content}`;
+            }
+
+            if (item.type === "figure_image" || item.type === "table_rows") {
+              console.log("summarizing figure/table on page ", i + index + 1);
+              const summarizationSchema = z.object({
+                summarizedItem: z.object({
+                  type: z.enum(["figure_image", "table_rows"]),
+                  label: z.object({
+                    labelType: z.string(),
+                    labelNumber: z.number()
+                  }),
+                  content: z.string()
+                })
+              });
+
+              const SUMMARIZE_PROMPT = `Write a detailed explanation for the figures and tables. For figures, replace the content field with a detailed explanation. For tables, replace the raw rows in the content field with a detailed explanation. Summarize the size of changes / effects / estimates / results in the tables or figures. To help understand them better, use context from the paper and any note below them.
+              
+              Add the label "Figure X" or "Table X" where X is the figure or table number indicated in the page. You need to extract the correct figure or table number. This is very important. Look for cues around the figure or table and use your best judgement to determine it. 
+              
+              Do not use markdown. Use plain text.`;
+
+              const summarizedItem = await getStructuredOpenAICompletion(
+                SUMMARIZE_PROMPT,
+                `Item to summarize on this page:\n${JSON.stringify(item)}\n\nPage context:\n${JSON.stringify(items)}`,
+                modelConfig.summarization.model,
+                modelConfig.summarization.temperature,
+                summarizationSchema,
+                [pagePath]
+              );
+
+              item["label"] = summarizedItem?.summarizedItem.label;
+              item.content = `${item.label.labelType} ${item.label.labelNumber} summary:\n${summarizedItem?.summarizedItem.content}`;
+            } else if (item.type === "math") {
+              console.log("summarizing math on page ", i + index + 1);
+              const mathSummarizationSchema = z.object({
+                summarizedMath: z.object({
+                  content: z.string()
+                })
+              });
+
+              const MATH_SUMMARIZE_PROMPT = `Explain the given math item using the page context in English. Explain what the math is, not what it is used for. Do not write more than two sentences. Do not include any math terms in the summary.`;
+
+              const summarizedMath = await getStructuredOpenAICompletion(
+                MATH_SUMMARIZE_PROMPT,
+                `Math to summarize:\n${JSON.stringify(item)}\n\nPage context:\n${JSON.stringify(items)}`,
+                modelConfig.mathExplainer.model,
+                modelConfig.mathExplainer.temperature,
+                mathSummarizationSchema,
+                [],
+                1024
+              );
+
+              item.content = `Math summary: ${summarizedMath?.summarizedMath.content}`;
+            }
+
+            //Some manual latex processing
+            item.content = item.content.replaceAll("\\", "").replaceAll("rightarrow", "approaches").replaceAll("infty","infinity").replaceAll("geq"," greater than or equal to ").replaceAll("leq", " less than or equal to ").replaceAll("mathbb","")
+
+            if (item.type === "text") {
+              item.content === item.content.replace(" - ", " minus ")
+            }
+          }
+
+          return { index: i + index, items };
+        })
       );
 
-      const items = pageItems?.items
+      // Sort batch results by index to maintain order
+      batchResults.sort((a, b) => a.index - b.index);
 
-      console.log("processed page ", index + 1);
-
-      for (const item of items) {
-
-        if (item.type === "author_info" && index < 5) {
-          authorInfoContents += `\n\n${item.content}`
-        }
-
-        if (item.type === "figure_image" || item.type === "table_rows") {
-          console.log("summarizing figure/table on page ", index + 1)
-          const summarizationSchema = z.object({
-            summarizedItem: z.object({
-              type: z.enum(["figure_image", "table_rows"]),
-              label: z.object({
-                labelType: z.string(),
-                labelNumber: z.number()
-              }),
-              content: z.string()
-            })
-          })
-    
-          const SUMMARIZE_PROMPT = `Write a detailed explanation for the figures and tables. For figures, replace the content field with a detailed explanation. For tables, replace the raw rows in the content field with a detailed explanation. Summarize the size of changes / effects / estimates / results in the tables or figures. To help understand them better, use context from the paper and any note below them.
-          
-          Add the label "Figure X" or "Table X" where X is the figure or table number indicated in the page. Please use the correct table or figure number otherwise the reader will be very confused.
-          
-          Do not use markdown. Use plain text.`
-    
-          const summarizedItem = await getStructuredOpenAICompletion(
-            SUMMARIZE_PROMPT,
-            `Item to summarize on this page:\n${JSON.stringify(item)}\n\nPage context:\n${JSON.stringify(items)}`,
-            modelConfig.summarization.model,
-            modelConfig.summarization.temperature,
-            summarizationSchema,
-            [pagePath]
-          )
-
-          item["label"] = summarizedItem?.summarizedItem.label
-          item.content = `${item.label.labelType} ${item.label.labelNumber} summary:\n${summarizedItem?.summarizedItem.content}`
-        }
+      // Add sorted items to allItems
+      for (const result of batchResults) {
+        allItems.push(...result.items);
       }
-
-      allItems.push(...items);
-
     }
 
     console.log("Improving author section")
@@ -213,7 +271,9 @@ Include math expressions. Include partial items cut off at the start or end of t
     Example:
     Author1, Affiliation1
     Author2, Affiliation2
-    .....`
+    .....
+    
+    If the affiliation is not available leave it empty.`
 
     const improveAuthorInfoSchema = z.object({
       authorInfo: z.string()
@@ -224,7 +284,8 @@ Include math expressions. Include partial items cut off at the start or end of t
       `Here is the author info: ${authorInfoContents}`,
       modelConfig.authorInfoEditor.model,
       modelConfig.authorInfoEditor.temperature,
-      improveAuthorInfoSchema
+      improveAuthorInfoSchema,
+      pngPages.slice(0,5).map((page)=>page.path)
     )
 
     const firstAuthorInfoIndex = allItems.findIndex(item => item.type === "author_info")
@@ -237,15 +298,17 @@ Include math expressions. Include partial items cut off at the start or end of t
 
     const filteredItems = allItems.filter((item: {type: string, content:string}) => {
       if (!abstractDetected) {
-        if (item.type === "abstract_heading") {
+        if (item.type === "abstract_heading" || item.content.toLocaleLowerCase() === 'abstract') {
+          abstractDetected = true;
+          item.type = "abstract_heading"
+        } else if (item.type === "abstract_content") {
           abstractDetected = true;
         }
-        return ["main_title", "improved_author_info", "abstract_heading"].includes(item.type);
+        return ["main_title", "improved_author_info", "figure_image", "abstract_heading", "abstract_content"].includes(item.type);
       } else {
         return ["text", "heading", "figure_image", "table_rows", "math", "abstract_content"].includes(item.type);
       }
     });
-
     const specialItems = filteredItems.filter((item) => (item.type === "figure_image" || item.type === "table_rows"))
 
     console.log("repositioning images and figures")
@@ -296,11 +359,11 @@ Include math expressions. Include partial items cut off at the start or end of t
     }
 
 
-    const parsedItemsPath = path.join(tempObjectsDir, "parsedItems.json");
+    const parsedItemsPath = path.join(timestampedDir, "parsedItems.json");
     fs.writeFileSync(parsedItemsPath, JSON.stringify(allItems, null, 2));
     console.log("Saved raw text extract to", parsedItemsPath);
 
-    const filteredItemsPath = path.join(tempObjectsDir, "filteredItems.json");
+    const filteredItemsPath = path.join(timestampedDir, "filteredItems.json");
     fs.writeFileSync(filteredItemsPath, JSON.stringify(filteredItems, null, 2));
     console.log("Saved filtered items to", filteredItemsPath);
 
@@ -311,7 +374,7 @@ Include math expressions. Include partial items cut off at the start or end of t
     // const ttsText = fs.readFileSync(ttsTextFilePath, "utf-8");
 
     try {
-      //throw new Error("Audio generation skipped");
+      throw new Error("Audio generation skipped");
       const audioBuffer = await synthesizeSpeechInChunks(filteredItems);
       console.log("Generated audio file");
 
@@ -393,7 +456,7 @@ async function synthesizeSpeechInChunks(items: {type: string, content: string, l
   const audioBuffers: Buffer[] = [];
 
   for (const item of items) {
-    const voiceId = ["figure_image", "table_rows"].includes(item.type) ? "Gregory" : "Ruth";
+    const voiceId = ["figure_image", "table_rows", "math"].includes(item.type) ? "Matthew" : "Ruth";
     const chunks = splitTextIntoChunks(item.content + "\n\n", MAX_POLLY_CHAR_LIMIT);
 
     for (const chunk of chunks) {
@@ -553,27 +616,30 @@ async function getStructuredOpenAICompletion(
   model: string,
   temperature: number,
   schema: z.AnyZodObject,
-  imagePaths: string[] = []
+  imagePaths: string[] = [],
+  maxTokens: number = 16384
 ) {
-  const imageMessages: ChatCompletionMessageParam[] = imagePaths.map((imagePath) => {
+  const imageUrls = imagePaths.map((imagePath) => {
     const imageBuffer = fs.readFileSync(imagePath);
     const mediaType = mime.getType(imagePath);
     const base64Image = imageBuffer.toString("base64");
     return {
-      role: "user",
-      content: [
-        { type: "text", text: userPrompt },
-        {
           type: "image_url",
           image_url: {
             url: `data:${mediaType};base64,${base64Image}`,
           },
-        },
-      ],
-    };
-  });
+        } as ChatCompletionContentPart
+});
 
-  const messages: ChatCompletionMessageParam[] = imagePaths.length > 0 ? imageMessages : [
+  const messages: ChatCompletionMessageParam[] = imagePaths.length > 0 ? [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: userPrompt },
+        ...imageUrls,
+      ],
+    },
+  ] : [
     {
       role: "user",
       content: userPrompt,
@@ -591,6 +657,7 @@ async function getStructuredOpenAICompletion(
       ...messages,
     ],
     response_format: zodResponseFormat(schema, "schema"),
+    max_tokens: maxTokens
   });
 
   const response = completion.choices[0].message;
