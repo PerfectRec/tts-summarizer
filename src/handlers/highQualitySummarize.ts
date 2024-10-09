@@ -33,12 +33,22 @@ type Model =
 
 const modelConfig: {[task: string]: {temperature: number, model: Model}} = {
   extraction: {
-    temperature: 0.1,
+    temperature: 0.2,
     model: "gpt-4o-2024-08-06"
   },
+  summarization: {
+    temperature: 0.2,
+    model: "gpt-4o-2024-08-06"
+  },
+  authorInfoEditor: {
+    temperature: 0,
+    model: "gpt-4o-2024-08-06"
+  }
 }
 
 const MAX_POLLY_CHAR_LIMIT = 1500;
+
+type PollyLongFormVoices = "Ruth" | "Gregory" | "Danielle"
 
 const firecrawl = new FirecrawlApp({
   apiKey: process.env.FIRECRAWL_API_KEY,
@@ -123,17 +133,19 @@ export default async function handler(
     
     //convert to JSON
     let allItems: any[] = [];
-    let abstract_detected = false
-    for (const [index, pngPage] of pngPages.slice(0,5).entries()) {
+    let abstractDetected = false;
+    let authorInfoContents = ""
+
+    for (const [index, pngPage] of pngPages.slice(0,6).entries()) {
       console.log("processing page ", index + 1);
 
       const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
 
-Include math expressions. Include partial items cut off at the start or end of the page.`;
+Include math expressions. Include partial items cut off at the start or end of the page. Combine all rows of a table into a single table_rows item.`;
 
       const extractSchema = z.object({
         items: z.array(z.object({
-          type: z.enum(["main_title", "text", "heading", "figure_image", "figure_caption_or_heading", "figure_note", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info", "references", "references_heading", "math", "table_of_contents_heading", "table_of_contents_item", "abstract_heading", "abstract_content"]),
+          type: z.enum(["main_title", "text", "heading", "figure_image", "figure_caption_or_heading", "figure_note", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info",  "references_heading", "references_item", "math", "table_of_contents_heading", "table_of_contents_item", "abstract_heading", "abstract_content", "page_number"]),
           content: z.string()
         }))
       })
@@ -150,9 +162,137 @@ Include math expressions. Include partial items cut off at the start or end of t
 
       const items = pageItems?.items
 
+      console.log("processed page ", index + 1);
+
+      for (const item of items) {
+
+        if (item.type === "author_info" && index < 5) {
+          authorInfoContents += `\n\n${item.content}`
+        }
+
+        if (item.type === "figure_image" || item.type === "table_rows") {
+          console.log("summarizing figure/table on page ", index + 1)
+          const summarizationSchema = z.object({
+            summarizedItem: z.object({
+              type: z.enum(["figure_image", "table_rows"]),
+              label: z.object({
+                labelType: z.string(),
+                labelNumber: z.number()
+              }),
+              content: z.string()
+            })
+          })
+    
+          const SUMMARIZE_PROMPT = `Write a detailed explanation for the figures and tables. For figures, replace the content field with a detailed explanation. For tables, replace the raw rows in the content field with a detailed explanation. Summarize the size of changes / effects / estimates / results in the tables or figures. To help understand them better, use context from the paper and any note below them.
+          
+          Add the label "Figure X" or "Table X" where X is the figure or table number indicated in the page. Please use the correct table or figure number otherwise the reader will be very confused.
+          
+          Do not use markdown. Use plain text.`
+    
+          const summarizedItem = await getStructuredOpenAICompletion(
+            SUMMARIZE_PROMPT,
+            `Item to summarize on this page:\n${JSON.stringify(item)}\n\nPage context:\n${JSON.stringify(items)}`,
+            modelConfig.summarization.model,
+            modelConfig.summarization.temperature,
+            summarizationSchema,
+            [pagePath]
+          )
+
+          item["label"] = summarizedItem?.summarizedItem.label
+          item.content = `${item.label.labelType} ${item.label.labelNumber} summary:\n${summarizedItem?.summarizedItem.content}`
+        }
+      }
 
       allItems.push(...items);
-      console.log("processed page ", index + 1);
+
+    }
+
+    console.log("Improving author section")
+    const IMPROVE_AUTHOR_INFO_PROMPT  = `Rearrange all the author info to make it more readable. Keep only the author names and affiliations. Each author's name and affiliation should be on one line followed by the next author in the next line.
+    
+    Example:
+    Author1, Affiliation1
+    Author2, Affiliation2
+    .....`
+
+    const improveAuthorInfoSchema = z.object({
+      authorInfo: z.string()
+    })
+
+    const improvedAuthorInfo = await getStructuredOpenAICompletion(
+      IMPROVE_AUTHOR_INFO_PROMPT,
+      `Here is the author info: ${authorInfoContents}`,
+      modelConfig.authorInfoEditor.model,
+      modelConfig.authorInfoEditor.temperature,
+      improveAuthorInfoSchema
+    )
+
+    const firstAuthorInfoIndex = allItems.findIndex(item => item.type === "author_info")
+    if (firstAuthorInfoIndex !== -1) {
+      allItems[firstAuthorInfoIndex].type = "improved_author_info"
+      allItems[firstAuthorInfoIndex].content = improvedAuthorInfo?.authorInfo;
+    }
+
+    console.log("filtering unnecessary item types")
+
+    const filteredItems = allItems.filter((item: {type: string, content:string}) => {
+      if (!abstractDetected) {
+        if (item.type === "abstract_heading") {
+          abstractDetected = true;
+        }
+        return ["main_title", "improved_author_info", "abstract_heading"].includes(item.type);
+      } else {
+        return ["text", "heading", "figure_image", "table_rows", "math", "abstract_content"].includes(item.type);
+      }
+    });
+
+    const specialItems = filteredItems.filter((item) => (item.type === "figure_image" || item.type === "table_rows"))
+
+    console.log("repositioning images and figures")
+    for (const item of specialItems) {
+      if (item.processed){
+        continue;
+      }
+
+      const {labelType, labelNumber} = item.label;
+      console.log("repositioning ", labelType, " ",labelNumber)
+      let mentionIndex = -1;
+      let headingIndex = -1;
+
+      let matchWords = []
+      if (labelType === "Figure") {
+        matchWords.push(`Figure ${labelNumber}`, `Fig. ${labelNumber}`, `Fig ${labelNumber}`)
+      } else if (labelType === "Table") {
+        matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`)
+      }
+
+      for (let i = 0; i < filteredItems.length; i++) {
+        if (i !== filteredItems.indexOf(item) && matchWords.some(word => filteredItems[i].content.includes(word))) {
+          mentionIndex = i;
+          console.log("found first mention in ", JSON.stringify(filteredItems[i]))
+          break;
+        }
+      }
+
+      const startIndex = mentionIndex !== -1 ? mentionIndex : filteredItems.indexOf(item);
+
+      for (let i = startIndex + 1; i < filteredItems.length; i++) {
+        if (filteredItems[i].type.includes("heading")) {
+          headingIndex = i;
+          console.log("found the first heading below mention in", JSON.stringify(filteredItems[i]))
+          break;
+        }
+      }
+
+      console.log("moving the item above the first heading or to the end")
+      const [movedItem] = filteredItems.splice(filteredItems.indexOf(item), 1);
+      if (headingIndex !== -1) {
+        filteredItems.splice(headingIndex - 1, 0, movedItem);
+      } else {
+        filteredItems.push(movedItem);
+      }
+
+      item["processed"] = true
     }
 
 
@@ -160,28 +300,19 @@ Include math expressions. Include partial items cut off at the start or end of t
     fs.writeFileSync(parsedItemsPath, JSON.stringify(allItems, null, 2));
     console.log("Saved raw text extract to", parsedItemsPath);
 
-  
-    // Join paragraphs back into a single string
-    // const pageTextStringWithItems = paragraphs.join('\n\n');
+    const filteredItemsPath = path.join(tempObjectsDir, "filteredItems.json");
+    fs.writeFileSync(filteredItemsPath, JSON.stringify(filteredItems, null, 2));
+    console.log("Saved filtered items to", filteredItemsPath);
 
-    //cleanup
-
-
-
-    console.log("attempting to combine text for TTS");
-    //let ttsText = pageTextStringWithItems;
-    let ttsText;
-
-    console.log("combined text for TTS");
-    //const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
-    //fs.writeFileSync(ttsTextFilePath, ttsText);
-
+    // const ttsText = filteredItems.map(item => item.content).join('\n\n');
+    // console.log("combined text for TTS");
     // const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
+    // fs.writeFileSync(ttsTextFilePath, ttsText)
     // const ttsText = fs.readFileSync(ttsTextFilePath, "utf-8");
 
     try {
       throw new Error("Audio generation skipped");
-      const audioBuffer = await synthesizeSpeechInChunks(ttsText);
+      const audioBuffer = await synthesizeSpeechInChunks(filteredItems);
       console.log("Generated audio file");
 
       const audioFilePath = path.join(audioOutputDir, "output.mp3");
@@ -234,6 +365,10 @@ async function getWebContext(link: string): Promise<string> {
 }
 
 function splitTextIntoChunks(text: string, maxLength: number): string[] {
+  if (text.length <= maxLength) {
+    return [text];
+  }
+  
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
   const chunks: string[] = [];
   let currentChunk = "";
@@ -254,13 +389,17 @@ function splitTextIntoChunks(text: string, maxLength: number): string[] {
   return chunks;
 }
 
-async function synthesizeSpeechInChunks(text: string): Promise<Buffer> {
-  const chunks = splitTextIntoChunks(text, MAX_POLLY_CHAR_LIMIT);
+async function synthesizeSpeechInChunks(items: {type: string, content: string, label?: string}[]): Promise<Buffer> {
   const audioBuffers: Buffer[] = [];
 
-  for (const chunk of chunks) {
-    const audioBuffer = await synthesizeSpeech(chunk);
-    audioBuffers.push(audioBuffer);
+  for (const item of items) {
+    const voiceId = ["figure_image", "table_rows", "heading", "abstract_heading","main_title"].includes(item.type) ? "Gregory" : "Ruth";
+    const chunks = splitTextIntoChunks(item.content + "\n\n", MAX_POLLY_CHAR_LIMIT);
+
+    for (const chunk of chunks) {
+      const audioBuffer = await synthesizeSpeech(chunk, voiceId);
+      audioBuffers.push(audioBuffer);
+    }
   }
 
   return Buffer.concat(audioBuffers);
@@ -434,6 +573,13 @@ async function getStructuredOpenAICompletion(
     };
   });
 
+  const messages: ChatCompletionMessageParam[] = imagePaths.length > 0 ? imageMessages : [
+    {
+      role: "user",
+      content: userPrompt,
+    },
+  ];
+
   const completion = await openai.beta.chat.completions.parse({
     model: model,
     temperature: temperature,
@@ -442,7 +588,7 @@ async function getStructuredOpenAICompletion(
         role: "system",
         content: systemPrompt,
       },
-      ...imageMessages,
+      ...messages,
     ],
     response_format: zodResponseFormat(schema, "schema"),
   });
