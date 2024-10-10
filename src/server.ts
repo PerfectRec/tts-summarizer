@@ -28,7 +28,7 @@ const environment: Environment =
 
 const fastify = Fastify({
   logger: envToLogger[environment] ?? true,
-  bodyLimit: 10485760,
+  bodyLimit: 52428800,
 });
 
 // Add content type parsers

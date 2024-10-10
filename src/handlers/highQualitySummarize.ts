@@ -148,7 +148,7 @@ export default async function handler(
     let allItems: any[] = [];
     let abstractDetected = false;
     let authorInfoContents = ""
-    const pngPages = pngPagesOriginal.slice(0,14)
+    const pngPages = pngPagesOriginal
 
     for (let i = 0; i < pngPages.length; i += batchSize) {
       const batch = pngPages.slice(i, i + batchSize);
@@ -177,7 +177,9 @@ export default async function handler(
             modelConfig.extraction.model,
             modelConfig.extraction.temperature,
             extractSchema,
-            [pagePath]
+            [pagePath],
+            16384,
+            0.1
           );
 
           const items = pageItems?.items;
@@ -294,9 +296,12 @@ export default async function handler(
       allItems[firstAuthorInfoIndex].content = improvedAuthorInfo?.authorInfo;
     }
 
-    console.log("filtering unnecessary item types")
+    const abstractExists = allItems.some(item => 
+      item.type === "abstract_heading" || item.type === "abstract_content" || item.content.toLocaleLowerCase() === 'abstract'
+    );
 
-    const filteredItems = allItems.filter((item: {type: string, content:string}) => {
+    console.log("filtering unnecessary item types")
+    const filteredItems = abstractExists ? allItems.filter((item: {type: string, content:string}) => {
       if (!abstractDetected) {
         if (item.type === "abstract_heading" || item.content.toLocaleLowerCase() === 'abstract') {
           abstractDetected = true;
@@ -304,13 +309,14 @@ export default async function handler(
         } else if (item.type === "abstract_content") {
           abstractDetected = true;
         }
-        return ["main_title", "improved_author_info", "figure_image", "abstract_heading", "abstract_content"].includes(item.type);
+        return ["main_title", "improved_author_info", "abstract_heading", "abstract_content"].includes(item.type);
       } else {
         return ["text", "heading", "figure_image", "table_rows", "math", "abstract_content"].includes(item.type);
       }
-    });
-    const specialItems = filteredItems.filter((item) => (item.type === "figure_image" || item.type === "table_rows"))
+    }) : allItems.filter((item: {type: string, content:string}) => ["main_title", "improved_author_info","text","heading","figure_image","table_rows","math","abstract_content","abstract_heading"].includes(item.type));
 
+
+    const specialItems = filteredItems.filter((item) => (item.type === "figure_image" || item.type === "table_rows"))
     console.log("repositioning images and figures")
     for (const item of specialItems) {
       if (item.processed){
@@ -617,7 +623,8 @@ async function getStructuredOpenAICompletion(
   temperature: number,
   schema: z.AnyZodObject,
   imagePaths: string[] = [],
-  maxTokens: number = 16384
+  maxTokens: number = 16384,
+  frequencyPenalty: number = 0
 ) {
   const imageUrls = imagePaths.map((imagePath) => {
     const imageBuffer = fs.readFileSync(imagePath);
@@ -657,7 +664,8 @@ async function getStructuredOpenAICompletion(
       ...messages,
     ],
     response_format: zodResponseFormat(schema, "schema"),
-    max_tokens: maxTokens
+    max_tokens: maxTokens,
+    frequency_penalty: frequencyPenalty
   });
 
   const response = completion.choices[0].message;
