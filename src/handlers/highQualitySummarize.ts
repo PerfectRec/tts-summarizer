@@ -273,7 +273,7 @@ export default async function handler(
     Author2, Affiliation2
     .....
     
-    If the affiliation is not available leave it empty.`
+    If the affiliation is not available leave it empty. Do not repeat the same author multiple times.`
 
     const improveAuthorInfoSchema = z.object({
       authorInfo: z.string()
@@ -374,7 +374,7 @@ export default async function handler(
     // const ttsText = fs.readFileSync(ttsTextFilePath, "utf-8");
 
     try {
-      throw new Error("Audio generation skipped");
+      //throw new Error("Audio generation skipped");
       const audioBuffer = await synthesizeSpeechInChunks(filteredItems);
       console.log("Generated audio file");
 
