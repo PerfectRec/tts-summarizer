@@ -165,7 +165,7 @@ export default async function handler(
 
           const extractSchema = z.object({
             items: z.array(z.object({
-              type: z.enum(["main_title", "text", "heading", "figure_image", "figure_caption_or_heading", "figure_note", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info",  "references_heading", "references_item", "math", "table_of_contents_heading", "table_of_contents_item", "abstract_heading", "abstract_content", "page_number"]),
+              type: z.enum(["main_title", "text", "heading", "figure_image", "figure_caption_or_heading", "figure_note", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info",  "references_heading", "references_item", "math", "table_of_contents_heading", "table_of_contents_item", "abstract_heading", "abstract_content", "page_number", "code_or_algorithm"]),
               content: z.string()
             }))
           });
@@ -244,6 +244,27 @@ export default async function handler(
               );
 
               item.content = `Math summary: ${summarizedMath?.summarizedMath.content}`;
+            } else if (item.type === "code_or_algorithm") {
+              console.log("summarizing code or algorithm on page ", i + index + 1);
+              const codeSummarizationSchema = z.object({
+                summarizedCode: z.object({
+                  content: z.string()
+                })
+              });
+
+              const CODE_SUMMARIZE_PROMPT = `Summarize the given code or algorithm. Explain what the code or algorithm does in simple terms including its input and output. Do not include any code syntax in the summary.`;
+
+              const summarizedCode = await getStructuredOpenAICompletion(
+                CODE_SUMMARIZE_PROMPT,
+                `Code or algorithm to summarize:\n${JSON.stringify(item)}\n\nPage context:\n${JSON.stringify(items)}`,
+                modelConfig.summarization.model,
+                modelConfig.summarization.temperature,
+                codeSummarizationSchema,
+                [],
+                1024
+              );
+
+              item.content = `Code or Algorithm summary: ${summarizedCode?.summarizedCode.content}`;
             }
 
             //Some manual latex processing
@@ -311,9 +332,9 @@ export default async function handler(
         }
         return ["main_title", "improved_author_info", "abstract_heading", "abstract_content"].includes(item.type);
       } else {
-        return ["text", "heading", "figure_image", "table_rows", "math", "abstract_content"].includes(item.type);
+        return ["text", "heading", "figure_image", "table_rows", "math", "abstract_content", "code_or_algorithm"].includes(item.type);
       }
-    }) : allItems.filter((item: {type: string, content:string}) => ["main_title", "improved_author_info","text","heading","figure_image","table_rows","math","abstract_content","abstract_heading"].includes(item.type));
+    }) : allItems.filter((item: {type: string, content:string}) => ["main_title", "improved_author_info","text","heading","figure_image","table_rows","math","abstract_content","abstract_heading", "code_or_algorithm"].includes(item.type));
 
 
     const specialItems = filteredItems.filter((item) => (item.type === "figure_image" || item.type === "table_rows"))
@@ -380,7 +401,7 @@ export default async function handler(
     // const ttsText = fs.readFileSync(ttsTextFilePath, "utf-8");
 
     try {
-      //throw new Error("Audio generation skipped");
+      throw new Error("Audio generation skipped");
       const audioBuffer = await synthesizeSpeechInChunks(filteredItems);
       console.log("Generated audio file");
 
@@ -463,7 +484,7 @@ async function synthesizeSpeechInChunks(items: {type: string, content: string, l
   const MAX_CONCURRENT_ITEMS = 10;
 
   const processItem = async (item: {type: string, content: string, label?: string}) => {
-    const voiceId = ["figure_image", "table_rows", "math"].includes(item.type) ? "Matthew" : "Ruth";
+    const voiceId = ["figure_image", "table_rows", "math", "code_or_algorithm"].includes(item.type) ? "Matthew" : "Ruth";
     const chunks = splitTextIntoChunks(item.content + "\n\n", MAX_POLLY_CHAR_LIMIT);
     const itemAudioBuffer: Buffer[] = []
 
