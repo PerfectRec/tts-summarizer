@@ -460,15 +460,26 @@ function splitTextIntoChunks(text: string, maxLength: number): string[] {
 
 async function synthesizeSpeechInChunks(items: {type: string, content: string, label?: string}[]): Promise<Buffer> {
   const audioBuffers: Buffer[] = [];
+  const MAX_CONCURRENT_ITEMS = 10;
 
-  for (const item of items) {
+  const processItem = async (item: {type: string, content: string, label?: string}) => {
     const voiceId = ["figure_image", "table_rows", "math"].includes(item.type) ? "Matthew" : "Ruth";
     const chunks = splitTextIntoChunks(item.content + "\n\n", MAX_POLLY_CHAR_LIMIT);
+    const itemAudioBuffer: Buffer[] = []
 
     for (const chunk of chunks) {
       const audioBuffer = await synthesizeSpeech(chunk, voiceId);
-      audioBuffers.push(audioBuffer);
+      itemAudioBuffer.push(audioBuffer);
     }
+
+    return Buffer.concat(itemAudioBuffer)
+  };
+
+  for (let i = 0; i < items.length; i += MAX_CONCURRENT_ITEMS) {
+    const itemBatch = items.slice(i, i + MAX_CONCURRENT_ITEMS);
+    console.log(`converting items ${i} through ${i + MAX_CONCURRENT_ITEMS} to audio`)
+    const batchResults = await Promise.all(itemBatch.map(processItem));
+    audioBuffers.push(...batchResults)
   }
 
   return Buffer.concat(audioBuffers);
