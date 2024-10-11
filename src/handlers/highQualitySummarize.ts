@@ -200,7 +200,7 @@ export default async function handler(
                   type: z.enum(["figure_image", "table_rows"]),
                   label: z.object({
                     labelType: z.string(),
-                    labelNumber: z.number()
+                    labelNumber: z.string()
                   }),
                   content: z.string()
                 })
