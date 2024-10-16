@@ -3,8 +3,14 @@ import "./App.css";
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
-  const [summarizationMethod, setSummarizationMethod] =
-    useState<string>("ultimate");
+  const [email, setEmail] = useState<string>("");
+
+  const handleEmailChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setEmail(event.target.value);
+  };
+  // const [summarizationMethod, setSummarizationMethod] =
+  //   useState<string>("ultimate");
+  const summarizationMethod = "ultimate";
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -15,9 +21,9 @@ function App() {
 
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
-  const handleMethodChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setSummarizationMethod(event.target.value);
-  };
+  // const handleMethodChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+  //   setSummarizationMethod(event.target.value);
+  // };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -30,7 +36,7 @@ function App() {
 
     try {
       const response = await fetch(
-        `/summarize?summarizationMethod=${summarizationMethod}`,
+        `/summarize?summarizationMethod=${summarizationMethod}&&email=${email}`,
         {
           method: "POST",
           headers: {
@@ -41,11 +47,9 @@ function App() {
       );
 
       if (response.ok) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        console.log("Audio URL:", url);
-        setLoadingMessage(null);
-        setAudioUrl(url);
+        // Update: Display success message instead of handling audio URL
+        console.log("Request successful");
+        setLoadingMessage("Request successful!");
       } else {
         console.error("Error:", response.statusText);
         setLoadingMessage(null);
@@ -74,14 +78,21 @@ function App() {
   return (
     <>
       <h1 className="text-2xl font-bold mb-4">Text-to-speech Summarizer</h1>
-      <form onSubmit={handleSubmit} className="flex flex-row gap-4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <input
           type="file"
           accept=".pdf,.epub"
           onChange={handleFileChange}
           className="p-2 border rounded"
         />
-        <select
+        <input
+          type="email"
+          value={email}
+          onChange={handleEmailChange}
+          placeholder="Enter your email"
+          className="p-2 border rounded"
+        />
+        {/* <select
           value={summarizationMethod}
           onChange={handleMethodChange}
           className="p-2 border rounded"
@@ -93,7 +104,7 @@ function App() {
           <option value="ultimate">
             Better Abstract + Tables and Figures Only
           </option>
-        </select>
+        </select> */}
         <button
           type="submit"
           className="p-2 bg-blue-500 text-white rounded hover:bg-blue-700"

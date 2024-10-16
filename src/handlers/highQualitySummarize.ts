@@ -16,6 +16,8 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { pdfToPng } from "pdf-to-png-converter";
 import { timeStamp } from "console";
+import { uploadFile } from "@aws/s3";
+import { sendEmail } from "@aws/ses";
 
 interface SummarizeRequestParams {
   summarizationMethod:
@@ -24,6 +26,7 @@ interface SummarizeRequestParams {
     | "chaptered"
     | "tablesAndFiguresOnly"
     | "ultimate";
+  email: string;
 }
 
 type Model =
@@ -83,7 +86,7 @@ export default async function handler(
   }>,
   reply: FastifyReply
 ) {
-  const { summarizationMethod } = request.query;
+  const { summarizationMethod, email } = request.query;
   const fileBuffer = request.body as Buffer;
 
   const __filename = fileURLToPath(import.meta.url);
@@ -405,12 +408,18 @@ export default async function handler(
       const audioBuffer = await synthesizeSpeechInChunks(filteredItems);
       console.log("Generated audio file");
 
-      const audioFilePath = path.join(audioOutputDir, "output.mp3");
-      fs.writeFileSync(audioFilePath, audioBuffer);
-      console.log("Saved audio file to", audioFilePath);
+      const audioFileName = `output-${timestamp}.mp3`;
+      const audioFileUrl = await uploadFile(audioBuffer, audioFileName);
+      console.log("Uploaded audio file to S3:", audioFileUrl);
+
+      const emailSubject = "Your Audio Paper is Ready!";
+      const emailBody = `Hello,\n\nYour audio paper is ready. You can download it from the following link:\n\n${audioFileUrl}\n\nBest regards,\nPerfectRec Team`;
+
+      await sendEmail(email, emailSubject, emailBody);
+      console.log("Email sent successfully to:", email);
 
       // Send the audio file as a response
-      return reply.status(200).type("audio/mpeg").send(audioBuffer);
+      return reply.status(200).send({ audioFileUrl });
     } catch (error) {
       console.error("Error generating audio file:", error);
       return reply.status(500).send({ message: "Error generating audio file" });
