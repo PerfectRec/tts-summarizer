@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import "./App.css";
 
 function App() {
@@ -30,7 +30,7 @@ function App() {
     if (!file) return;
 
     setAudioUrl(null);
-    setLoadingMessage("Improving abstract...");
+    setLoadingMessage("Check your email for download link.");
 
     const fileBuffer = await file.arrayBuffer();
 
@@ -60,24 +60,9 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    if (loadingMessage === "Improving abstract...") {
-      const timer1 = setTimeout(() => {
-        setLoadingMessage("Processing images and tables...");
-      }, 3000);
-      const timer2 = setTimeout(() => {
-        setLoadingMessage("Converting text to speech...");
-      }, 15000);
-      return () => {
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-      };
-    }
-  }, [loadingMessage]);
-
   return (
     <>
-      <h1 className="text-2xl font-bold mb-4">Text-to-speech Summarizer</h1>
+      <h1 className="text-4xl font-bold mb-6">paper2audio</h1>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <input
           type="file"
@@ -109,7 +94,7 @@ function App() {
           type="submit"
           className="p-2 bg-blue-500 text-white rounded hover:bg-blue-700"
         >
-          Upload + Summarize
+          Generate audio
         </button>
       </form>
       {loadingMessage && (
