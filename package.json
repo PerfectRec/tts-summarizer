@@ -24,8 +24,7 @@
   "scripts": {
     "start": "yarn build:client && tsx src/server.ts",
     "dev": "concurrently \"nodemon --watch client/src --ext js,jsx,ts,tsx --exec yarn build:client\" \"nodemon --watch src --exec tsx src/server.ts\"",
-    "build:client": "yarn --cwd client build",
-    "install:client": "yarn --cwd client"
+    "build:client": "yarn --cwd client build"
   },
   "devDependencies": {
     "concurrently": "^9.0.1",

@@ -60,9 +60,12 @@ fastify.register(fastifyStatic, {
 // Routes
 fastify.post("/summarize", highQualitySummarizeHandler);
 
+const port = Number(process.env.PORT) || 4242;
+const host = ("RENDER" in process.env) ? `0.0.0.0` : `localhost`;
+
 // Run the server!
 try {
-  await fastify.listen({ port: 4242 });
+  await fastify.listen({ host: host, port: port });
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);
