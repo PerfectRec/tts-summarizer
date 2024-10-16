@@ -22,6 +22,7 @@ export const uploadFile = async (
     Bucket: bucketName,
     Key: fileName,
     Body: fileContent,
+    ACL: "public-read",
   };
 
   try {
