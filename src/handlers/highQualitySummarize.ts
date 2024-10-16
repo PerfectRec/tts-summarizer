@@ -410,7 +410,7 @@ export default async function handler(
       console.log("Saved audio file to", audioFilePath);
 
       // Send the audio file as a response
-      return reply.type("audio/mpeg").send(audioBuffer);
+      return reply.status(200).type("audio/mpeg").send(audioBuffer);
     } catch (error) {
       console.error("Error generating audio file:", error);
       return reply.status(500).send({ message: "Error generating audio file" });
