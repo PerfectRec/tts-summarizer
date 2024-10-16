@@ -401,7 +401,7 @@ export default async function handler(
     // const ttsText = fs.readFileSync(ttsTextFilePath, "utf-8");
 
     try {
-      throw new Error("Audio generation skipped");
+      //throw new Error("Audio generation skipped");
       const audioBuffer = await synthesizeSpeechInChunks(filteredItems);
       console.log("Generated audio file");
 
