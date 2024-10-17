@@ -27,6 +27,7 @@ interface SummarizeRequestParams {
     | "tablesAndFiguresOnly"
     | "ultimate";
   email: string;
+  fileName: string;
 }
 
 type Model =
@@ -86,7 +87,7 @@ export default async function handler(
   }>,
   reply: FastifyReply
 ) {
-  const { summarizationMethod, email } = request.query;
+  const { summarizationMethod, email, fileName } = request.query;
   const fileBuffer = request.body as Buffer;
 
   const __filename = fileURLToPath(import.meta.url);
@@ -104,7 +105,7 @@ export default async function handler(
   const ttsTextDir = path.join(tempDir, "text");
   const tempObjectsDir = path.join(tempDir, "objects");
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const timestampedDir = path.join(tempObjectsDir, timestamp);
+  const timestampedDir = path.join(tempObjectsDir, fileName);
 
   clearDirectory(tempImageDir);
 
@@ -130,7 +131,7 @@ export default async function handler(
 
   console.log("attempting to convert pdf pages to images");
   const pngPagesOriginal = await pdfToPng(fileBuffer, {
-    viewportScale: 2.0,
+    viewportScale: 3.0,
     outputFolder: tempImageDir,
   });
   console.log("converted pdf pages to images");
@@ -164,11 +165,13 @@ export default async function handler(
 
           Include math expressions in plain text. Do not use LaTeX or any other special formatting for math. Instead using the english version, for example "\\geq" means "greater than or equal to". Include partial items cut off at the start or end of the page. Combine all rows of a table into a single table_rows item.
           
-          Please use your best judgement to determine the abstract even if it is not explicitly labeled as such.`;
+          Please use your best judgement to determine the abstract even if it is not explicitly labeled as such.
+          
+          Usually, text item starting with a superscript number is an endnote`;
 
           const extractSchema = z.object({
             items: z.array(z.object({
-              type: z.enum(["main_title", "text", "heading", "figure_image", "figure_caption_or_heading", "figure_note", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info",  "references_heading", "references_item", "math", "table_of_contents_heading", "table_of_contents_item", "abstract_heading", "abstract_content", "page_number", "code_or_algorithm"]),
+              type: z.enum(["main_title", "text", "heading", "figure_image", "figure_caption_or_heading", "figure_note", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info",  "references_heading", "references_item", "math", "table_of_contents_heading", "table_of_contents_item", "abstract_heading", "abstract_content", "page_number", "code_or_algorithm", "endnotes_item","endnotes_heading"]),
               content: z.string()
             }))
           });
@@ -325,7 +328,7 @@ export default async function handler(
     );
 
     console.log("filtering unnecessary item types")
-    const filteredItems = abstractExists ? allItems.filter((item: {type: string, content:string}) => {
+    const filteredItems = abstractExists ? allItems.filter((item: {type: string, content:string}, index: number, array: any[]) => {
       if (!abstractDetected) {
         if (item.type === "abstract_heading" || item.content.toLocaleLowerCase() === 'abstract') {
           abstractDetected = true;
@@ -335,9 +338,27 @@ export default async function handler(
         }
         return ["main_title", "improved_author_info", "abstract_heading", "abstract_content"].includes(item.type);
       } else {
+        // Check for math items between endnotes
+        if (item.type === "math" && index > 0 && index < array.length - 1) {
+          const prevItem = array[index - 1];
+          const nextItem = array[index + 1];
+          if (prevItem.type === "endnotes_item" && nextItem.type === "endnotes_item") {
+            return false; // Remove this math item
+          }
+        }
         return ["text", "heading", "figure_image", "table_rows", "math", "abstract_content", "code_or_algorithm"].includes(item.type);
       }
-    }) : allItems.filter((item: {type: string, content:string}) => ["main_title", "improved_author_info","text","heading","figure_image","table_rows","math","abstract_content","abstract_heading", "code_or_algorithm"].includes(item.type));
+    }) : allItems.filter((item: {type: string, content:string}, index: number, array: any[]) => {
+      // Check for math items between endnotes
+      if (item.type === "math" && index > 0 && index < array.length - 1) {
+        const prevItem = array[index - 1];
+        const nextItem = array[index + 1];
+        if (prevItem.type === "endnotes_item" && nextItem.type === "endnotes_item") {
+          return false; // Remove this math item
+        }
+      }
+      return ["main_title", "improved_author_info","text","heading","figure_image","table_rows","math","abstract_content","abstract_heading", "code_or_algorithm"].includes(item.type);
+    });
 
 
     const specialItems = filteredItems.filter((item) => (item.type === "figure_image" || item.type === "table_rows"))
@@ -413,9 +434,9 @@ export default async function handler(
       console.log("Uploaded audio file to S3:", audioFileUrl);
 
       const emailSubject = "Your Audio Paper is Ready!";
-      const emailBody = `Hello,\n\nYour audio paper is ready. You can download it from the following link:\n\n${audioFileUrl}\n\nBest regards,\npaper2audio Team`;
+      const emailBody = `Hello,\n\nYour audio paper is ready. You can download it from the following link:\n\n${audioFileUrl}\n\nReply to this email to share feedback about the audio. We will read every feedback email!\n\nBest regards,\nJoe`;
 
-      await sendEmail(email, "", "it@perfectrec.com", "paper2audio", emailSubject, emailBody);
+      await sendEmail(email, "", "joe@perfectrec.com", "paper2audio", emailSubject, emailBody);
       console.log("Email sent successfully to:", email);
 
       // Send the audio file as a response

@@ -33,10 +33,11 @@ function App() {
     setLoadingMessage("Check your email for download link.");
 
     const fileBuffer = await file.arrayBuffer();
+    const fileName = await file.name;
 
     try {
       const response = await fetch(
-        `/summarize?summarizationMethod=${summarizationMethod}&&email=${email}`,
+        `/summarize?summarizationMethod=${summarizationMethod}&email=${email}&fileName=${fileName}`,
         {
           method: "POST",
           headers: {
@@ -66,7 +67,7 @@ function App() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <input
           type="file"
-          accept=".pdf,.epub"
+          accept=".pdf"
           onChange={handleFileChange}
           className="p-2 border rounded"
         />
