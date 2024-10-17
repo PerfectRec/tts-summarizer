@@ -64,7 +64,7 @@ function App() {
   };
 
   return (
-    <div className="max-w-lg mx-auto p-4">
+    <div className="max-w-lg mx-auto">
       <h1 className="text-4xl font-bold mb-4">paper2audio</h1>
       <div className="mb-4 text-sm">
         paper2audio creates an audio version of your research paper PDF. It
