@@ -104,8 +104,7 @@ export default async function handler(
   const audioOutputDir = path.join(tempDir, "audio");
   const ttsTextDir = path.join(tempDir, "text");
   const tempObjectsDir = path.join(tempDir, "objects");
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const timestampedDir = path.join(tempObjectsDir, fileName);
+  const fileNameDir = path.join(tempObjectsDir, fileName);
 
   clearDirectory(tempImageDir);
 
@@ -125,8 +124,8 @@ export default async function handler(
     fs.mkdirSync(tempObjectsDir);
   }
 
-  if (!fs.existsSync(timestampedDir)) {
-    fs.mkdirSync(timestampedDir, { recursive: true });
+  if (!fs.existsSync(fileNameDir)) {
+    fs.mkdirSync(fileNameDir, { recursive: true });
   }
 
   console.log("attempting to convert pdf pages to images");
@@ -410,11 +409,11 @@ export default async function handler(
     }
 
 
-    const parsedItemsPath = path.join(timestampedDir, "parsedItems.json");
+    const parsedItemsPath = path.join(fileNameDir, "parsedItems.json");
     fs.writeFileSync(parsedItemsPath, JSON.stringify(allItems, null, 2));
     console.log("Saved raw text extract to", parsedItemsPath);
 
-    const filteredItemsPath = path.join(timestampedDir, "filteredItems.json");
+    const filteredItemsPath = path.join(fileNameDir, "filteredItems.json");
     fs.writeFileSync(filteredItemsPath, JSON.stringify(filteredItems, null, 2));
     console.log("Saved filtered items to", filteredItemsPath);
 
@@ -429,7 +428,7 @@ export default async function handler(
       const audioBuffer = await synthesizeSpeechInChunks(filteredItems);
       console.log("Generated audio file");
 
-      const audioFileName = `output-${timestamp}.mp3`;
+      const audioFileName = `audio-${fileName}.mp3`;
       const audioFileUrl = await uploadFile(audioBuffer, audioFileName);
       console.log("Uploaded audio file to S3:", audioFileUrl);
 
