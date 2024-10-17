@@ -11,7 +11,8 @@
     "baseUrl": "./src", // Set base URL to /src
     "paths": {
       "@aws/*": ["aws/*"], // Alias for /src/aws
-      "@handlers/*": ["handlers/*"] // Alias for /src/handlers
+      "@handlers/*": ["handlers/*"], // Alias for /src/handlers
+      "@mandrill/*": ["mandrill/*"]
     }
   },
   "include": ["src/**/*.ts"],

@@ -17,7 +17,7 @@ import { z } from "zod";
 import { pdfToPng } from "pdf-to-png-converter";
 import { timeStamp } from "console";
 import { uploadFile } from "@aws/s3";
-import { sendEmail } from "@aws/ses";
+import { sendEmail } from "@mandrill/mandrill";
 
 interface SummarizeRequestParams {
   summarizationMethod:
@@ -413,9 +413,9 @@ export default async function handler(
       console.log("Uploaded audio file to S3:", audioFileUrl);
 
       const emailSubject = "Your Audio Paper is Ready!";
-      const emailBody = `Hello,\n\nYour audio paper is ready. You can download it from the following link:\n\n${audioFileUrl}\n\nBest regards,\nPerfectRec Team`;
+      const emailBody = `Hello,\n\nYour audio paper is ready. You can download it from the following link:\n\n${audioFileUrl}\n\nBest regards,\npaper2audio Team`;
 
-      await sendEmail(email, emailSubject, emailBody);
+      await sendEmail(email, "", "it@perfectrec.com", "paper2audio", emailSubject, emailBody);
       console.log("Email sent successfully to:", email);
 
       // Send the audio file as a response
