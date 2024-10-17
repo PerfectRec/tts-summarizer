@@ -4,6 +4,7 @@ import "./App.css";
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [email, setEmail] = useState<string>("");
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
   const handleEmailChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setEmail(event.target.value);
@@ -11,7 +12,7 @@ function App() {
   // const [summarizationMethod, setSummarizationMethod] =
   //   useState<string>("ultimate");
   const summarizationMethod = "ultimate";
-  const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
+  const [submitMessage, setSubmitMessage] = useState<string>("Generate audio");
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -19,18 +20,19 @@ function App() {
     }
   };
 
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-
   // const handleMethodChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
   //   setSummarizationMethod(event.target.value);
   // };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!file) return;
+    if (!file || !email || email === "") {
+      setErrorMessage("Please select a file and enter your email address.");
+      return;
+    }
 
-    setAudioUrl(null);
-    setLoadingMessage("Check your email for download link.");
+    setErrorMessage("");
+    setSubmitMessage("You're done!  Check your email in a few mins.");
 
     const fileBuffer = await file.arrayBuffer();
     const fileName = await file.name;
@@ -50,20 +52,25 @@ function App() {
       if (response.ok) {
         // Update: Display success message instead of handling audio URL
         console.log("Request successful");
-        setLoadingMessage("Request successful!");
+        setSubmitMessage("Generate audio");
       } else {
         console.error("Error:", response.statusText);
-        setLoadingMessage(null);
+        setSubmitMessage("Generate audio");
       }
     } catch (error) {
       console.error("Error:", error);
-      setLoadingMessage(null);
+      setSubmitMessage("Generate audio");
     }
   };
 
   return (
-    <>
-      <h1 className="text-4xl font-bold mb-6">paper2audio</h1>
+    <div className="max-w-lg mx-auto p-4">
+      <h1 className="text-4xl font-bold mb-4">paper2audio</h1>
+      <div className="mb-4 text-sm">
+        paper2audio creates an audio version of your research paper PDF. It
+        narrates all the text of the paper, plus AI-generated summaries of any
+        tables, figures, math or code.
+      </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <input
           type="file"
@@ -71,6 +78,10 @@ function App() {
           onChange={handleFileChange}
           className="p-2 border rounded"
         />
+        <div className="text-sm">
+          Audio generation takes a few minutes. We'll email you a link to the
+          file when it is ready.
+        </div>
         <input
           type="email"
           value={email}
@@ -95,29 +106,19 @@ function App() {
           type="submit"
           className="p-2 bg-blue-500 text-white rounded hover:bg-blue-700"
         >
-          Generate audio
+          {submitMessage}
         </button>
-      </form>
-      {loadingMessage && (
-        <p className="mt-4 text-lg text-white">{loadingMessage}</p>
-      )}
-      {audioUrl && (
-        <div className="mt-4">
-          <audio
-            controls
-            src={audioUrl}
-            className="w-full mb-2 rounded"
-          ></audio>
-          <a
-            href={audioUrl}
-            download="summary.mp3"
-            className="p-2 mt-2 bg-green-500 hover:bg-green-700 text-white rounded"
-          >
-            Download MP3
-          </a>
+        {errorMessage && (
+          <div className="text-sm text-red-500">{errorMessage}</div>
+        )}
+        <div className="text-sm text-red-500">
+          This is a new project that we’re actively improving. The audio output
+          is generally good, but not perfect. Math heavy papers unfortunately do
+          not naturally translate well to audio. AI-generated summaries may not
+          be 100% accurate.
         </div>
-      )}
-    </>
+      </form>
+    </div>
   );
 }
 

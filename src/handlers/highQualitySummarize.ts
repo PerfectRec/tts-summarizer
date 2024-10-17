@@ -88,6 +88,7 @@ export default async function handler(
   reply: FastifyReply
 ) {
   const { summarizationMethod, email, fileName } = request.query;
+  const cleanedFileName = path.parse(fileName).name
   const fileBuffer = request.body as Buffer;
 
   const __filename = fileURLToPath(import.meta.url);
@@ -104,7 +105,7 @@ export default async function handler(
   const audioOutputDir = path.join(tempDir, "audio");
   const ttsTextDir = path.join(tempDir, "text");
   const tempObjectsDir = path.join(tempDir, "objects");
-  const fileNameDir = path.join(tempObjectsDir, fileName);
+  const fileNameDir = path.join(tempObjectsDir, cleanedFileName);
 
   clearDirectory(tempImageDir);
 
@@ -428,7 +429,7 @@ export default async function handler(
       const audioBuffer = await synthesizeSpeechInChunks(filteredItems);
       console.log("Generated audio file");
 
-      const audioFileName = `audio-${fileName}.mp3`;
+      const audioFileName = `${cleanedFileName}.mp3`;
       const audioFileUrl = await uploadFile(audioBuffer, audioFileName);
       console.log("Uploaded audio file to S3:", audioFileUrl);
 
