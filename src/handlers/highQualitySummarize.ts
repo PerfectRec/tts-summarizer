@@ -17,7 +17,8 @@ import { z } from "zod";
 import { pdfToPng } from "pdf-to-png-converter";
 import { timeStamp } from "console";
 import { uploadFile } from "@aws/s3";
-import { sendEmail } from "@mandrill/mandrill";
+import { sendEmail } from "@email/transactional";
+import { subscribeEmail } from "@email/marketing";
 
 interface SummarizeRequestParams {
   summarizationMethod:
@@ -426,6 +427,8 @@ export default async function handler(
 
     try {
       //throw new Error("Audio generation skipped");
+      await subscribeEmail(email, process.env.MAILCHIMP_AUDIENCE_ID || "");
+      console.log("Subscribed user to mailing list")
       const audioBuffer = await synthesizeSpeechInChunks(filteredItems);
       console.log("Generated audio file");
 

@@ -4,7 +4,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fastifyStatic from "@fastify/static";
 // Handler imports
-import summarizeHandler from "@handlers/summarize";
 import highQualitySummarizeHandler from "@handlers/highQualitySummarize";
 
 const envToLogger = {

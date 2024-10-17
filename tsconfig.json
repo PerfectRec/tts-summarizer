@@ -12,7 +12,7 @@
     "paths": {
       "@aws/*": ["aws/*"], // Alias for /src/aws
       "@handlers/*": ["handlers/*"], // Alias for /src/handlers
-      "@mandrill/*": ["mandrill/*"]
+      "@email/*": ["email/*"]
     }
   },
   "include": ["src/**/*.ts"],
