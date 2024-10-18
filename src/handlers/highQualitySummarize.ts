@@ -452,7 +452,7 @@ export default async function handler(
       const emailSubject = `Your audio paper ${cleanedFileName} is ready!`;
       const emailBody = `Download link:\nhttps://${process.env.AWS_BUCKET_NAME}/${encodedAudioFilePath}\n\nReply to this email to share feedback. We want your feedback. We will actually read it, work on addressing it, and if indicated by your reply, respond to your email.\n\nPlease share https://www.paper2audio.com with friends. We are looking for more feedback!\n\nKeep listening,\nJoe Golden`;;
 
-      await sendEmail(email, "", "joe@perfectrec.com", "paper2audio", emailSubject, emailBody);
+      await sendEmail(email, "", "joe@paper2audio.com", "paper2audio", emailSubject, emailBody);
       console.log("Email sent successfully to:", email);
 
       // Send the audio file as a response
