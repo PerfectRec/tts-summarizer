@@ -93,6 +93,10 @@ export default async function handler(
   const cleanedFileName = path.parse(fileName).name
   const fileBuffer = request.body as Buffer;
 
+  if (fileBuffer.length > 100 * 1024 * 1024) {
+    return reply.status(400).send({ message: "File size exceeds 100MB limit." });
+  }
+
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
@@ -136,6 +140,11 @@ export default async function handler(
     viewportScale: 3.0,
     outputFolder: tempImageDir,
   });
+
+  if (pngPagesOriginal.length > 100) {
+    return reply.status(400).send({ message: "PDF has more than 100 pages." });
+  }
+
   console.log("converted pdf pages to images");
 
   if (summarizationMethod === "ultimate") {

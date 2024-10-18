@@ -57,10 +57,12 @@ function App() {
       } else {
         console.error("Error:", response.statusText);
         setSubmitMessage("Generate audio");
+        setErrorMessage(response.statusText);
       }
     } catch (error) {
       console.error("Error:", error);
       setSubmitMessage("Generate audio");
+      setErrorMessage(JSON.stringify(error));
     }
   };
 
