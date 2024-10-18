@@ -19,6 +19,7 @@ import { timeStamp } from "console";
 import { uploadFile } from "@aws/s3";
 import { sendEmail } from "@email/transactional";
 import { subscribeEmail } from "@email/marketing";
+import { v4 as uuidv4 } from 'uuid';
 
 interface SummarizeRequestParams {
   summarizationMethod:
@@ -433,11 +434,13 @@ export default async function handler(
       console.log("Generated audio file");
 
       const audioFileName = `${cleanedFileName}.mp3`;
-      const audioFileUrl = await uploadFile(audioBuffer, audioFileName);
+      const uuid = uuidv4(); // Generate a random UUID
+      const audioFilePath = `${uuid}/${audioFileName}`;
+      const audioFileUrl = await uploadFile(audioBuffer, audioFilePath);
       console.log("Uploaded audio file to S3:", audioFileUrl);
 
-      const emailSubject = "Your Audio Paper is Ready!";
-      const emailBody = `Hello,\n\nYour audio paper is ready. You can download it from the following link:\n\n${audioFileUrl}\n\nReply to this email to share feedback about the audio. We will read every feedback email!\n\nBest regards,\nJoe`;
+      const emailSubject = `Your audio paper ${cleanedFileName} is ready!`;
+      const emailBody = `Download link:\nhttps://${process.env.AWS_BUCKET_NAME}/${audioFilePath}\n\nReply to this email to share feedback. We want your feedback. We will actually read it, work on addressing it, and if indicated by your reply, respond to your email.\n\nPlease share https://www.paper2audio.com with friends. We are looking for more feedback!\n\nKeep listening,\nJoe Golden`;;
 
       await sendEmail(email, "", "joe@perfectrec.com", "paper2audio", emailSubject, emailBody);
       console.log("Email sent successfully to:", email);
