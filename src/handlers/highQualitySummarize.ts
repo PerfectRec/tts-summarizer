@@ -457,7 +457,7 @@ export default async function handler(
       const uuid = uuidv4(); // Generate a random UUID
       const audioFilePath = `${email}/${audioFileName}`;
       const audioFileUrl = await uploadFile(audioBuffer, audioFilePath);
-      const encodedAudioFilePath = encodeURIComponent(audioFilePath);
+      const encodedAudioFilePath = `${encodeURIComponent(email)}/${encodeURIComponent(audioFileName)}`;
       console.log("Uploaded audio file to S3:", audioFileUrl);
 
       const emailSubject = `Your audio paper ${cleanedFileName} is ready!`;
