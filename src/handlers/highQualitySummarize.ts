@@ -429,6 +429,17 @@ export default async function handler(
     fs.writeFileSync(filteredItemsPath, JSON.stringify(filteredItems, null, 2));
     console.log("Saved filtered items to", filteredItemsPath);
 
+    const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
+    const filteredItemsFileName = `${cleanedFileName}-filteredItems.json`;
+    const parsedItemsFilePath = `${email}/${parsedItemsFileName}`;
+    const filteredItemsFilePath = `${email}/${filteredItemsFileName}`;
+
+    const parsedItemsFileUrl = await uploadFile(fs.readFileSync(parsedItemsPath), parsedItemsFilePath);
+    console.log("Uploaded parsed items to S3:", parsedItemsFileUrl);
+
+    const filteredItemsFileUrl = await uploadFile(fs.readFileSync(filteredItemsPath), filteredItemsFilePath);
+    console.log("Uploaded filtered items to S3:", filteredItemsFileUrl);
+
     // const ttsText = filteredItems.map(item => item.content).join('\n\n');
     // console.log("combined text for TTS");
     // const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
@@ -444,7 +455,7 @@ export default async function handler(
 
       const audioFileName = `${cleanedFileName}.mp3`;
       const uuid = uuidv4(); // Generate a random UUID
-      const audioFilePath = `${uuid}/${audioFileName}`;
+      const audioFilePath = `${email}/${audioFileName}`;
       const audioFileUrl = await uploadFile(audioBuffer, audioFilePath);
       const encodedAudioFilePath = encodeURIComponent(audioFilePath);
       console.log("Uploaded audio file to S3:", audioFileUrl);
