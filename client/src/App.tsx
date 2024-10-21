@@ -111,7 +111,7 @@ function App() {
         >
           {submitMessage}
         </button>
-        {errorMessage && (
+        {errorMessage && errorMessage !== "" && (
           <div className="text-sm text-red-500">{errorMessage}</div>
         )}
         <div className="text-sm">

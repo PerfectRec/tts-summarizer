@@ -159,204 +159,216 @@ export default async function handler(
     */
     
     //convert to JSON
-    const batchSize = 10;
-    let allItems: any[] = [];
-    let abstractDetected = false;
-    let authorInfoContents = ""
-    const pngPages = pngPagesOriginal
+    try {
+      const batchSize = 10;
+      let allItems: any[] = [];
+      let abstractDetected = false;
+      let authorInfoContents = ""
+      const pngPages = pngPagesOriginal
 
-    for (let i = 0; i < pngPages.length; i += batchSize) {
-      const batch = pngPages.slice(i, i + batchSize);
+      for (let i = 0; i < pngPages.length; i += batchSize) {
+        const batch = pngPages.slice(i, i + batchSize);
 
-      const batchResults = await Promise.all(
-        batch.map(async (pngPage, index) => {
-          console.log("processing page ", i + index + 1);
+        const batchResults = await Promise.all(
+          batch.map(async (pngPage, index) => {
+            console.log("processing page ", i + index + 1);
 
-          const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
+            const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
 
-          Include math expressions in plain text. Do not use LaTeX or any other special formatting for math. Instead using the english version, for example "\\geq" means "greater than or equal to". Include partial items cut off at the start or end of the page. Combine all rows of a table into a single table_rows item.
-          
-          Please use your best judgement to determine the abstract even if it is not explicitly labeled as such.
-          
-          Usually, text item starting with a superscript number is an endnote`;
+            Include math expressions in plain text. Do not use LaTeX or any other special formatting for math. Instead using the english version, for example "\\geq" means "greater than or equal to". Include partial items cut off at the start or end of the page. Combine all rows of a table into a single table_rows item.
+            
+            Please use your best judgement to determine the abstract even if it is not explicitly labeled as such.
+            
+            Usually, text item starting with a superscript number is an endnote`;
 
-          const extractSchema = z.object({
-            items: z.array(z.object({
-              type: z.enum(["main_title", "text", "heading", "figure_image", "figure_caption_or_heading", "figure_note", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info",  "references_heading", "references_item", "math", "table_of_contents_heading", "table_of_contents_item", "abstract_heading", "abstract_content", "page_number", "code_or_algorithm", "endnotes_item","endnotes_heading"]),
-              content: z.string()
-            }))
-          });
+            const extractSchema = z.object({
+              items: z.array(z.object({
+                type: z.enum(["main_title", "text", "heading", "figure_image", "figure_caption_or_heading", "figure_note", "table_rows", "table_descrption_or_heading", "author_info",  "footnotes", "meta_or_publication_info",  "references_heading", "references_item", "math", "table_of_contents_heading", "table_of_contents_item", "abstract_heading", "abstract_content", "page_number", "code_or_algorithm", "endnotes_item","endnotes_heading"]),
+                content: z.string()
+              }))
+            });
 
-          const pagePath = pngPage.path;
-          const pageItems = await getStructuredOpenAICompletion(
-            EXTRACT_PROMPT,
-            ``,
-            modelConfig.extraction.model,
-            modelConfig.extraction.temperature,
-            extractSchema,
-            [pagePath],
-            16384,
-            0.1
-          );
+            const pagePath = pngPage.path;
+            const pageItems = await getStructuredOpenAICompletion(
+              EXTRACT_PROMPT,
+              ``,
+              modelConfig.extraction.model,
+              modelConfig.extraction.temperature,
+              extractSchema,
+              [pagePath],
+              16384,
+              0.1
+            );
 
-          const items = pageItems?.items;
+            const items = pageItems?.items;
 
-          console.log("processed page ", i + index + 1);
+            console.log("processed page ", i + index + 1);
 
-          for (const item of items) {
-            item.content = item.content.replace(/https?:\/\/[^\s]+/g, 'See URL in paper.');
+            for (const item of items) {
+              item.content = item.content.replace(/https?:\/\/[^\s]+/g, 'See URL in paper.');
 
-            if (item.type === "author_info" && i < 5) {
-              authorInfoContents += `\n\n${item.content}`;
+              if (item.type === "author_info" && i < 5) {
+                authorInfoContents += `\n\n${item.content}`;
+              }
+
+              if (item.type === "figure_image" || item.type === "table_rows") {
+                console.log("summarizing figure/table on page ", i + index + 1);
+                const summarizationSchema = z.object({
+                  summarizedItem: z.object({
+                    type: z.enum(["figure_image", "table_rows"]),
+                    label: z.object({
+                      labelType: z.string(),
+                      labelNumber: z.string()
+                    }),
+                    content: z.string()
+                  })
+                });
+
+                const FIGURE_SUMMARIZE_PROMPT = `Write a detailed explanation for the figures. Replace the content field with a detailed explanation. Summarize the size of changes / effects / estimates / results in the figures. To help understand them better, use context from the paper and any note below them.
+                
+                Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct figure number. This is very important. Look for cues around the figure and use your best judgement to determine it. 
+                
+                Do not use markdown. Use plain text.`;
+
+                const TABLE_SUMMARIZE_PROMPT = `Write a concise and effective summary for the table. Replace the raw rows in the content field with the summary. Summarize the size of changes / effects / estimates / results in the tables. To help understand them better, use context from the paper and any note below them. The summary should capture the main point of the table. Try to use as few numbers as possible. Keep in mind that the user cannot see the table as they will be listening to your summary. 
+                
+                Add the label "Table X" where X is the table number indicated in the page. You need to extract the correct table number. This is very important. Look for cues around the table and use your best judgement to determine it. 
+                
+                Do not use markdown. Use plain text.`;
+
+                const summarizePrompt = item.type === "figure_image" ? FIGURE_SUMMARIZE_PROMPT : TABLE_SUMMARIZE_PROMPT
+
+                const summarizedItem = await getStructuredOpenAICompletion(
+                  summarizePrompt,
+                  `Item to summarize on this page:\n${JSON.stringify(item)}\n\nPage context:\n${JSON.stringify(items)}`,
+                  modelConfig.summarization.model,
+                  modelConfig.summarization.temperature,
+                  summarizationSchema,
+                  [pagePath]
+                );
+
+                item["label"] = summarizedItem?.summarizedItem.label;
+                item.content = `${item.label.labelType} ${item.label.labelNumber} summary:\n${summarizedItem?.summarizedItem.content}`;
+              } else if (item.type === "math") {
+                console.log("summarizing math on page ", i + index + 1);
+                const mathSummarizationSchema = z.object({
+                  summarizedMath: z.object({
+                    content: z.string()
+                  })
+                });
+
+                const MATH_SUMMARIZE_PROMPT = `Explain the given math item using the page context in English. Explain what the math is, not what it is used for. Do not write more than two sentences. Do not include any math terms in the summary.`;
+
+                const summarizedMath = await getStructuredOpenAICompletion(
+                  MATH_SUMMARIZE_PROMPT,
+                  `Math to summarize:\n${JSON.stringify(item)}\n\nPage context:\n${JSON.stringify(items)}`,
+                  modelConfig.mathExplainer.model,
+                  modelConfig.mathExplainer.temperature,
+                  mathSummarizationSchema,
+                  [],
+                  1024
+                );
+
+                item.content = `Math summary: ${summarizedMath?.summarizedMath.content}`;
+              } else if (item.type === "code_or_algorithm") {
+                console.log("summarizing code or algorithm on page ", i + index + 1);
+                const codeSummarizationSchema = z.object({
+                  summarizedCode: z.object({
+                    content: z.string()
+                  })
+                });
+
+                const CODE_SUMMARIZE_PROMPT = `Summarize the given code or algorithm. Explain what the code or algorithm does in simple terms including its input and output. Do not include any code syntax in the summary.`;
+
+                const summarizedCode = await getStructuredOpenAICompletion(
+                  CODE_SUMMARIZE_PROMPT,
+                  `Code or algorithm to summarize:\n${JSON.stringify(item)}\n\nPage context:\n${JSON.stringify(items)}`,
+                  modelConfig.summarization.model,
+                  modelConfig.summarization.temperature,
+                  codeSummarizationSchema,
+                  [],
+                  1024
+                );
+
+                item.content = `Code or Algorithm summary: ${summarizedCode?.summarizedCode.content}`;
+              }
+
+              //Some manual latex processing
+              item.content = item.content.replaceAll("\\", "").replaceAll("rightarrow", "approaches").replaceAll("infty","infinity").replaceAll("geq"," greater than or equal to ").replaceAll("leq", " less than or equal to ").replaceAll("mathbb","")
+
+              if (item.type === "text") {
+                item.content === item.content.replace(" - ", " minus ")
+              }
             }
 
-            if (item.type === "figure_image" || item.type === "table_rows") {
-              console.log("summarizing figure/table on page ", i + index + 1);
-              const summarizationSchema = z.object({
-                summarizedItem: z.object({
-                  type: z.enum(["figure_image", "table_rows"]),
-                  label: z.object({
-                    labelType: z.string(),
-                    labelNumber: z.string()
-                  }),
-                  content: z.string()
-                })
-              });
+            return { index: i + index, items };
+          })
+        );
 
-              const FIGURE_SUMMARIZE_PROMPT = `Write a detailed explanation for the figures. Replace the content field with a detailed explanation. Summarize the size of changes / effects / estimates / results in the figures. To help understand them better, use context from the paper and any note below them.
-              
-              Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct figure number. This is very important. Look for cues around the figure and use your best judgement to determine it. 
-              
-              Do not use markdown. Use plain text.`;
+        // Sort batch results by index to maintain order
+        batchResults.sort((a, b) => a.index - b.index);
 
-              const TABLE_SUMMARIZE_PROMPT = `Write a concise and effective summary for the table. Replace the raw rows in the content field with the summary. Summarize the size of changes / effects / estimates / results in the tables. To help understand them better, use context from the paper and any note below them. The summary should capture the main point of the table. Try to use as few numbers as possible. Keep in mind that the user cannot see the table as they will be listening to your summary. 
-              
-              Add the label "Table X" where X is the table number indicated in the page. You need to extract the correct table number. This is very important. Look for cues around the table and use your best judgement to determine it. 
-              
-              Do not use markdown. Use plain text.`;
+        // Add sorted items to allItems
+        for (const result of batchResults) {
+          allItems.push(...result.items);
+        }
+      }
 
-              const summarizePrompt = item.type === "figure_image" ? FIGURE_SUMMARIZE_PROMPT : TABLE_SUMMARIZE_PROMPT
+      console.log("Improving author section")
+      const IMPROVE_AUTHOR_INFO_PROMPT  = `Rearrange all the author info to make it more readable. Keep only the author names and affiliations. Each author's name and affiliation should be on one line followed by the next author in the next line.
+      
+      Example:
+      Author1, Affiliation1
+      Author2, Affiliation2
+      .....
+      
+      If the affiliation is not available leave it empty. Do not repeat the same author multiple times.`
 
-              const summarizedItem = await getStructuredOpenAICompletion(
-                summarizePrompt,
-                `Item to summarize on this page:\n${JSON.stringify(item)}\n\nPage context:\n${JSON.stringify(items)}`,
-                modelConfig.summarization.model,
-                modelConfig.summarization.temperature,
-                summarizationSchema,
-                [pagePath]
-              );
+      const improveAuthorInfoSchema = z.object({
+        authorInfo: z.string()
+      })
 
-              item["label"] = summarizedItem?.summarizedItem.label;
-              item.content = `${item.label.labelType} ${item.label.labelNumber} summary:\n${summarizedItem?.summarizedItem.content}`;
-            } else if (item.type === "math") {
-              console.log("summarizing math on page ", i + index + 1);
-              const mathSummarizationSchema = z.object({
-                summarizedMath: z.object({
-                  content: z.string()
-                })
-              });
+      const improvedAuthorInfo = await getStructuredOpenAICompletion(
+        IMPROVE_AUTHOR_INFO_PROMPT,
+        `Here is the author info: ${authorInfoContents}`,
+        modelConfig.authorInfoEditor.model,
+        modelConfig.authorInfoEditor.temperature,
+        improveAuthorInfoSchema,
+        pngPages.slice(0,5).map((page)=>page.path)
+      )
 
-              const MATH_SUMMARIZE_PROMPT = `Explain the given math item using the page context in English. Explain what the math is, not what it is used for. Do not write more than two sentences. Do not include any math terms in the summary.`;
+      const firstAuthorInfoIndex = allItems.findIndex(item => item.type === "author_info")
+      if (firstAuthorInfoIndex !== -1) {
+        allItems[firstAuthorInfoIndex].type = "improved_author_info"
+        allItems[firstAuthorInfoIndex].content = improvedAuthorInfo?.authorInfo;
+      }
 
-              const summarizedMath = await getStructuredOpenAICompletion(
-                MATH_SUMMARIZE_PROMPT,
-                `Math to summarize:\n${JSON.stringify(item)}\n\nPage context:\n${JSON.stringify(items)}`,
-                modelConfig.mathExplainer.model,
-                modelConfig.mathExplainer.temperature,
-                mathSummarizationSchema,
-                [],
-                1024
-              );
-
-              item.content = `Math summary: ${summarizedMath?.summarizedMath.content}`;
-            } else if (item.type === "code_or_algorithm") {
-              console.log("summarizing code or algorithm on page ", i + index + 1);
-              const codeSummarizationSchema = z.object({
-                summarizedCode: z.object({
-                  content: z.string()
-                })
-              });
-
-              const CODE_SUMMARIZE_PROMPT = `Summarize the given code or algorithm. Explain what the code or algorithm does in simple terms including its input and output. Do not include any code syntax in the summary.`;
-
-              const summarizedCode = await getStructuredOpenAICompletion(
-                CODE_SUMMARIZE_PROMPT,
-                `Code or algorithm to summarize:\n${JSON.stringify(item)}\n\nPage context:\n${JSON.stringify(items)}`,
-                modelConfig.summarization.model,
-                modelConfig.summarization.temperature,
-                codeSummarizationSchema,
-                [],
-                1024
-              );
-
-              item.content = `Code or Algorithm summary: ${summarizedCode?.summarizedCode.content}`;
-            }
-
-            //Some manual latex processing
-            item.content = item.content.replaceAll("\\", "").replaceAll("rightarrow", "approaches").replaceAll("infty","infinity").replaceAll("geq"," greater than or equal to ").replaceAll("leq", " less than or equal to ").replaceAll("mathbb","")
-
-            if (item.type === "text") {
-              item.content === item.content.replace(" - ", " minus ")
-            }
-          }
-
-          return { index: i + index, items };
-        })
+      const abstractExists = allItems.some(item => 
+        item.type === "abstract_heading" || item.type === "abstract_content" || item.content.toLocaleLowerCase() === 'abstract'
       );
 
-      // Sort batch results by index to maintain order
-      batchResults.sort((a, b) => a.index - b.index);
-
-      // Add sorted items to allItems
-      for (const result of batchResults) {
-        allItems.push(...result.items);
-      }
-    }
-
-    console.log("Improving author section")
-    const IMPROVE_AUTHOR_INFO_PROMPT  = `Rearrange all the author info to make it more readable. Keep only the author names and affiliations. Each author's name and affiliation should be on one line followed by the next author in the next line.
-    
-    Example:
-    Author1, Affiliation1
-    Author2, Affiliation2
-    .....
-    
-    If the affiliation is not available leave it empty. Do not repeat the same author multiple times.`
-
-    const improveAuthorInfoSchema = z.object({
-      authorInfo: z.string()
-    })
-
-    const improvedAuthorInfo = await getStructuredOpenAICompletion(
-      IMPROVE_AUTHOR_INFO_PROMPT,
-      `Here is the author info: ${authorInfoContents}`,
-      modelConfig.authorInfoEditor.model,
-      modelConfig.authorInfoEditor.temperature,
-      improveAuthorInfoSchema,
-      pngPages.slice(0,5).map((page)=>page.path)
-    )
-
-    const firstAuthorInfoIndex = allItems.findIndex(item => item.type === "author_info")
-    if (firstAuthorInfoIndex !== -1) {
-      allItems[firstAuthorInfoIndex].type = "improved_author_info"
-      allItems[firstAuthorInfoIndex].content = improvedAuthorInfo?.authorInfo;
-    }
-
-    const abstractExists = allItems.some(item => 
-      item.type === "abstract_heading" || item.type === "abstract_content" || item.content.toLocaleLowerCase() === 'abstract'
-    );
-
-    console.log("filtering unnecessary item types")
-    const filteredItems = abstractExists ? allItems.filter((item: {type: string, content:string}, index: number, array: any[]) => {
-      if (!abstractDetected) {
-        if (item.type === "abstract_heading" || item.content.toLocaleLowerCase() === 'abstract') {
-          abstractDetected = true;
-          item.type = "abstract_heading"
-        } else if (item.type === "abstract_content") {
-          abstractDetected = true;
+      console.log("filtering unnecessary item types")
+      const filteredItems = abstractExists ? allItems.filter((item: {type: string, content:string}, index: number, array: any[]) => {
+        if (!abstractDetected) {
+          if (item.type === "abstract_heading" || item.content.toLocaleLowerCase() === 'abstract') {
+            abstractDetected = true;
+            item.type = "abstract_heading"
+          } else if (item.type === "abstract_content") {
+            abstractDetected = true;
+          }
+          return ["main_title", "improved_author_info", "abstract_heading", "abstract_content"].includes(item.type);
+        } else {
+          // Check for math items between endnotes
+          if (item.type === "math" && index > 0 && index < array.length - 1) {
+            const prevItem = array[index - 1];
+            const nextItem = array[index + 1];
+            if (prevItem.type === "endnotes_item" && nextItem.type === "endnotes_item") {
+              return false; // Remove this math item
+            }
+          }
+          return ["text", "heading", "figure_image", "table_rows", "math", "abstract_content", "code_or_algorithm"].includes(item.type);
         }
-        return ["main_title", "improved_author_info", "abstract_heading", "abstract_content"].includes(item.type);
-      } else {
+      }) : allItems.filter((item: {type: string, content:string}, index: number, array: any[]) => {
         // Check for math items between endnotes
         if (item.type === "math" && index > 0 && index < array.length - 1) {
           const prevItem = array[index - 1];
@@ -365,98 +377,85 @@ export default async function handler(
             return false; // Remove this math item
           }
         }
-        return ["text", "heading", "figure_image", "table_rows", "math", "abstract_content", "code_or_algorithm"].includes(item.type);
-      }
-    }) : allItems.filter((item: {type: string, content:string}, index: number, array: any[]) => {
-      // Check for math items between endnotes
-      if (item.type === "math" && index > 0 && index < array.length - 1) {
-        const prevItem = array[index - 1];
-        const nextItem = array[index + 1];
-        if (prevItem.type === "endnotes_item" && nextItem.type === "endnotes_item") {
-          return false; // Remove this math item
+        return ["main_title", "improved_author_info","text","heading","figure_image","table_rows","math","abstract_content","abstract_heading", "code_or_algorithm"].includes(item.type);
+      });
+
+
+      const specialItems = filteredItems.filter((item) => (item.type === "figure_image" || item.type === "table_rows"))
+      console.log("repositioning images and figures")
+      for (const item of specialItems) {
+        if (item.processed){
+          continue;
         }
-      }
-      return ["main_title", "improved_author_info","text","heading","figure_image","table_rows","math","abstract_content","abstract_heading", "code_or_algorithm"].includes(item.type);
-    });
 
+        const {labelType, labelNumber} = item.label;
+        console.log("repositioning ", labelType, " ",labelNumber)
+        let mentionIndex = -1;
+        let headingIndex = -1;
 
-    const specialItems = filteredItems.filter((item) => (item.type === "figure_image" || item.type === "table_rows"))
-    console.log("repositioning images and figures")
-    for (const item of specialItems) {
-      if (item.processed){
-        continue;
-      }
-
-      const {labelType, labelNumber} = item.label;
-      console.log("repositioning ", labelType, " ",labelNumber)
-      let mentionIndex = -1;
-      let headingIndex = -1;
-
-      let matchWords = []
-      if (labelType === "Figure") {
-        matchWords.push(`Figure ${labelNumber}`, `Fig. ${labelNumber}`, `Fig ${labelNumber}`)
-      } else if (labelType === "Table") {
-        matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`)
-      }
-
-      for (let i = 0; i < filteredItems.length; i++) {
-        if (i !== filteredItems.indexOf(item) && matchWords.some(word => filteredItems[i].content.includes(word))) {
-          mentionIndex = i;
-          console.log("found first mention in ", JSON.stringify(filteredItems[i]))
-          break;
+        let matchWords = []
+        if (labelType === "Figure") {
+          matchWords.push(`Figure ${labelNumber}`, `Fig. ${labelNumber}`, `Fig ${labelNumber}`)
+        } else if (labelType === "Table") {
+          matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`)
         }
-      }
 
-      const startIndex = mentionIndex !== -1 ? mentionIndex : filteredItems.indexOf(item);
-
-      for (let i = startIndex + 1; i < filteredItems.length; i++) {
-        if (filteredItems[i].type.includes("heading")) {
-          headingIndex = i;
-          console.log("found the first heading below mention in", JSON.stringify(filteredItems[i]))
-          break;
+        for (let i = 0; i < filteredItems.length; i++) {
+          if (i !== filteredItems.indexOf(item) && matchWords.some(word => filteredItems[i].content.includes(word))) {
+            mentionIndex = i;
+            console.log("found first mention in ", JSON.stringify(filteredItems[i]))
+            break;
+          }
         }
+
+        const startIndex = mentionIndex !== -1 ? mentionIndex : filteredItems.indexOf(item);
+
+        for (let i = startIndex + 1; i < filteredItems.length; i++) {
+          if (filteredItems[i].type.includes("heading")) {
+            headingIndex = i;
+            console.log("found the first heading below mention in", JSON.stringify(filteredItems[i]))
+            break;
+          }
+        }
+
+        console.log("moving the item above the first heading or to the end")
+        const [movedItem] = filteredItems.splice(filteredItems.indexOf(item), 1);
+        if (headingIndex !== -1) {
+          filteredItems.splice(headingIndex - 1, 0, movedItem);
+        } else {
+          filteredItems.push(movedItem);
+        }
+
+        item["processed"] = true
       }
 
-      console.log("moving the item above the first heading or to the end")
-      const [movedItem] = filteredItems.splice(filteredItems.indexOf(item), 1);
-      if (headingIndex !== -1) {
-        filteredItems.splice(headingIndex - 1, 0, movedItem);
-      } else {
-        filteredItems.push(movedItem);
-      }
 
-      item["processed"] = true
-    }
+      const parsedItemsPath = path.join(fileNameDir, "parsedItems.json");
+      fs.writeFileSync(parsedItemsPath, JSON.stringify(allItems, null, 2));
+      console.log("Saved raw text extract to", parsedItemsPath);
 
+      const filteredItemsPath = path.join(fileNameDir, "filteredItems.json");
+      fs.writeFileSync(filteredItemsPath, JSON.stringify(filteredItems, null, 2));
+      console.log("Saved filtered items to", filteredItemsPath);
 
-    const parsedItemsPath = path.join(fileNameDir, "parsedItems.json");
-    fs.writeFileSync(parsedItemsPath, JSON.stringify(allItems, null, 2));
-    console.log("Saved raw text extract to", parsedItemsPath);
+      //throw new Error("Audio generation skipped");
 
-    const filteredItemsPath = path.join(fileNameDir, "filteredItems.json");
-    fs.writeFileSync(filteredItemsPath, JSON.stringify(filteredItems, null, 2));
-    console.log("Saved filtered items to", filteredItemsPath);
+      const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
+      const filteredItemsFileName = `${cleanedFileName}-filteredItems.json`;
+      const parsedItemsFilePath = `${email}/${parsedItemsFileName}`;
+      const filteredItemsFilePath = `${email}/${filteredItemsFileName}`;
 
-    //throw new Error("Audio generation skipped");
+      const parsedItemsFileUrl = await uploadFile(fs.readFileSync(parsedItemsPath), parsedItemsFilePath);
+      console.log("Uploaded parsed items to S3:", parsedItemsFileUrl);
 
-    const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
-    const filteredItemsFileName = `${cleanedFileName}-filteredItems.json`;
-    const parsedItemsFilePath = `${email}/${parsedItemsFileName}`;
-    const filteredItemsFilePath = `${email}/${filteredItemsFileName}`;
+      const filteredItemsFileUrl = await uploadFile(fs.readFileSync(filteredItemsPath), filteredItemsFilePath);
+      console.log("Uploaded filtered items to S3:", filteredItemsFileUrl);
 
-    const parsedItemsFileUrl = await uploadFile(fs.readFileSync(parsedItemsPath), parsedItemsFilePath);
-    console.log("Uploaded parsed items to S3:", parsedItemsFileUrl);
-
-    const filteredItemsFileUrl = await uploadFile(fs.readFileSync(filteredItemsPath), filteredItemsFilePath);
-    console.log("Uploaded filtered items to S3:", filteredItemsFileUrl);
-
-    // const ttsText = filteredItems.map(item => item.content).join('\n\n');
-    // console.log("combined text for TTS");
-    // const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
-    // fs.writeFileSync(ttsTextFilePath, ttsText)
-    // const ttsText = fs.readFileSync(ttsTextFilePath, "utf-8");
-
-    try {
+      // const ttsText = filteredItems.map(item => item.content).join('\n\n');
+      // console.log("combined text for TTS");
+      // const ttsTextFilePath = path.join(ttsTextDir, "tts-text.txt");
+      // fs.writeFileSync(ttsTextFilePath, ttsText)
+      // const ttsText = fs.readFileSync(ttsTextFilePath, "utf-8");
       await subscribeEmail(email, process.env.MAILCHIMP_AUDIENCE_ID || "");
       console.log("Subscribed user to mailing list")
       const audioBuffer = await synthesizeSpeechInChunks(filteredItems);
@@ -483,6 +482,17 @@ export default async function handler(
       // Send the audio file as a response
       return reply.status(200).send({ audioFileUrl });
     } catch (error) {
+      const errorFilePath = `${email}/${cleanedFileName}-error.json`
+      const encodedErrorFilePath = `${encodeURIComponent(email)}/${encodeURIComponent(cleanedFileName)}-error.json`
+      const errorFileUrl = await uploadFile(Buffer.from(JSON.stringify(error, Object.getOwnPropertyNames(error))), errorFilePath)
+
+      const emailSubject = `Failed to generate audio paper ${cleanedFileName} for ${email}`;
+      const emailBody = `Failed to generate audio paper for ${cleanedFileName}.pdf uploaded by ${email}. See error logs at https://${process.env.AWS_BUCKET_NAME}/${encodedErrorFilePath}`;;
+
+      //send an email to both of us
+      await sendEmail(email, "", "joe@paper2audio.com", "paper2audio", emailSubject, emailBody);
+      await sendEmail(email, "", "chandradeep@paper2audio.com", "paper2audio", emailSubject, emailBody);
+
       console.error("Error generating audio file:", error);
       return reply.status(500).send({ message: "Error generating audio file" });
     }
