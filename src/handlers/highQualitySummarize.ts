@@ -229,7 +229,7 @@ export default async function handler(
               
               Do not use markdown. Use plain text.`;
 
-              const TABLE_SUMMARIZE_PROMPT = `Write a detailed explanation for the tables. Replace the raw rows in the content field with a detailed explanation. Summarize the size of changes / effects / estimates / results in the tables. To help understand them better, use context from the paper and any note below them.
+              const TABLE_SUMMARIZE_PROMPT = `Write a concise and effective summary for the table. Replace the raw rows in the content field with the summary. Summarize the size of changes / effects / estimates / results in the tables. To help understand them better, use context from the paper and any note below them. The summary should capture the main point of the table. Try to use as few numbers as possible. Keep in mind that the user cannot see the table as they will be listening to your summary. 
               
               Add the label "Table X" where X is the table number indicated in the page. You need to extract the correct table number. This is very important. Look for cues around the table and use your best judgement to determine it. 
               
