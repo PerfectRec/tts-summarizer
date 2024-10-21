@@ -223,14 +223,22 @@ export default async function handler(
                 })
               });
 
-              const SUMMARIZE_PROMPT = `Write a detailed explanation for the figures and tables. For figures, replace the content field with a detailed explanation. For tables, replace the raw rows in the content field with a detailed explanation. Summarize the size of changes / effects / estimates / results in the tables or figures. To help understand them better, use context from the paper and any note below them.
+              const FIGURE_SUMMARIZE_PROMPT = `Write a detailed explanation for the figures. Replace the content field with a detailed explanation. Summarize the size of changes / effects / estimates / results in the figures. To help understand them better, use context from the paper and any note below them.
               
-              Add the label "Figure X" or "Table X" where X is the figure or table number indicated in the page. You need to extract the correct figure or table number. This is very important. Look for cues around the figure or table and use your best judgement to determine it. 
+              Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct figure number. This is very important. Look for cues around the figure and use your best judgement to determine it. 
               
               Do not use markdown. Use plain text.`;
 
+              const TABLE_SUMMARIZE_PROMPT = `Write a detailed explanation for the tables. Replace the raw rows in the content field with a detailed explanation. Summarize the size of changes / effects / estimates / results in the tables. To help understand them better, use context from the paper and any note below them.
+              
+              Add the label "Table X" where X is the table number indicated in the page. You need to extract the correct table number. This is very important. Look for cues around the table and use your best judgement to determine it. 
+              
+              Do not use markdown. Use plain text.`;
+
+              const summarizePrompt = item.type === "figure_image" ? FIGURE_SUMMARIZE_PROMPT : TABLE_SUMMARIZE_PROMPT
+
               const summarizedItem = await getStructuredOpenAICompletion(
-                SUMMARIZE_PROMPT,
+                summarizePrompt,
                 `Item to summarize on this page:\n${JSON.stringify(item)}\n\nPage context:\n${JSON.stringify(items)}`,
                 modelConfig.summarization.model,
                 modelConfig.summarization.temperature,
@@ -429,6 +437,8 @@ export default async function handler(
     fs.writeFileSync(filteredItemsPath, JSON.stringify(filteredItems, null, 2));
     console.log("Saved filtered items to", filteredItemsPath);
 
+    //throw new Error("Audio generation skipped");
+
     const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
     const filteredItemsFileName = `${cleanedFileName}-filteredItems.json`;
     const parsedItemsFilePath = `${email}/${parsedItemsFileName}`;
@@ -447,11 +457,15 @@ export default async function handler(
     // const ttsText = fs.readFileSync(ttsTextFilePath, "utf-8");
 
     try {
-      //throw new Error("Audio generation skipped");
       await subscribeEmail(email, process.env.MAILCHIMP_AUDIENCE_ID || "");
       console.log("Subscribed user to mailing list")
       const audioBuffer = await synthesizeSpeechInChunks(filteredItems);
       console.log("Generated audio file");
+
+      const pdfFileName = `${cleanedFileName}.pdf`;
+      const pdfFilePath = `${email}/${pdfFileName}`;
+      const pdfFileUrl = await uploadFile(fileBuffer, pdfFilePath);
+      console.log("Uploaded PDF file to S3:", pdfFileUrl);
 
       const audioFileName = `${cleanedFileName}.mp3`;
       const uuid = uuidv4(); // Generate a random UUID
