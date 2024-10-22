@@ -188,7 +188,7 @@ export default async function handler(
             
             Please use your best judgement to determine the abstract even if it is not explicitly labeled as such.
             
-            Usually, text item starting with a superscript number is an endnote`;
+            Usually, text item starting with a superscript number is an endnote.`;
 
             const extractSchema = z.object({
               items: z.array(
@@ -200,6 +200,7 @@ export default async function handler(
                     "figure_image",
                     "figure_caption_or_heading",
                     "figure_note",
+                    "non_figure_image",
                     "table_rows",
                     "table_descrption_or_heading",
                     "author_info",
@@ -265,9 +266,9 @@ export default async function handler(
               }
 
               if (item.type === "heading") {
-                item.content = `<speak><break time="2s"/>${escapeSSMLCharacters(
+                item.content = `<break time="1s"/>${escapeSSMLCharacters(
                   item.content
-                )}<break time="2s"/></speak>`;
+                )}<break time="1s"/>`;
               }
 
               if (item.type === "figure_image" || item.type === "table_rows") {
@@ -286,6 +287,8 @@ export default async function handler(
                 const FIGURE_SUMMARIZE_PROMPT = `Write a detailed explanation for the figures. Replace the content field with a detailed explanation. Summarize the size of changes / effects / estimates / results in the figures. To help understand them better, use context from the paper and any note below them.
                 
                 Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct figure number. This is very important. Look for cues around the figure and use your best judgement to determine it. 
+                
+                If there is no label or label number set the labelNumber as "unlabeled".
                 
                 Do not use markdown. Use plain text.`;
 
@@ -312,7 +315,11 @@ export default async function handler(
                 );
 
                 item["label"] = summarizedItem?.summarizedItem.label;
-                item.content = `${item.label.labelType} ${item.label.labelNumber} summary:\n${summarizedItem?.summarizedItem.content}`;
+                item.content = `${item.label.labelType} ${
+                  item.label.labelNumber === "unlabeled"
+                    ? ""
+                    : item.label.labelNumber
+                } summary:\n${summarizedItem?.summarizedItem.content}`;
               } else if (item.type === "math") {
                 console.log("summarizing math on page ", i + index + 1);
                 const mathSummarizationSchema = z.object({
@@ -348,10 +355,13 @@ export default async function handler(
                 const codeSummarizationSchema = z.object({
                   summarizedCode: z.object({
                     content: z.string(),
+                    title: z.string(),
                   }),
                 });
 
-                const CODE_SUMMARIZE_PROMPT = `Summarize the given code or algorithm. Explain what the code or algorithm does in simple terms including its input and output. Do not include any code syntax in the summary.`;
+                const CODE_SUMMARIZE_PROMPT = `Summarize the given code or algorithm. Explain what the code or algorithm does in simple terms including its input and output. Do not include any code syntax in the summary.
+                
+                Also extract the title of the algorithm or code block. If no title is mentioned, then generate an appropriate one yourself.`;
 
                 const summarizedCode = await getStructuredOpenAICompletion(
                   CODE_SUMMARIZE_PROMPT,
@@ -365,7 +375,7 @@ export default async function handler(
                   1024
                 );
 
-                item.content = `Code or Algorithm summary: ${summarizedCode?.summarizedCode.content}`;
+                item.content = `Code or Algorithm<break time="1s"/>title: ${summarizedCode?.summarizedCode.title}<break time="1s"/>summary: ${summarizedCode?.summarizedCode.content}`;
               }
 
               //Some manual latex processing
@@ -396,12 +406,10 @@ export default async function handler(
       }
 
       console.log("Improving author section");
-      const IMPROVE_AUTHOR_INFO_PROMPT = `Rearrange all the author info to make it more readable. Keep only the author names and affiliations. Each author's name and affiliation should be on one line followed by the next author in the next line.
+      const IMPROVE_AUTHOR_INFO_PROMPT = `Rearrange all the author info to make it more readable. Keep only the author names and affiliations. Each author's name and affiliation should be together followed by the ssml break. 
       
       Example:
-      Author1, Affiliation1
-      Author2, Affiliation2
-      .....
+      Author1, Affiliation1<break time="1s"/>Author2, Affiliation2<break time="1s"/>Author3, Affiliation3.....
       
       If the affiliation is not available leave it empty. Do not repeat the same author multiple times.`;
 
@@ -535,28 +543,31 @@ export default async function handler(
         let mentionIndex = -1;
         let headingIndex = -1;
 
-        let matchWords = [];
-        if (labelType === "Figure") {
-          matchWords.push(
-            `Figure ${labelNumber}`,
-            `Fig. ${labelNumber}`,
-            `Fig ${labelNumber}`
-          );
-        } else if (labelType === "Table") {
-          matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`);
-        }
-
-        for (let i = 0; i < filteredItems.length; i++) {
-          if (
-            i !== filteredItems.indexOf(item) &&
-            matchWords.some((word) => filteredItems[i].content.includes(word))
-          ) {
-            mentionIndex = i;
-            console.log(
-              "found first mention in ",
-              JSON.stringify(filteredItems[i])
+        if (labelNumber !== "unlabeled") {
+          console.log("searching for matches for", labelType, labelNumber);
+          let matchWords = [];
+          if (labelType === "Figure") {
+            matchWords.push(
+              `Figure ${labelNumber}`,
+              `Fig. ${labelNumber}`,
+              `Fig ${labelNumber}`
             );
-            break;
+          } else if (labelType === "Table") {
+            matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`);
+          }
+
+          for (let i = 0; i < filteredItems.length; i++) {
+            if (
+              i !== filteredItems.indexOf(item) &&
+              matchWords.some((word) => filteredItems[i].content.includes(word))
+            ) {
+              mentionIndex = i;
+              console.log(
+                "found first mention in ",
+                JSON.stringify(filteredItems[i])
+              );
+              break;
+            }
           }
         }
 
@@ -599,7 +610,7 @@ export default async function handler(
       );
       console.log("Saved filtered items to", filteredItemsPath);
 
-      //throw new Error("Audio generation skipped");
+      throw new Error("Audio generation skipped");
 
       const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
       const filteredItemsFileName = `${cleanedFileName}-filteredItems.json`;
@@ -653,44 +664,44 @@ export default async function handler(
       // Send the audio file as a response
       return reply.status(200).send({ audioFileUrl });
     } catch (error) {
-      const errorFilePath = `${email}/${cleanedFileName}-error.json`;
-      const encodedErrorFilePath = `${encodeURIComponent(
-        email
-      )}/${encodeURIComponent(cleanedFileName)}-error.json`;
-      const errorFileUrl = await uploadFile(
-        Buffer.from(JSON.stringify(error, Object.getOwnPropertyNames(error))),
-        errorFilePath
-      );
+      // const errorFilePath = `${email}/${cleanedFileName}-error.json`;
+      // const encodedErrorFilePath = `${encodeURIComponent(
+      //   email
+      // )}/${encodeURIComponent(cleanedFileName)}-error.json`;
+      // const errorFileUrl = await uploadFile(
+      //   Buffer.from(JSON.stringify(error, Object.getOwnPropertyNames(error))),
+      //   errorFilePath
+      // );
 
-      const emailSubject = `Failed to generate audio paper ${cleanedFileName} for ${email}`;
-      const emailBody = `Failed to generate audio paper for ${cleanedFileName}.pdf uploaded by ${email}. See error logs at https://${process.env.AWS_BUCKET_NAME}/${encodedErrorFilePath} and send an updated email to the user.`;
+      // const emailSubject = `Failed to generate audio paper ${cleanedFileName} for ${email}`;
+      // const emailBody = `Failed to generate audio paper for ${cleanedFileName}.pdf uploaded by ${email}. See error logs at https://${process.env.AWS_BUCKET_NAME}/${encodedErrorFilePath} and send an updated email to the user.`;
 
-      const userEmailBody = `Failed to generate audio paper for ${cleanedFileName}. We will take a look at the error and send you a follow up email with the audio file.`;
+      // const userEmailBody = `Failed to generate audio paper for ${cleanedFileName}. We will take a look at the error and send you a follow up email with the audio file.`;
 
-      await sendEmail(
-        "joe@paper2audio.com",
-        "",
-        "joe@paper2audio.com",
-        "paper2audio",
-        emailSubject,
-        emailBody
-      );
-      await sendEmail(
-        "chandradeep@paper2audio.com",
-        "",
-        "joe@paper2audio.com",
-        "paper2audio",
-        emailSubject,
-        emailBody
-      );
-      await sendEmail(
-        email,
-        "",
-        "joe@paper2audio.com",
-        "paper2audio",
-        emailSubject,
-        userEmailBody
-      );
+      // await sendEmail(
+      //   "joe@paper2audio.com",
+      //   "",
+      //   "joe@paper2audio.com",
+      //   "paper2audio",
+      //   emailSubject,
+      //   emailBody
+      // );
+      // await sendEmail(
+      //   "chandradeep@paper2audio.com",
+      //   "",
+      //   "joe@paper2audio.com",
+      //   "paper2audio",
+      //   emailSubject,
+      //   emailBody
+      // );
+      // await sendEmail(
+      //   email,
+      //   "",
+      //   "joe@paper2audio.com",
+      //   "paper2audio",
+      //   emailSubject,
+      //   userEmailBody
+      // );
 
       console.error("Error generating audio file:", error);
       return reply.status(500).send({ message: "Error generating audio file" });
@@ -769,6 +780,7 @@ async function synthesizeSpeechInChunks(
     type: string;
     content: string;
     label?: string;
+    summary?: string;
   }) => {
     const voiceId = [
       "figure_image",
@@ -778,14 +790,18 @@ async function synthesizeSpeechInChunks(
     ].includes(item.type)
       ? "Matthew"
       : "Ruth";
-    const chunks = splitTextIntoChunks(
-      item.content + "\n\n",
-      MAX_POLLY_CHAR_LIMIT
-    );
+
+    const textToSpeechify =
+      item.type === "math" && item.summary
+        ? `${item.content} ${item.summary}`
+        : item.content;
+
+    const chunks = splitTextIntoChunks(textToSpeechify, MAX_POLLY_CHAR_LIMIT);
     const itemAudioBuffer: Buffer[] = [];
 
     for (const chunk of chunks) {
-      const audioBuffer = await synthesizeSpeech(chunk, voiceId);
+      const ssmlChunk = `<speak><break time="1s"/>${chunk}<break time="1s"/></speak>`;
+      const audioBuffer = await synthesizeSpeech(ssmlChunk, voiceId, true);
       itemAudioBuffer.push(audioBuffer);
     }
 

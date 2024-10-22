@@ -11,13 +11,15 @@ const polly = new AWS.Polly({
 
 export const synthesizeSpeech = async (
   text: string,
-  voiceId: string = "Ruth"
+  voiceId: string = "Ruth",
+  useSSML: boolean = false
 ): Promise<Buffer> => {
   const params = {
     Text: text,
     OutputFormat: "mp3",
     VoiceId: voiceId,
     Engine: "generative",
+    TextType: useSSML ? "ssml" : "text",
   };
 
   try {
