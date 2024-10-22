@@ -234,9 +234,25 @@ export default async function handler(
               0.1
             );
 
-            const items = pageItems?.items;
+            let items = pageItems?.items;
 
             console.log("processed page ", i + index + 1);
+
+            //combining contiguous math items
+            let combinedItems: any[] = [];
+            for (let i = 0; i < items.length; i++) {
+              if (items[i].type === "math") {
+                let combinedContent = items[i].content;
+                while (i + 1 < items.length && items[i + 1].type === "math") {
+                  combinedContent += " " + items[i + 1].content;
+                  i++;
+                }
+                combinedItems.push({ type: "math", content: combinedContent });
+              } else {
+                combinedItems.push(items[i]);
+              }
+            }
+            items = combinedItems;
 
             for (const item of items) {
               item.content = item.content.replace(
