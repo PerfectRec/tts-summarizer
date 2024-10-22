@@ -610,7 +610,7 @@ export default async function handler(
       );
       console.log("Saved filtered items to", filteredItemsPath);
 
-      throw new Error("Audio generation skipped");
+      // new Error("Audio generation skipped");
 
       const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
       const filteredItemsFileName = `${cleanedFileName}-filteredItems.json`;
@@ -664,44 +664,44 @@ export default async function handler(
       // Send the audio file as a response
       return reply.status(200).send({ audioFileUrl });
     } catch (error) {
-      // const errorFilePath = `${email}/${cleanedFileName}-error.json`;
-      // const encodedErrorFilePath = `${encodeURIComponent(
-      //   email
-      // )}/${encodeURIComponent(cleanedFileName)}-error.json`;
-      // const errorFileUrl = await uploadFile(
-      //   Buffer.from(JSON.stringify(error, Object.getOwnPropertyNames(error))),
-      //   errorFilePath
-      // );
+      const errorFilePath = `${email}/${cleanedFileName}-error.json`;
+      const encodedErrorFilePath = `${encodeURIComponent(
+        email
+      )}/${encodeURIComponent(cleanedFileName)}-error.json`;
+      const errorFileUrl = await uploadFile(
+        Buffer.from(JSON.stringify(error, Object.getOwnPropertyNames(error))),
+        errorFilePath
+      );
 
-      // const emailSubject = `Failed to generate audio paper ${cleanedFileName} for ${email}`;
-      // const emailBody = `Failed to generate audio paper for ${cleanedFileName}.pdf uploaded by ${email}. See error logs at https://${process.env.AWS_BUCKET_NAME}/${encodedErrorFilePath} and send an updated email to the user.`;
+      const emailSubject = `Failed to generate audio paper ${cleanedFileName} for ${email}`;
+      const emailBody = `Failed to generate audio paper for ${cleanedFileName}.pdf uploaded by ${email}. See error logs at https://${process.env.AWS_BUCKET_NAME}/${encodedErrorFilePath} and send an updated email to the user.`;
 
-      // const userEmailBody = `Failed to generate audio paper for ${cleanedFileName}. We will take a look at the error and send you a follow up email with the audio file.`;
+      const userEmailBody = `Failed to generate audio paper for ${cleanedFileName}. We will take a look at the error and send you a follow up email with the audio file.`;
 
-      // await sendEmail(
-      //   "joe@paper2audio.com",
-      //   "",
-      //   "joe@paper2audio.com",
-      //   "paper2audio",
-      //   emailSubject,
-      //   emailBody
-      // );
-      // await sendEmail(
-      //   "chandradeep@paper2audio.com",
-      //   "",
-      //   "joe@paper2audio.com",
-      //   "paper2audio",
-      //   emailSubject,
-      //   emailBody
-      // );
-      // await sendEmail(
-      //   email,
-      //   "",
-      //   "joe@paper2audio.com",
-      //   "paper2audio",
-      //   emailSubject,
-      //   userEmailBody
-      // );
+      await sendEmail(
+        "joe@paper2audio.com",
+        "",
+        "joe@paper2audio.com",
+        "paper2audio",
+        emailSubject,
+        emailBody
+      );
+      await sendEmail(
+        "chandradeep@paper2audio.com",
+        "",
+        "joe@paper2audio.com",
+        "paper2audio",
+        emailSubject,
+        emailBody
+      );
+      await sendEmail(
+        email,
+        "",
+        "joe@paper2audio.com",
+        "paper2audio",
+        emailSubject,
+        userEmailBody
+      );
 
       console.error("Error generating audio file:", error);
       return reply.status(500).send({ message: "Error generating audio file" });
