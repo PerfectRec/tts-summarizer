@@ -63,7 +63,17 @@ const modelConfig: { [task: string]: { temperature: number; model: Model } } = {
 const MAX_POLLY_CHAR_LIMIT = 2900;
 
 type PollyLongFormVoices = "Ruth" | "Gregory" | "Danielle";
-type PollyGenerativeVoices = "Ruth" | "Matthew";
+type PollyGenerativeVoices = "Ruth" | "Matthew" | "Stephen";
+
+type OpenAIVoice = "alloy" | "onyx" | "echo" | "fable" | "shimmer" | "nova";
+
+interface Item {
+  type: string;
+  content: string;
+  label?: { labelType: string; labelNumber: string };
+  summary?: string;
+  processed?: boolean;
+}
 
 const firecrawl = new FirecrawlApp({
   apiKey: process.env.FIRECRAWL_API_KEY,
@@ -166,7 +176,7 @@ export default async function handler(
     //convert to JSON
     try {
       const batchSize = 10;
-      let allItems: any[] = [];
+      let allItems: Item[] = [];
       let abstractDetected = false;
       let authorInfoContents = "";
       const pngPages = pngPagesOriginal;
@@ -343,7 +353,8 @@ export default async function handler(
                   [],
                   1024
                 );
-                item.content = `Rephrased math: ${summarizedMath?.summarizedMathItem.content}`;
+
+                item.content = summarizedMath?.summarizedMathItem.content;
                 item.summary = `Math summary: ${summarizedMath?.summarizedMathItem.summary}`;
               } else if (item.type === "code_or_algorithm") {
                 console.log(
@@ -439,64 +450,35 @@ export default async function handler(
           item.content.toLocaleLowerCase() === "abstract"
       );
 
+      for (const item of allItems) {
+        if (item.type === "math") {
+          const rephrasedMathMessage =
+            "Rephrased math will use this voice.[break1]";
+          item.content = `${rephrasedMathMessage}${item.content}`;
+          break;
+        }
+      }
+
       console.log("filtering unnecessary item types");
       const filteredItems = abstractExists
-        ? allItems.filter(
-            (
-              item: { type: string; content: string },
-              index: number,
-              array: any[]
-            ) => {
-              if (!abstractDetected) {
-                if (
-                  item.type === "abstract_heading" ||
-                  item.content.toLocaleLowerCase() === "abstract"
-                ) {
-                  abstractDetected = true;
-                  item.type = "abstract_heading";
-                } else if (item.type === "abstract_content") {
-                  abstractDetected = true;
-                }
-                return [
-                  "main_title",
-                  "improved_author_info",
-                  "abstract_heading",
-                  "abstract_content",
-                ].includes(item.type);
-              } else {
-                // Check for math items between endnotes
-                if (
-                  item.type === "math" &&
-                  index > 0 &&
-                  index < array.length - 1
-                ) {
-                  const prevItem = array[index - 1];
-                  const nextItem = array[index + 1];
-                  if (
-                    prevItem.type === "endnotes_item" &&
-                    nextItem.type === "endnotes_item"
-                  ) {
-                    return false; // Remove this math item
-                  }
-                }
-                return [
-                  "text",
-                  "heading",
-                  "figure_image",
-                  "table_rows",
-                  "math",
-                  "abstract_content",
-                  "code_or_algorithm",
-                ].includes(item.type);
+        ? allItems.filter((item: Item, index: number, array: any[]) => {
+            if (!abstractDetected) {
+              if (
+                item.type === "abstract_heading" ||
+                item.content.toLocaleLowerCase() === "abstract"
+              ) {
+                abstractDetected = true;
+                item.type = "abstract_heading";
+              } else if (item.type === "abstract_content") {
+                abstractDetected = true;
               }
-            }
-          )
-        : allItems.filter(
-            (
-              item: { type: string; content: string },
-              index: number,
-              array: any[]
-            ) => {
+              return [
+                "main_title",
+                "improved_author_info",
+                "abstract_heading",
+                "abstract_content",
+              ].includes(item.type);
+            } else {
               // Check for math items between endnotes
               if (
                 item.type === "math" &&
@@ -513,26 +495,48 @@ export default async function handler(
                 }
               }
               return [
-                "main_title",
-                "improved_author_info",
                 "text",
                 "heading",
                 "figure_image",
                 "table_rows",
                 "math",
                 "abstract_content",
-                "abstract_heading",
                 "code_or_algorithm",
               ].includes(item.type);
             }
-          );
+          })
+        : allItems.filter((item: Item, index: number, array: any[]) => {
+            // Check for math items between endnotes
+            if (item.type === "math" && index > 0 && index < array.length - 1) {
+              const prevItem = array[index - 1];
+              const nextItem = array[index + 1];
+              if (
+                prevItem.type === "endnotes_item" &&
+                nextItem.type === "endnotes_item"
+              ) {
+                return false; // Remove this math item
+              }
+            }
+            return [
+              "main_title",
+              "improved_author_info",
+              "text",
+              "heading",
+              "figure_image",
+              "table_rows",
+              "math",
+              "abstract_content",
+              "abstract_heading",
+              "code_or_algorithm",
+            ].includes(item.type);
+          });
 
       const specialItems = filteredItems.filter(
         (item) => item.type === "figure_image" || item.type === "table_rows"
       );
       console.log("repositioning images and figures");
       for (const item of specialItems) {
-        if (item.processed) {
+        if (item.processed || !item.label) {
           continue;
         }
 
@@ -773,41 +777,67 @@ function splitTextIntoChunks(text: string, maxLength: number): string[] {
   return chunks;
 }
 
-async function synthesizeSpeechInChunks(
-  items: { type: string; content: string; label?: string }[]
-): Promise<Buffer> {
+async function synthesizeSpeechInChunks(items: Item[]): Promise<Buffer> {
   const audioBuffers: Buffer[] = [];
   const MAX_CONCURRENT_ITEMS = 10;
 
-  const processItem = async (item: {
-    type: string;
-    content: string;
-    label?: string;
-    summary?: string;
-  }) => {
-    const voiceId = [
-      "figure_image",
-      "table_rows",
-      "math",
-      "code_or_algorithm",
-    ].includes(item.type)
-      ? "Matthew"
-      : "Ruth";
-
-    const textToSpeechify =
-      item.type === "math" && item.summary
-        ? `${item.content} ${item.summary}`
-        : item.content;
-
-    const chunks = splitTextIntoChunks(textToSpeechify, MAX_POLLY_CHAR_LIMIT);
+  const processItem = async (item: Item) => {
     const itemAudioBuffer: Buffer[] = [];
 
-    for (const chunk of chunks) {
-      const ssmlChunk = `<speak><break time="1s"/> ${convertBreaks(
-        escapeSSMLCharacters(chunk)
-      )} <break time="1s"/></speak>`;
-      const audioBuffer = await synthesizeSpeech(ssmlChunk, voiceId, true);
-      itemAudioBuffer.push(audioBuffer);
+    if (item.type === "math") {
+      // Use "Stephen" for math content
+      const contentChunks = splitTextIntoChunks(
+        item.content,
+        MAX_POLLY_CHAR_LIMIT
+      );
+      for (const chunk of contentChunks) {
+        const ssmlChunk = `<speak>${convertBreaks(
+          escapeSSMLCharacters(chunk)
+        )}</speak>`;
+        const audioBuffer = await synthesizeSpeech(ssmlChunk, "Stephen", true);
+        itemAudioBuffer.push(audioBuffer);
+      }
+
+      // Use "Matthew" for math summary
+      if (item.summary) {
+        const summaryChunks = splitTextIntoChunks(
+          item.summary,
+          MAX_POLLY_CHAR_LIMIT
+        );
+        for (const chunk of summaryChunks) {
+          const ssmlChunk = `<speak>${convertBreaks(
+            escapeSSMLCharacters(chunk)
+          )}</speak>`;
+          const audioBuffer = await synthesizeSpeech(
+            ssmlChunk,
+            "Matthew",
+            true
+          );
+          itemAudioBuffer.push(audioBuffer);
+        }
+      }
+    } else if (
+      //Use Matthew for other generated content.
+      ["code_or_algorithm", "figure_image", "table_rows"].includes(item.type)
+    ) {
+      const chunks = splitTextIntoChunks(item.content, MAX_POLLY_CHAR_LIMIT);
+      for (const chunk of chunks) {
+        const ssmlChunk = `<speak>${convertBreaks(
+          escapeSSMLCharacters(chunk)
+        )}</speak>`;
+        const audioBuffer = await synthesizeSpeech(ssmlChunk, "Matthew", true);
+        itemAudioBuffer.push(audioBuffer);
+      }
+    } else {
+      // Use "Ruth" for narrated content
+      const chunks = splitTextIntoChunks(item.content, MAX_POLLY_CHAR_LIMIT);
+      for (const chunk of chunks) {
+        const ssmlChunk = `<speak>${convertBreaks(
+          escapeSSMLCharacters(chunk)
+        )}</speak>`;
+        const audioBuffer = await synthesizeSpeech(ssmlChunk, "Ruth", true);
+        itemAudioBuffer.push(audioBuffer);
+      }
     }
 
     return Buffer.concat(itemAudioBuffer);
@@ -1053,4 +1083,62 @@ function escapeSSMLCharacters(text: string): string {
 
 function convertBreaks(text: string): string {
   return text.replace(/\[break(\d+)\]/g, '<break time="$1s"/>');
+}
+
+async function synthesizeOpenAISpeech(
+  text: string,
+  voice: OpenAIVoice
+): Promise<Buffer> {
+  const mp3 = await openai.audio.speech.create({
+    model: "tts-1-hd",
+    voice: voice,
+    input: text,
+  });
+  return Buffer.from(await mp3.arrayBuffer());
+}
+
+async function synthesizeSpeechInChunksOpenAI(items: Item[]): Promise<Buffer> {
+  const audioBuffers: Buffer[] = [];
+  const MAX_CONCURRENT_ITEMS = 10;
+
+  const processItem = async (item: Item) => {
+    let audioBuffer: Buffer;
+
+    if (item.type === "math" && item.summary) {
+      const contentBuffer = await synthesizeOpenAISpeech(
+        convertBreaks(item.content),
+        "echo"
+      );
+      const summaryBuffer = await synthesizeOpenAISpeech(
+        convertBreaks(item.summary),
+        "onyx"
+      );
+      audioBuffer = Buffer.concat([contentBuffer, summaryBuffer]);
+    } else if (
+      ["figure_image", "table_rows", "code_or_algorithm"].includes(item.type)
+    ) {
+      audioBuffer = await synthesizeOpenAISpeech(
+        convertBreaks(item.content),
+        "onyx"
+      );
+    } else {
+      audioBuffer = await synthesizeOpenAISpeech(
+        convertBreaks(item.content),
+        "alloy"
+      );
+    }
+
+    return audioBuffer;
+  };
+
+  for (let i = 0; i < items.length; i += MAX_CONCURRENT_ITEMS) {
+    const itemBatch = items.slice(i, i + MAX_CONCURRENT_ITEMS);
+    console.log(
+      `converting items ${i} through ${i + MAX_CONCURRENT_ITEMS} to audio`
+    );
+    const batchResults = await Promise.all(itemBatch.map(processItem));
+    audioBuffers.push(...batchResults);
+  }
+
+  return Buffer.concat(audioBuffers);
 }
