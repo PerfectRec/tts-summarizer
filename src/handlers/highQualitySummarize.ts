@@ -294,9 +294,9 @@ export default async function handler(
 
                 const FIGURE_SUMMARIZE_PROMPT = `Write a detailed explanation for the figures. Replace the content field with a detailed explanation. Summarize the size of changes / effects / estimates / results in the figures. To help understand them better, use context from the paper and any note below them.
                 
-                Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct figure number. This is very important. Look for cues around the figure and use your best judgement to determine it. 
+                Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct label type and label number. This is very important. Look for cues around the figure and use your best judgement to determine it. Possible label types can be Figure, Chart, Image etc.
                 
-                If there is no label or label number set the labelNumber as "unlabeled".
+                If there is no label or label number set the labelType as "Image" and labelNumber as "unlabeled".
                 
                 Do not use markdown. Use plain text.`;
 
@@ -554,6 +554,15 @@ export default async function handler(
               `Fig. ${labelNumber}`,
               `Fig ${labelNumber}`
             );
+          } else if (labelType === "Chart") {
+            matchWords.push(`Chart ${labelNumber}`, `chart ${labelNumber}`);
+          } else if (labelType === "Image") {
+            matchWords.push(
+              `Image ${labelNumber}`,
+              `image ${labelNumber}`,
+              `Img ${labelNumber}`,
+              `Img. ${labelNumber}`
+            );
           } else if (labelType === "Table") {
             matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`);
           }
@@ -612,7 +621,7 @@ export default async function handler(
       );
       console.log("Saved filtered items to", filteredItemsPath);
 
-      //throw new Error("Audio generation skipped");
+      //return reply.status(200).send({ message: "Audio generation skipped" });
 
       const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
       const filteredItemsFileName = `${cleanedFileName}-filteredItems.json`;
