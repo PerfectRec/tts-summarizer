@@ -265,6 +265,10 @@ export default async function handler(
                 authorInfoContents += `\n\n${item.content}`;
               }
 
+              if (item.type.includes("heading")) {
+                item.content = `[break1]${item.content}[break1]`;
+              }
+
               if (item.type === "figure_image" || item.type === "table_rows") {
                 console.log("summarizing figure/table on page ", i + index + 1);
                 const summarizationSchema = z.object({
@@ -403,7 +407,7 @@ export default async function handler(
       const IMPROVE_AUTHOR_INFO_PROMPT = `Rearrange all the author info to make it more readable. Keep only the author names and affiliations.
       
       Example:
-      Author1, Affiliation1; Author2, Affiliation2; Author3, Affiliation3; .....
+      Author1, Affiliation1[break1]Author2, Affiliation2[break1]Author3, Affiliation3[break1] .....
       
       If the affiliation is not available leave it empty. Do not repeat the same author multiple times.`;
 
@@ -658,6 +662,11 @@ export default async function handler(
       // Send the audio file as a response
       return reply.status(200).send({ audioFileUrl });
     } catch (error) {
+      const pdfFileName = `${cleanedFileName}.pdf`;
+      const pdfFilePath = `${email}/${pdfFileName}`;
+      const pdfFileUrl = await uploadFile(fileBuffer, pdfFilePath);
+
+      console.log("Uploaded PDF file to S3:", pdfFileUrl);
       const errorFilePath = `${email}/${cleanedFileName}-error.json`;
       const encodedErrorFilePath = `${encodeURIComponent(
         email
@@ -794,8 +803,8 @@ async function synthesizeSpeechInChunks(
     const itemAudioBuffer: Buffer[] = [];
 
     for (const chunk of chunks) {
-      const ssmlChunk = `<speak><break time="1s"/> ${escapeSSMLCharacters(
-        chunk
+      const ssmlChunk = `<speak><break time="1s"/> ${convertBreaks(
+        escapeSSMLCharacters(chunk)
       )} <break time="1s"/></speak>`;
       const audioBuffer = await synthesizeSpeech(ssmlChunk, voiceId, true);
       itemAudioBuffer.push(audioBuffer);
@@ -1040,4 +1049,8 @@ function escapeSSMLCharacters(text: string): string {
     .replace(/'/g, "&apos;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+function convertBreaks(text: string): string {
+  return text.replace(/\[break(\d+)\]/g, '<break time="$1s"/>');
 }
