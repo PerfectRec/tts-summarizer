@@ -60,7 +60,7 @@ const modelConfig: { [task: string]: { temperature: number; model: Model } } = {
   },
 };
 
-const MAX_POLLY_CHAR_LIMIT = 3000;
+const MAX_POLLY_CHAR_LIMIT = 2900;
 
 type PollyLongFormVoices = "Ruth" | "Gregory" | "Danielle";
 type PollyGenerativeVoices = "Ruth" | "Matthew";
@@ -265,12 +265,6 @@ export default async function handler(
                 authorInfoContents += `\n\n${item.content}`;
               }
 
-              if (item.type === "heading") {
-                item.content = `<break time="1s"/>${escapeSSMLCharacters(
-                  item.content
-                )}<break time="1s"/>`;
-              }
-
               if (item.type === "figure_image" || item.type === "table_rows") {
                 console.log("summarizing figure/table on page ", i + index + 1);
                 const summarizationSchema = z.object({
@@ -375,7 +369,7 @@ export default async function handler(
                   1024
                 );
 
-                item.content = `Code or Algorithm<break time="1s"/>title: ${summarizedCode?.summarizedCode.title}<break time="1s"/>summary: ${summarizedCode?.summarizedCode.content}`;
+                item.content = `Code or Algorithm, title: ${summarizedCode?.summarizedCode.title}, summary: ${summarizedCode?.summarizedCode.content}`;
               }
 
               //Some manual latex processing
@@ -406,10 +400,10 @@ export default async function handler(
       }
 
       console.log("Improving author section");
-      const IMPROVE_AUTHOR_INFO_PROMPT = `Rearrange all the author info to make it more readable. Keep only the author names and affiliations. Each author's name and affiliation should be together followed by the ssml break. 
+      const IMPROVE_AUTHOR_INFO_PROMPT = `Rearrange all the author info to make it more readable. Keep only the author names and affiliations.
       
       Example:
-      Author1, Affiliation1<break time="1s"/>Author2, Affiliation2<break time="1s"/>Author3, Affiliation3.....
+      Author1, Affiliation1; Author2, Affiliation2; Author3, Affiliation3; .....
       
       If the affiliation is not available leave it empty. Do not repeat the same author multiple times.`;
 
@@ -610,7 +604,7 @@ export default async function handler(
       );
       console.log("Saved filtered items to", filteredItemsPath);
 
-      // new Error("Audio generation skipped");
+      //throw new Error("Audio generation skipped");
 
       const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
       const filteredItemsFileName = `${cleanedFileName}-filteredItems.json`;
@@ -800,7 +794,9 @@ async function synthesizeSpeechInChunks(
     const itemAudioBuffer: Buffer[] = [];
 
     for (const chunk of chunks) {
-      const ssmlChunk = `<speak><break time="1s"/>${chunk}<break time="1s"/></speak>`;
+      const ssmlChunk = `<speak><break time="1s"/> ${escapeSSMLCharacters(
+        chunk
+      )} <break time="1s"/></speak>`;
       const audioBuffer = await synthesizeSpeech(ssmlChunk, voiceId, true);
       itemAudioBuffer.push(audioBuffer);
     }
