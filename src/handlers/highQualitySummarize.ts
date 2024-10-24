@@ -548,20 +548,30 @@ export default async function handler(
         if (labelNumber !== "unlabeled") {
           console.log("searching for matches for", labelType, labelNumber);
           let matchWords = [];
-          if (labelType === "Figure") {
+          if (labelType.toLocaleLowerCase() === "figure") {
             matchWords.push(
               `Figure ${labelNumber}`,
               `Fig. ${labelNumber}`,
-              `Fig ${labelNumber}`
+              `Fig ${labelNumber}`,
+              `FIGURE ${labelNumber}`,
+              `FIG ${labelNumber}`,
+              `FIG. ${labelNumber}`
             );
-          } else if (labelType === "Chart") {
-            matchWords.push(`Chart ${labelNumber}`, `chart ${labelNumber}`);
+          } else if (labelType.toLocaleLowerCase() === "chart") {
+            matchWords.push(
+              `Chart ${labelNumber}`,
+              `chart ${labelNumber}`,
+              `CHART ${labelNumber}`
+            );
           } else if (labelType === "Image") {
             matchWords.push(
               `Image ${labelNumber}`,
               `image ${labelNumber}`,
               `Img ${labelNumber}`,
-              `Img. ${labelNumber}`
+              `Img. ${labelNumber}`,
+              `IMAGE ${labelNumber}`,
+              `IMG ${labelNumber}`,
+              `IMG. ${labelNumber}`
             );
           } else if (labelType === "Table") {
             matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`);
@@ -597,12 +607,16 @@ export default async function handler(
         }
 
         console.log("moving the item above the first heading or to the end");
-        const [movedItem] = filteredItems.splice(
-          filteredItems.indexOf(item),
-          1
-        );
-        if (headingIndex !== -1) {
-          filteredItems.splice(headingIndex - 1, 0, movedItem);
+        const currentIndex = filteredItems.indexOf(item);
+        const insertIndex =
+          headingIndex !== -1 && headingIndex > currentIndex
+            ? headingIndex - 1
+            : headingIndex;
+
+        const [movedItem] = filteredItems.splice(currentIndex, 1);
+
+        if (insertIndex !== -1) {
+          filteredItems.splice(insertIndex, 0, movedItem);
         } else {
           filteredItems.push(movedItem);
         }
