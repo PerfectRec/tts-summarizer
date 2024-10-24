@@ -175,7 +175,7 @@ export default async function handler(
 
     //convert to JSON
     try {
-      const batchSize = 10;
+      const batchSize = 20;
       let allItems: Item[] = [];
       let abstractDetected = false;
       let authorInfoContents = "";
@@ -635,7 +635,7 @@ export default async function handler(
       );
       console.log("Saved filtered items to", filteredItemsPath);
 
-      //return reply.status(200).send({ message: "Audio generation skipped" });
+      return reply.status(200).send({ message: "Audio generation skipped" });
 
       const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
       const filteredItemsFileName = `${cleanedFileName}-filteredItems.json`;
