@@ -635,7 +635,7 @@ export default async function handler(
       );
       console.log("Saved filtered items to", filteredItemsPath);
 
-      return reply.status(200).send({ message: "Audio generation skipped" });
+      //return reply.status(200).send({ message: "Audio generation skipped" });
 
       const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
       const filteredItemsFileName = `${cleanedFileName}-filteredItems.json`;
