@@ -58,6 +58,10 @@ const modelConfig: { [task: string]: { temperature: number; model: Model } } = {
     temperature: 0.1,
     model: "gpt-4o-2024-08-06",
   },
+  citation: {
+    temperature: 0.1,
+    model: "gpt-4o-2024-08-06",
+  },
 };
 
 const MAX_POLLY_CHAR_LIMIT = 2900;
@@ -624,9 +628,56 @@ export default async function handler(
         item["processed"] = true;
       }
 
+      const referencesItems = allItems.filter(
+        (item) =>
+          item.type === "references_item" || item.type === "references_heading"
+      );
+
       const parsedItemsPath = path.join(fileNameDir, "parsedItems.json");
       fs.writeFileSync(parsedItemsPath, JSON.stringify(allItems, null, 2));
       console.log("Saved raw text extract to", parsedItemsPath);
+
+      console.log("processing citations");
+      if (referencesItems.length > 0) {
+        const CITATION_REPLACEMENT_PROMPT = `Remove citations unless they are part of the sentence structure and removing them will make the sentence invalid.`;
+
+        const referenceSchema = z.object({
+          processedContent: z.string(),
+        });
+
+        const referencesContent = referencesItems
+          .map((refItem) => refItem.content)
+          .join("\n");
+
+        const MAX_CONCURRENT_ITEMS = 10;
+
+        for (let i = 0; i < filteredItems.length; i += MAX_CONCURRENT_ITEMS) {
+          const itemBatch = filteredItems.slice(i, i + MAX_CONCURRENT_ITEMS);
+          console.log(
+            `processing text items ${i} through ${i + MAX_CONCURRENT_ITEMS}`
+          );
+
+          await Promise.all(
+            itemBatch.map(async (item) => {
+              if (item.type === "text") {
+                const processedItem = await getStructuredOpenAICompletion(
+                  CITATION_REPLACEMENT_PROMPT,
+                  `Text to process:\n${item.content}\n\nReferences:\n${referencesContent}`,
+                  modelConfig.citation.model,
+                  modelConfig.citation.temperature,
+                  referenceSchema,
+                  [],
+                  16384,
+                  0.2
+                );
+
+                item.content = processedItem?.processedContent;
+                item.processed = true;
+              }
+            })
+          );
+        }
+      }
 
       const filteredItemsPath = path.join(fileNameDir, "filteredItems.json");
       fs.writeFileSync(
