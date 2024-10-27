@@ -126,24 +126,20 @@ export default async function handler(
     fs.mkdirSync(tempDir);
   }
 
-  const tempImageDir = path.join(tempDir, "images", cleanedFileName);
-  const audioOutputDir = path.join(tempDir, "audio");
-  const ttsTextDir = path.join(tempDir, "text");
+  const runId = uuidv4();
+
+  const tempImageDir = path.join(
+    tempDir,
+    "images",
+    `${cleanedFileName}-${runId}`
+  );
   const tempObjectsDir = path.join(tempDir, "objects");
-  const fileNameDir = path.join(tempObjectsDir, cleanedFileName);
+  const fileNameDir = path.join(tempObjectsDir, `${cleanedFileName}-${runId}`);
 
   clearDirectory(tempImageDir);
 
   if (!fs.existsSync(tempImageDir)) {
-    fs.mkdirSync(tempImageDir);
-  }
-
-  if (!fs.existsSync(audioOutputDir)) {
-    fs.mkdirSync(audioOutputDir);
-  }
-
-  if (!fs.existsSync(ttsTextDir)) {
-    fs.mkdirSync(ttsTextDir);
+    fs.mkdirSync(tempImageDir, { recursive: true });
   }
 
   if (!fs.existsSync(tempObjectsDir)) {
@@ -721,7 +717,6 @@ export default async function handler(
       console.log("Uploaded PDF file to S3:", pdfFileUrl);
 
       const audioFileName = `${cleanedFileName}.mp3`;
-      const uuid = uuidv4(); // Generate a random UUID
       const audioFilePath = `${email}/${audioFileName}`;
       const audioFileUrl = await uploadFile(audioBuffer, audioFilePath);
       const encodedAudioFilePath = `${encodeURIComponent(
@@ -741,7 +736,6 @@ export default async function handler(
         emailBody
       );
       console.log("Email sent successfully to:", email);
-      return;
     } catch (error) {
       const pdfFileName = `${cleanedFileName}.pdf`;
       const pdfFilePath = `${email}/${pdfFileName}`;
@@ -787,13 +781,23 @@ export default async function handler(
         userEmailBody
       );
       console.error("Error generating audio file:", error);
-      return;
     }
   } else {
-    return reply
+    reply
       .status(400)
       .send({ message: "This summarization method is not supported yet!" });
   }
+
+  //cleanup temp subdirectories
+  try {
+    await fs.remove(tempImageDir);
+    await fs.remove(fileNameDir);
+    console.log("Temporary directories deleted");
+  } catch (cleanupError) {
+    console.error("Error during cleanup:", cleanupError);
+  }
+
+  return;
 }
 
 async function getWebContext(link: string): Promise<string> {
