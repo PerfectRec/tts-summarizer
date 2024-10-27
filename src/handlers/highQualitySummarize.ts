@@ -126,7 +126,7 @@ export default async function handler(
     fs.mkdirSync(tempDir);
   }
 
-  const tempImageDir = path.join(tempDir, "images");
+  const tempImageDir = path.join(tempDir, "images", cleanedFileName);
   const audioOutputDir = path.join(tempDir, "audio");
   const ttsTextDir = path.join(tempDir, "text");
   const tempObjectsDir = path.join(tempDir, "objects");
@@ -176,6 +176,11 @@ export default async function handler(
     - Process items again to make them audio optimized. (LLM)
     - Join the items. (code)
     */
+
+    reply.status(200).send({
+      message:
+        "Received audio file and selected summarization method is valid. Check email for result.",
+    });
 
     //convert to JSON
     try {
@@ -736,9 +741,7 @@ export default async function handler(
         emailBody
       );
       console.log("Email sent successfully to:", email);
-
-      // Send the audio file as a response
-      return reply.status(200).send({ audioFileUrl });
+      return;
     } catch (error) {
       const pdfFileName = `${cleanedFileName}.pdf`;
       const pdfFilePath = `${email}/${pdfFileName}`;
@@ -783,9 +786,8 @@ export default async function handler(
         emailSubject,
         userEmailBody
       );
-
       console.error("Error generating audio file:", error);
-      return reply.status(500).send({ message: "Error generating audio file" });
+      return;
     }
   } else {
     return reply
