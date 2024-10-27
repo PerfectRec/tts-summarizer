@@ -650,7 +650,7 @@ export default async function handler(
           .map((refItem) => refItem.content)
           .join("\n");
 
-        const MAX_CONCURRENT_ITEMS = 10;
+        const MAX_CONCURRENT_ITEMS = 20;
 
         for (let i = 0; i < filteredItems.length; i += MAX_CONCURRENT_ITEMS) {
           const itemBatch = filteredItems.slice(i, i + MAX_CONCURRENT_ITEMS);
