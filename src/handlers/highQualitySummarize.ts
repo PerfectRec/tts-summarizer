@@ -232,6 +232,8 @@ export default async function handler(
                     "code_or_algorithm",
                     "endnotes_item",
                     "endnotes_heading",
+                    "JEL_classification",
+                    "keywords",
                   ]),
                   content: z.string(),
                 })
@@ -687,7 +689,7 @@ export default async function handler(
       );
       console.log("Saved filtered items to", filteredItemsPath);
 
-      //return reply.status(200).send({ message: "Audio generation skipped" });
+      //return;
 
       const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
       const filteredItemsFileName = `${cleanedFileName}-filteredItems.json`;
