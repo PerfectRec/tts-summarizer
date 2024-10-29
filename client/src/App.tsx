@@ -18,6 +18,7 @@ function App() {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       setFile(event.target.files[0]);
+      setSubmitMessage("Generate audio");
     }
   };
 
@@ -36,10 +37,10 @@ function App() {
     setSubmitMessage("You're done!  Check your email in a few mins.");
 
     const fileBuffer = await file.arrayBuffer();
-    const fileName = await file.name;
+    const fileName = file.name;
 
     try {
-      const response = await fetch(
+      fetch(
         `/summarize?summarizationMethod=${summarizationMethod}&email=${email}&fileName=${fileName}`,
         {
           method: "POST",
@@ -49,20 +50,8 @@ function App() {
           body: fileBuffer,
         }
       );
-
-      if (response.ok) {
-        // Update: Display success message instead of handling audio URL
-        console.log("Request successful");
-        setSubmitMessage("Generate audio");
-      } else {
-        console.error("Error:", response.statusText);
-        setSubmitMessage("Generate audio");
-        setErrorMessage(response.statusText);
-      }
     } catch (error) {
-      console.error("Error:", error);
       setSubmitMessage("Generate audio");
-      setErrorMessage(JSON.stringify(error));
     }
   };
 
