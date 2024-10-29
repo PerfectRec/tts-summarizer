@@ -24,6 +24,7 @@ import { sendEmail } from "@email/transactional";
 import { subscribeEmail } from "@email/marketing";
 import { v4 as uuidv4 } from "uuid";
 import { parseBuffer } from "music-metadata";
+import { getDB } from "db/db";
 
 interface SummarizeRequestParams {
   summarizationMethod:
@@ -41,6 +42,8 @@ type Model =
   | "gpt-4o-2024-08-06"
   | "gpt-4o-mini-2024-07-18"
   | "claude-3-haiku-20240307";
+
+const { db } = getDB();
 
 const modelConfig: { [task: string]: { temperature: number; model: Model } } = {
   extraction: {
