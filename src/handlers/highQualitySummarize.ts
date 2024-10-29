@@ -84,7 +84,7 @@ interface ItemAudioMetadata {
   type: string;
   startTime: number;
   itemDuration: number;
-  headingName?: string;
+  transcript: string;
 }
 
 interface ItemAudioResult {
@@ -954,11 +954,9 @@ async function synthesizeSpeechInChunks(items: Item[]): Promise<AudioResult> {
       type: item.type,
       startTime: 0,
       itemDuration: itemMetadata.format.duration || 0,
-      headingName: ["heading", "main_title"].some((headingType) =>
-        item.type.includes(headingType)
-      )
-        ? removeBreaks(item.content)
-        : undefined,
+      transcript: item.summary
+        ? `${removeBreaks(item.content)}\n\n${removeBreaks(item.summary)}`
+        : removeBreaks(item.content),
     };
 
     return { itemAudioBuffer, itemAudioMetadata };
