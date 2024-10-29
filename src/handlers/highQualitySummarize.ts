@@ -23,6 +23,7 @@ import { uploadFile } from "@aws/s3";
 import { sendEmail } from "@email/transactional";
 import { subscribeEmail } from "@email/marketing";
 import { v4 as uuidv4 } from "uuid";
+import { parseBuffer } from "music-metadata";
 
 interface SummarizeRequestParams {
   summarizationMethod:
@@ -77,6 +78,23 @@ interface Item {
   label?: { labelType: string; labelNumber: string };
   summary?: string;
   processed?: boolean;
+}
+
+interface ItemAudioMetadata {
+  type: string;
+  startTime: number;
+  itemDuration: number;
+  headingName?: string;
+}
+
+interface ItemAudioResult {
+  itemAudioBuffer: Buffer;
+  itemAudioMetadata: ItemAudioMetadata;
+}
+
+interface AudioResult {
+  audioBuffer: Buffer;
+  audioMetadata: ItemAudioMetadata[];
 }
 
 const firecrawl = new FirecrawlApp({
@@ -702,23 +720,22 @@ export default async function handler(
         fs.readFileSync(parsedItemsPath),
         parsedItemsFilePath
       );
-      console.log("Uploaded parsed items to S3:", parsedItemsFileUrl);
 
       const filteredItemsFileUrl = await uploadFile(
         fs.readFileSync(filteredItemsPath),
         filteredItemsFilePath
       );
-      console.log("Uploaded filtered items to S3:", filteredItemsFileUrl);
 
       await subscribeEmail(email, process.env.MAILCHIMP_AUDIENCE_ID || "");
       console.log("Subscribed user to mailing list");
-      const audioBuffer = await synthesizeSpeechInChunks(filteredItems);
+      const { audioBuffer, audioMetadata } = await synthesizeSpeechInChunks(
+        filteredItems
+      );
       console.log("Generated audio file");
 
       const pdfFileName = `${cleanedFileName}.pdf`;
       const pdfFilePath = `${email}/${pdfFileName}`;
       const pdfFileUrl = await uploadFile(fileBuffer, pdfFilePath);
-      console.log("Uploaded PDF file to S3:", pdfFileUrl);
 
       const audioFileName = `${cleanedFileName}.mp3`;
       const audioFilePath = `${email}/${audioFileName}`;
@@ -726,7 +743,13 @@ export default async function handler(
       const encodedAudioFilePath = `${encodeURIComponent(
         email
       )}/${encodeURIComponent(audioFileName)}`;
-      console.log("Uploaded audio file to S3:", audioFileUrl);
+
+      const metadataFileName = `${cleanedFileName}-metadata.json`;
+      const metadataFilePath = `${email}/${metadataFileName}`;
+      const metadataFileUrl = await uploadFile(
+        Buffer.from(JSON.stringify(audioMetadata)),
+        metadataFilePath
+      );
 
       const emailSubject = `Your audio paper ${cleanedFileName} is ready!`;
       const emailBody = `Download link:\nhttps://${process.env.AWS_BUCKET_NAME}/${encodedAudioFilePath}\n\nReply to this email to share feedback. We want your feedback. We will actually read it, work on addressing it, and if indicated by your reply, respond to your email.\n\nPlease share https://www.paper2audio.com with friends. We are looking for more feedback!\n\nKeep listening,\nJoe Golden`;
@@ -745,7 +768,6 @@ export default async function handler(
       const pdfFilePath = `${email}/${pdfFileName}`;
       const pdfFileUrl = await uploadFile(fileBuffer, pdfFilePath);
 
-      console.log("Uploaded PDF file to S3:", pdfFileUrl);
       const errorFilePath = `${email}/${cleanedFileName}-error.json`;
       const encodedErrorFilePath = `${encodeURIComponent(
         email
@@ -861,12 +883,12 @@ function splitTextIntoChunks(text: string, maxLength: number): string[] {
   return chunks;
 }
 
-async function synthesizeSpeechInChunks(items: Item[]): Promise<Buffer> {
-  const audioBuffers: Buffer[] = [];
+async function synthesizeSpeechInChunks(items: Item[]): Promise<AudioResult> {
+  const itemAudioResults: ItemAudioResult[] = [];
   const MAX_CONCURRENT_ITEMS = 10;
 
   const processItem = async (item: Item) => {
-    const itemAudioBuffer: Buffer[] = [];
+    const chunkAudioBuffers: Buffer[] = [];
 
     if (item.type === "math") {
       // Use "Stephen" for math content
@@ -879,7 +901,7 @@ async function synthesizeSpeechInChunks(items: Item[]): Promise<Buffer> {
           escapeSSMLCharacters(chunk)
         )}</speak>`;
         const audioBuffer = await synthesizeSpeech(ssmlChunk, "Stephen", true);
-        itemAudioBuffer.push(audioBuffer);
+        chunkAudioBuffers.push(audioBuffer);
       }
 
       // Use "Matthew" for math summary
@@ -897,7 +919,7 @@ async function synthesizeSpeechInChunks(items: Item[]): Promise<Buffer> {
             "Matthew",
             true
           );
-          itemAudioBuffer.push(audioBuffer);
+          chunkAudioBuffers.push(audioBuffer);
         }
       }
     } else if (
@@ -910,7 +932,7 @@ async function synthesizeSpeechInChunks(items: Item[]): Promise<Buffer> {
           escapeSSMLCharacters(chunk)
         )}</speak>`;
         const audioBuffer = await synthesizeSpeech(ssmlChunk, "Matthew", true);
-        itemAudioBuffer.push(audioBuffer);
+        chunkAudioBuffers.push(audioBuffer);
       }
     } else {
       // Use "Ruth" for narrated content
@@ -920,11 +942,26 @@ async function synthesizeSpeechInChunks(items: Item[]): Promise<Buffer> {
           escapeSSMLCharacters(chunk)
         )}</speak>`;
         const audioBuffer = await synthesizeSpeech(ssmlChunk, "Ruth", true);
-        itemAudioBuffer.push(audioBuffer);
+        chunkAudioBuffers.push(audioBuffer);
       }
     }
 
-    return Buffer.concat(itemAudioBuffer);
+    const itemAudioBuffer = Buffer.concat(chunkAudioBuffers);
+
+    const itemMetadata = await parseBuffer(itemAudioBuffer);
+
+    const itemAudioMetadata: ItemAudioMetadata = {
+      type: item.type,
+      startTime: 0,
+      itemDuration: itemMetadata.format.duration || 0,
+      headingName: ["heading", "main_title"].some((headingType) =>
+        item.type.includes(headingType)
+      )
+        ? removeBreaks(item.content)
+        : undefined,
+    };
+
+    return { itemAudioBuffer, itemAudioMetadata };
   };
 
   for (let i = 0; i < items.length; i += MAX_CONCURRENT_ITEMS) {
@@ -933,10 +970,25 @@ async function synthesizeSpeechInChunks(items: Item[]): Promise<Buffer> {
       `converting items ${i} through ${i + MAX_CONCURRENT_ITEMS} to audio`
     );
     const batchResults = await Promise.all(itemBatch.map(processItem));
-    audioBuffers.push(...batchResults);
+    itemAudioResults.push(...batchResults);
   }
 
-  return Buffer.concat(audioBuffers);
+  const audioBuffer = Buffer.concat(
+    itemAudioResults.map((itemAudioResult) => itemAudioResult.itemAudioBuffer)
+  );
+
+  const audioMetadata = itemAudioResults.map(
+    (itemAudioResult) => itemAudioResult.itemAudioMetadata
+  );
+
+  //We need to adjust the start times here
+  let startTime = 0;
+  for (const itemMetadata of audioMetadata) {
+    itemMetadata.startTime = startTime;
+    startTime += itemMetadata.itemDuration;
+  }
+
+  return { audioBuffer: audioBuffer, audioMetadata: audioMetadata };
 }
 
 async function getAnthropicCompletion(
@@ -1167,6 +1219,10 @@ function escapeSSMLCharacters(text: string): string {
 
 function convertBreaks(text: string): string {
   return text.replace(/\[break(\d+)\]/g, '<break time="$1s"/>');
+}
+
+function removeBreaks(text: string): string {
+  return text.replace(/\[break\d+\]/g, "");
 }
 
 async function synthesizeOpenAISpeech(
