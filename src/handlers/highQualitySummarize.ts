@@ -396,12 +396,14 @@ export default async function handler(
 
               //Some manual latex processing
               item.content = item.content
-                .replaceAll("\\", "")
-                .replaceAll("rightarrow", "approaches")
-                .replaceAll("infty", "infinity")
-                .replaceAll("geq", " greater than or equal to ")
-                .replaceAll("leq", " less than or equal to ")
-                .replaceAll("mathbb", "");
+                .replace(/\\geq/g, " greater than or equal to ")
+                .replace(/\\leq/g, " less than or equal to ")
+                .replace(/\\rightarrow/g, " approaches ")
+                .replace(/\\infty/g, " infinity ")
+                .replace(/\\mathbb/g, "")
+                .replaceAll("\\(", "")
+                .replaceAll("\\)", "")
+                .replaceAll("\\", "");
 
               if (item.type === "text") {
                 item.content === item.content.replace(" - ", " minus ");
