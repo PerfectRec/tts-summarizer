@@ -281,6 +281,7 @@ export default async function handler(
                     "non_figure_image",
                     "table_rows",
                     "table_descrption_or_heading",
+                    "table_note",
                     "author_info",
                     "footnotes",
                     "meta_or_publication_info",
@@ -685,9 +686,9 @@ export default async function handler(
           processedContent: z.string(),
         });
 
-        const referencesContent = referencesItems
-          .map((refItem) => refItem.content)
-          .join("\n");
+        // const referencesContent = referencesItems
+        //   .map((refItem) => refItem.content)
+        //   .join("\n");
 
         const MAX_CONCURRENT_ITEMS = 20;
 
@@ -702,7 +703,7 @@ export default async function handler(
               if (item.type === "text") {
                 const processedItem = await getStructuredOpenAICompletion(
                   CITATION_REPLACEMENT_PROMPT,
-                  `Text to process:\n${item.content}\n\nReferences:\n${referencesContent}`,
+                  `Text to process:\n${item.content}`,
                   modelConfig.citation.model,
                   modelConfig.citation.temperature,
                   referenceSchema,
