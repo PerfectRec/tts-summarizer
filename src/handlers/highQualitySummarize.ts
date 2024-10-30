@@ -36,6 +36,7 @@ interface SummarizeRequestParams {
   email: string;
   fileName: string;
   sendEmailToUser: string;
+  link: string;
 }
 
 type Model =
@@ -130,13 +131,39 @@ export default async function handler(
   }>,
   reply: FastifyReply
 ) {
-  const { summarizationMethod, email, fileName, sendEmailToUser } =
+  const { summarizationMethod, email, fileName, sendEmailToUser, link } =
     request.query;
 
   const shouldSendEmailToUser = sendEmailToUser === "true";
 
-  const cleanedFileName = path.parse(fileName).name;
-  const fileBuffer = request.body as Buffer;
+  let fileBuffer: Buffer;
+  let cleanedFileName: string;
+
+  if (link && link !== "") {
+    try {
+      const url = new URL(link);
+
+      // Special processing for arXiv links
+      if (url.hostname === "arxiv.org" && url.pathname.startsWith("/abs/")) {
+        url.pathname = url.pathname.replace("/abs/", "/pdf/");
+      }
+      // Download the PDF from the link using fetch
+      const response = await fetch(url.toString());
+      if (!response.ok) {
+        throw new Error("Failed to download PDF from link");
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      fileBuffer = Buffer.from(arrayBuffer);
+      cleanedFileName = path.parse(url.pathname).name; // Set the filename from the link
+    } catch (error) {
+      return reply
+        .status(400)
+        .send({ message: "Failed to download PDF from link" });
+    }
+  } else {
+    fileBuffer = request.body as Buffer;
+    cleanedFileName = path.parse(fileName).name;
+  }
 
   if (fileBuffer.length > 100 * 1024 * 1024) {
     throw new Error("File size exceeds 100MB which is currently not supported");

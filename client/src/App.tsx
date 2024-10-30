@@ -5,6 +5,7 @@ import r2 from "./assets/r2.jpeg";
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [email, setEmail] = useState<string>("");
+  const [pdfLink, setPdfLink] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
 
   const handleEmailChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -14,6 +15,11 @@ function App() {
   //   useState<string>("ultimate");
   const summarizationMethod = "ultimate";
   const [submitMessage, setSubmitMessage] = useState<string>("Generate audio");
+
+  const handlePdfLinkChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setPdfLink(event.target.value);
+    setSubmitMessage("Generate audio");
+  };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -28,8 +34,10 @@ function App() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!file || !email || email === "") {
-      setErrorMessage("Please select a file and enter your email address.");
+    if ((!file && (!pdfLink || pdfLink === "")) || !email || email === "") {
+      setErrorMessage(
+        "Please select a file or enter a link and enter your email address."
+      );
       return;
     }
 
@@ -38,18 +46,27 @@ function App() {
       "You're done! Check your inbox (and spam folder) in a few mins."
     );
 
-    const fileBuffer = await file.arrayBuffer();
-    const fileName = file.name;
+    let fileBuffer;
+    let fileName;
+    let headers = {};
+
+    if (file) {
+      fileBuffer = await file.arrayBuffer();
+      fileName = file.name;
+      headers = {
+        "Content-Type": file.type,
+      };
+    }
 
     try {
       fetch(
-        `/summarize?summarizationMethod=${summarizationMethod}&email=${email}&fileName=${fileName}&sendEmailToUser=true`,
+        `/summarize?summarizationMethod=${summarizationMethod}&email=${email}&fileName=${
+          fileName || ""
+        }&sendEmailToUser=true&link=${pdfLink}`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": file.type,
-          },
-          body: fileBuffer,
+          headers: headers,
+          body: fileBuffer || undefined,
         }
       );
     } catch (error) {
@@ -70,6 +87,13 @@ function App() {
           type="file"
           accept=".pdf"
           onChange={handleFileChange}
+          className="p-2 border rounded"
+        />
+        <input
+          type="text"
+          value={pdfLink}
+          onChange={handlePdfLinkChange}
+          placeholder="Or enter a link to a PDF"
           className="p-2 border rounded"
         />
         <div className="text-sm">
