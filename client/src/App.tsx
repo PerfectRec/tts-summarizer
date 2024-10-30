@@ -43,7 +43,7 @@ function App() {
 
     try {
       fetch(
-        `/summarize?summarizationMethod=${summarizationMethod}&email=${email}&fileName=${fileName}`,
+        `/summarize?summarizationMethod=${summarizationMethod}&email=${email}&fileName=${fileName}&sendEmailToUser=true`,
         {
           method: "POST",
           headers: {

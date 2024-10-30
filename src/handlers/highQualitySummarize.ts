@@ -35,6 +35,7 @@ interface SummarizeRequestParams {
     | "ultimate";
   email: string;
   fileName: string;
+  sendEmailToUser: string;
 }
 
 type Model =
@@ -129,7 +130,11 @@ export default async function handler(
   }>,
   reply: FastifyReply
 ) {
-  const { summarizationMethod, email, fileName } = request.query;
+  const { summarizationMethod, email, fileName, sendEmailToUser } =
+    request.query;
+
+  const shouldSendEmailToUser = sendEmailToUser === "true";
+
   const cleanedFileName = path.parse(fileName).name;
   const fileBuffer = request.body as Buffer;
 
@@ -183,6 +188,32 @@ export default async function handler(
     );
   }
 
+  //Setting file names
+  //PDF
+  const pdfFileName = `${cleanedFileName}.pdf`;
+  const pdfFilePath = `${email}/${pdfFileName}`;
+  const s3pdfFilePath = `https://${process.env.AWS_BUCKET_NAME}/${pdfFilePath}`;
+
+  //MP3
+  const audioFileName = `${cleanedFileName}.mp3`;
+  const audioFilePath = `${email}/${audioFileName}`;
+  const encodedAudioFilePath = `${encodeURIComponent(
+    email
+  )}/${encodeURIComponent(audioFileName)}`;
+  const s3encodedAudioFilePath = `https://${process.env.AWS_BUCKET_NAME}/${encodedAudioFilePath}`;
+
+  //METADATA
+  const metadataFileName = `${cleanedFileName}-metadata.json`;
+  const metadataFilePath = `${email}/${metadataFileName}`;
+  const s3metadataFilePath = `https://${process.env.AWS_BUCKET_NAME}/${metadataFilePath}`;
+
+  //ERROR
+  const errorFilePath = `${email}/${cleanedFileName}-error.json`;
+  const encodedErrorFilePath = `${encodeURIComponent(
+    email
+  )}/${encodeURIComponent(cleanedFileName)}-error.json`;
+  const s3encodedErrorFilePath = `https://${process.env.AWS_BUCKET_NAME}/${encodedErrorFilePath}`;
+
   console.log("converted pdf pages to images");
 
   if (summarizationMethod === "ultimate") {
@@ -198,7 +229,13 @@ export default async function handler(
 
     reply.status(200).send({
       message:
-        "Received audio file and selected summarization method is valid. Check email for result.",
+        "Received file and validated summarization method. Wait for result.",
+      urls: {
+        uploadedFileUrl: s3pdfFilePath,
+        metadataFileUrl: s3metadataFilePath,
+        errorFileUrl: s3encodedErrorFilePath,
+        audioFileUrl: s3encodedAudioFilePath,
+      },
     });
 
     //convert to JSON
@@ -770,84 +807,72 @@ export default async function handler(
 
       await subscribeEmail(email, process.env.MAILCHIMP_AUDIENCE_ID || "");
       console.log("Subscribed user to mailing list");
+
       const { audioBuffer, audioMetadata } = await synthesizeSpeechInChunks(
         filteredItems
       );
       console.log("Generated audio file");
 
-      const pdfFileName = `${cleanedFileName}.pdf`;
-      const pdfFilePath = `${email}/${pdfFileName}`;
       const pdfFileUrl = await uploadFile(fileBuffer, pdfFilePath);
-
-      const audioFileName = `${cleanedFileName}.mp3`;
-      const audioFilePath = `${email}/${audioFileName}`;
       const audioFileUrl = await uploadFile(audioBuffer, audioFilePath);
-      const encodedAudioFilePath = `${encodeURIComponent(
-        email
-      )}/${encodeURIComponent(audioFileName)}`;
-
-      const metadataFileName = `${cleanedFileName}-metadata.json`;
-      const metadataFilePath = `${email}/${metadataFileName}`;
       const metadataFileUrl = await uploadFile(
         Buffer.from(JSON.stringify(audioMetadata)),
         metadataFilePath
       );
 
-      const emailSubject = `Your audio paper ${cleanedFileName} is ready!`;
-      const emailBody = `Download link:\nhttps://${process.env.AWS_BUCKET_NAME}/${encodedAudioFilePath}\n\nReply to this email to share feedback. We want your feedback. We will actually read it, work on addressing it, and if indicated by your reply, respond to your email.\n\nPlease share https://www.paper2audio.com with friends. We are looking for more feedback!\n\nKeep listening,\nJoe Golden`;
+      if (shouldSendEmailToUser) {
+        const emailSubject = `Your audio paper ${cleanedFileName} is ready!`;
+        const emailBody = `Download link:\n${s3encodedAudioFilePath}\n\nReply to this email to share feedback. We want your feedback. We will actually read it, work on addressing it, and if indicated by your reply, respond to your email.\n\nPlease share https://www.paper2audio.com with friends. We are looking for more feedback!\n\nKeep listening,\nJoe Golden`;
 
-      await sendEmail(
-        email,
-        "",
-        "joe@paper2audio.com",
-        "paper2audio",
-        emailSubject,
-        emailBody
-      );
-      console.log("Email sent successfully to:", email);
+        await sendEmail(
+          email,
+          "",
+          "joe@paper2audio.com",
+          "paper2audio",
+          emailSubject,
+          emailBody
+        );
+        console.log("Email sent successfully to:", email);
+      }
     } catch (error) {
-      const pdfFileName = `${cleanedFileName}.pdf`;
-      const pdfFilePath = `${email}/${pdfFileName}`;
       const pdfFileUrl = await uploadFile(fileBuffer, pdfFilePath);
-
-      const errorFilePath = `${email}/${cleanedFileName}-error.json`;
-      const encodedErrorFilePath = `${encodeURIComponent(
-        email
-      )}/${encodeURIComponent(cleanedFileName)}-error.json`;
       const errorFileUrl = await uploadFile(
         Buffer.from(JSON.stringify(error, Object.getOwnPropertyNames(error))),
         errorFilePath
       );
 
-      const emailSubject = `Failed to generate audio paper ${cleanedFileName} for ${email}`;
-      const emailBody = `Failed to generate audio paper for ${cleanedFileName}.pdf uploaded by ${email}. See error logs at https://${process.env.AWS_BUCKET_NAME}/${encodedErrorFilePath} and send an updated email to the user.`;
+      if (shouldSendEmailToUser) {
+        const emailSubject = `Failed to generate audio paper ${cleanedFileName} for ${email}`;
+        const emailBody = `Failed to generate audio paper for ${cleanedFileName}.pdf uploaded by ${email}. See error logs at ${s3encodedErrorFilePath} and send an updated email to the user.`;
 
-      const userEmailBody = `Failed to generate audio paper for ${cleanedFileName}. We will take a look at the error and send you a follow up email with the audio file.`;
+        const userEmailBody = `Failed to generate audio paper for ${cleanedFileName}. We will take a look at the error and send you a follow up email with the audio file.`;
 
-      await sendEmail(
-        "joe@paper2audio.com",
-        "",
-        "joe@paper2audio.com",
-        "paper2audio",
-        emailSubject,
-        emailBody
-      );
-      await sendEmail(
-        "chandradeep@paper2audio.com",
-        "",
-        "joe@paper2audio.com",
-        "paper2audio",
-        emailSubject,
-        emailBody
-      );
-      await sendEmail(
-        email,
-        "",
-        "joe@paper2audio.com",
-        "paper2audio",
-        emailSubject,
-        userEmailBody
-      );
+        await sendEmail(
+          "joe@paper2audio.com",
+          "",
+          "joe@paper2audio.com",
+          "paper2audio",
+          emailSubject,
+          emailBody
+        );
+        await sendEmail(
+          "chandradeep@paper2audio.com",
+          "",
+          "joe@paper2audio.com",
+          "paper2audio",
+          emailSubject,
+          emailBody
+        );
+        await sendEmail(
+          email,
+          "",
+          "joe@paper2audio.com",
+          "paper2audio",
+          emailSubject,
+          userEmailBody
+        );
+      }
+
       console.error("Error generating audio file:", error);
     }
   } else {
