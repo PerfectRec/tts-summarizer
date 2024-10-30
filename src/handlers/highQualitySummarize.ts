@@ -336,6 +336,8 @@ export default async function handler(
             }
             items = combinedItems;
 
+            //console.log(JSON.stringify(items, null, 2));
+
             for (const item of items) {
               item.content = item.content.replace(
                 /https?:\/\/[^\s]+/g,
@@ -358,6 +360,7 @@ export default async function handler(
                     label: z.object({
                       labelType: z.string(),
                       labelNumber: z.string(),
+                      panelNumber: z.string().optional(),
                     }),
                     content: z.string(),
                   }),
@@ -373,7 +376,7 @@ export default async function handler(
 
                 const TABLE_SUMMARIZE_PROMPT = `Write a concise and effective summary for the table. Replace the raw rows in the content field with the summary. Summarize the size of changes / effects / estimates / results in the tables. To help understand them better, use context from the paper and any note below them. The summary should capture the main point of the table. Try to use as few numbers as possible. Keep in mind that the user cannot see the table as they will be listening to your summary. 
                 
-                Add the label "Table X" where X is the table number indicated in the page. You need to extract the correct table number. This is very important. Look for cues around the table and use your best judgement to determine it. 
+                Add the label "Table X" where X is the table number indicated in the page. You need to extract the correct table number. This is very important. Look for cues around the table and use your best judgement to determine it. Add the panel number that is being summarized, if it is mentioned.
                 
                 Do not use markdown. Use plain text.`;
 
@@ -398,6 +401,11 @@ export default async function handler(
                   item.label.labelNumber === "unlabeled"
                     ? ""
                     : item.label.labelNumber
+                } ${
+                  item.label.panelNumber &&
+                  item.label.panelNumber !== "unlabeled"
+                    ? `Panel ${item.label.panelNumber}`
+                    : ""
                 } summary:\n${summarizedItem?.summarizedItem.content}`;
               } else if (item.type === "code_or_algorithm") {
                 console.log(
