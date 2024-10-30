@@ -58,8 +58,8 @@ const modelConfig: { [task: string]: { temperature: number; model: Model } } = {
     temperature: 0.2,
     model: "gpt-4o-2024-08-06",
   },
-  mathExplainer: {
-    temperature: 0.1,
+  mathOptimization: {
+    temperature: 0.2,
     model: "gpt-4o-2024-08-06",
   },
   citation: {
@@ -80,7 +80,9 @@ interface Item {
   content: string;
   label?: { labelType: string; labelNumber: string };
   summary?: string;
-  processed?: boolean;
+  optimizedMath?: boolean;
+  replacedCitations?: Boolean;
+  repositioned?: Boolean;
 }
 
 interface ItemAudioMetadata {
@@ -132,9 +134,7 @@ export default async function handler(
   const fileBuffer = request.body as Buffer;
 
   if (fileBuffer.length > 100 * 1024 * 1024) {
-    return reply
-      .status(400)
-      .send({ message: "File size exceeds 100MB limit." });
+    throw new Error("File size exceeds 100MB which is currently not supported");
   }
 
   const __filename = fileURLToPath(import.meta.url);
@@ -178,7 +178,9 @@ export default async function handler(
   });
 
   if (pngPagesOriginal.length > 100) {
-    return reply.status(400).send({ message: "PDF has more than 100 pages." });
+    throw new Error(
+      "pdf has more than 100 pages which is not currently supported"
+    );
   }
 
   console.log("converted pdf pages to images");
@@ -207,6 +209,9 @@ export default async function handler(
       let authorInfoContents = "";
       const pngPages = pngPagesOriginal;
 
+      console.log(
+        `PASS 1: Extracting text from the images\n\nPASS 1.5: Summarizing special items`
+      );
       for (let i = 0; i < pngPages.length; i += batchSize) {
         const batch = pngPages.slice(i, i + batchSize);
 
@@ -216,7 +221,7 @@ export default async function handler(
 
             const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
 
-            Include math expressions in plain text. Do not use LaTeX or any other special formatting for math. Instead using the english version, for example "\\geq" means "greater than or equal to".
+            Please include math expressions.
             
             Include partial items cut off at the start or end of the page. 
             
@@ -270,7 +275,7 @@ export default async function handler(
               extractSchema,
               [pagePath],
               16384,
-              0.1
+              0.2
             );
 
             let items = pageItems?.items;
@@ -356,34 +361,6 @@ export default async function handler(
                     ? ""
                     : item.label.labelNumber
                 } summary:\n${summarizedItem?.summarizedItem.content}`;
-              } else if (item.type === "math") {
-                console.log("summarizing math on page ", i + index + 1);
-                const mathSummarizationSchema = z.object({
-                  summarizedMathItem: z.object({
-                    type: z.enum(["math"]),
-                    content: z.string(),
-                    summary: z.string(),
-                  }),
-                });
-
-                const MATH_SUMMARIZE_PROMPT = `Rewrite the math expression to be more audio friendly with notation converted to words as much as possible. Make sure to do it accurately. 
-                
-                Then write a short summary in plain english. Do not use any notation here. The summary should explain what the expression is and it's purpose within the provided context.`;
-
-                const summarizedMath = await getStructuredOpenAICompletion(
-                  MATH_SUMMARIZE_PROMPT,
-                  `Math to rewrite and summarize:\n${JSON.stringify(
-                    item
-                  )}\n\nPage context:\n${JSON.stringify(items)}`,
-                  modelConfig.mathExplainer.model,
-                  modelConfig.mathExplainer.temperature,
-                  mathSummarizationSchema,
-                  [],
-                  1024
-                );
-
-                item.content = summarizedMath?.summarizedMathItem.content;
-                item.summary = `Math summary: ${summarizedMath?.summarizedMathItem.summary}`;
               } else if (item.type === "code_or_algorithm") {
                 console.log(
                   "summarizing code or algorithm on page ",
@@ -416,19 +393,19 @@ export default async function handler(
               }
 
               //Some manual latex processing
-              item.content = item.content
-                .replace(/\\geq/g, " greater than or equal to ")
-                .replace(/\\leq/g, " less than or equal to ")
-                .replace(/\\rightarrow/g, " approaches ")
-                .replace(/\\infty/g, " infinity ")
-                .replace(/\\mathbb/g, "")
-                .replaceAll("\\(", "")
-                .replaceAll("\\)", "")
-                .replaceAll("\\", "");
+              // item.content = item.content
+              //   .replace(/\\geq/g, " greater than or equal to ")
+              //   .replace(/\\leq/g, " less than or equal to ")
+              //   .replace(/\\rightarrow/g, " approaches ")
+              //   .replace(/\\infty/g, " infinity ")
+              //   .replace(/\\mathbb/g, "")
+              //   .replaceAll("\\(", "")
+              //   .replaceAll("\\)", "")
+              //   .replaceAll("\\", "");
 
-              if (item.type === "text") {
-                item.content === item.content.replace(" - ", " minus ");
-              }
+              // if (item.type === "text") {
+              //   item.content === item.content.replace(" - ", " minus ");
+              // }
             }
 
             return { index: i + index, items };
@@ -480,14 +457,14 @@ export default async function handler(
           item.content.toLocaleLowerCase() === "abstract"
       );
 
-      for (const item of allItems) {
-        if (item.type === "math") {
-          const rephrasedMathMessage =
-            "Rephrased math will use this voice.[break1]";
-          item.content = `${rephrasedMathMessage}${item.content}`;
-          break;
-        }
-      }
+      // for (const item of allItems) {
+      //   if (item.type === "math") {
+      //     const rephrasedMathMessage =
+      //       "Rephrased math will use this voice.[break1]";
+      //     item.content = `${rephrasedMathMessage}${item.content}`;
+      //     break;
+      //   }
+      // }
 
       console.log("filtering unnecessary item types");
       const filteredItems = abstractExists
@@ -566,7 +543,7 @@ export default async function handler(
       );
       console.log("repositioning images and figures");
       for (const item of specialItems) {
-        if (item.processed || !item.label) {
+        if (item.repositioned || !item.label) {
           continue;
         }
 
@@ -651,19 +628,19 @@ export default async function handler(
           filteredItems.push(movedItem);
         }
 
-        item["processed"] = true;
+        item.repositioned = true;
       }
-
-      const referencesItems = allItems.filter(
-        (item) =>
-          item.type === "references_item" || item.type === "references_heading"
-      );
 
       const parsedItemsPath = path.join(fileNameDir, "parsedItems.json");
       fs.writeFileSync(parsedItemsPath, JSON.stringify(allItems, null, 2));
       console.log("Saved raw text extract to", parsedItemsPath);
 
-      console.log("processing citations");
+      console.log("PASS 2: processing citations");
+      const referencesItems = allItems.filter(
+        (item) =>
+          item.type === "references_item" || item.type === "references_heading"
+      );
+
       if (referencesItems.length > 0) {
         const CITATION_REPLACEMENT_PROMPT = `Remove citations unless they are part of the sentence structure and removing them will make the sentence invalid.`;
 
@@ -698,7 +675,69 @@ export default async function handler(
                 );
 
                 item.content = processedItem?.processedContent;
-                item.processed = true;
+                item.replacedCitations = true;
+              }
+            })
+          );
+        }
+      }
+
+      //It is important to replace citations first and then optimize the math
+      console.log("PASS 3: optimizing math for audio");
+      const itemsThatCanIncludeMath = filteredItems.filter((item) =>
+        [
+          "figure_image",
+          "table_rows",
+          "math",
+          "text",
+          "code_or_algorithm",
+        ].includes(item.type)
+      );
+
+      if (itemsThatCanIncludeMath.length > 0) {
+        const MATH_OPTIMIZATION_PROMPT = `The following text will be converted to audio for the user to listen to. Replace math notation and all LaTeX formatting with plain english words to make it more suitable for that purpose. Convert accurately. 
+        
+        Some examples includes changing "+" to "plus" and inserting a "times" when multiplication is implied. Use your best judgment to make the text as pleasant for audio as possible.
+        
+        Convert math notation and special formatting to english words and sentences as much as possble.
+        
+        Note special LaTeX commands like "\\sqrt{x}" that must be changed to "square root of x" or "\\text{something}" that should be changed to just "something". Use your knowledge of LaTeX to remove these commands.`;
+
+        const mathOptimizationSchema = z.object({
+          optimizedContent: z.string(),
+        });
+
+        const MAX_CONCURRENT_ITEMS = 20;
+
+        for (
+          let i = 0;
+          i < itemsThatCanIncludeMath.length;
+          i += MAX_CONCURRENT_ITEMS
+        ) {
+          const itemBatch = itemsThatCanIncludeMath.slice(
+            i,
+            i + MAX_CONCURRENT_ITEMS
+          );
+          console.log(
+            `processing math items ${i} through ${i + MAX_CONCURRENT_ITEMS}`
+          );
+
+          await Promise.all(
+            itemBatch.map(async (item) => {
+              if (item.type === "math" || item.type === "text") {
+                const processedItem = await getStructuredOpenAICompletion(
+                  MATH_OPTIMIZATION_PROMPT,
+                  `Text to optimize:\n${item.content}`,
+                  modelConfig.mathOptimization.model,
+                  modelConfig.mathOptimization.temperature,
+                  mathOptimizationSchema,
+                  [],
+                  16384,
+                  0.2
+                );
+
+                item.content = processedItem?.optimizedContent;
+                item.optimizedMath = true;
               }
             })
           );
@@ -893,39 +932,7 @@ async function synthesizeSpeechInChunks(items: Item[]): Promise<AudioResult> {
   const processItem = async (item: Item) => {
     const chunkAudioBuffers: Buffer[] = [];
 
-    if (item.type === "math") {
-      // Use "Stephen" for math content
-      const contentChunks = splitTextIntoChunks(
-        item.content,
-        MAX_POLLY_CHAR_LIMIT
-      );
-      for (const chunk of contentChunks) {
-        const ssmlChunk = `<speak>${convertBreaks(
-          escapeSSMLCharacters(chunk)
-        )}</speak>`;
-        const audioBuffer = await synthesizeSpeech(ssmlChunk, "Stephen", true);
-        chunkAudioBuffers.push(audioBuffer);
-      }
-
-      // Use "Matthew" for math summary
-      if (item.summary) {
-        const summaryChunks = splitTextIntoChunks(
-          item.summary,
-          MAX_POLLY_CHAR_LIMIT
-        );
-        for (const chunk of summaryChunks) {
-          const ssmlChunk = `<speak>${convertBreaks(
-            escapeSSMLCharacters(chunk)
-          )}</speak>`;
-          const audioBuffer = await synthesizeSpeech(
-            ssmlChunk,
-            "Matthew",
-            true
-          );
-          chunkAudioBuffers.push(audioBuffer);
-        }
-      }
-    } else if (
+    if (
       //Use Matthew for other generated content.
       ["code_or_algorithm", "figure_image", "table_rows"].includes(item.type)
     ) {
@@ -957,9 +964,7 @@ async function synthesizeSpeechInChunks(items: Item[]): Promise<AudioResult> {
       type: item.type,
       startTime: 0,
       itemDuration: itemMetadata.format.duration || 0,
-      transcript: item.summary
-        ? `${removeBreaks(item.content)}\n\n${removeBreaks(item.summary)}`
-        : removeBreaks(item.content),
+      transcript: removeBreaks(item.content),
     };
 
     return { itemAudioBuffer, itemAudioMetadata };
@@ -1240,22 +1245,12 @@ async function synthesizeOpenAISpeech(
 
 async function synthesizeSpeechInChunksOpenAI(items: Item[]): Promise<Buffer> {
   const audioBuffers: Buffer[] = [];
-  const MAX_CONCURRENT_ITEMS = 10;
+  const MAX_CONCURRENT_ITEMS = 20;
 
   const processItem = async (item: Item) => {
     let audioBuffer: Buffer;
 
-    if (item.type === "math" && item.summary) {
-      const contentBuffer = await synthesizeOpenAISpeech(
-        convertBreaks(item.content),
-        "echo"
-      );
-      const summaryBuffer = await synthesizeOpenAISpeech(
-        convertBreaks(item.summary),
-        "onyx"
-      );
-      audioBuffer = Buffer.concat([contentBuffer, summaryBuffer]);
-    } else if (
+    if (
       ["figure_image", "table_rows", "code_or_algorithm"].includes(item.type)
     ) {
       audioBuffer = await synthesizeOpenAISpeech(

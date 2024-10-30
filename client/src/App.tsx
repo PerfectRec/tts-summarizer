@@ -34,7 +34,9 @@ function App() {
     }
 
     setErrorMessage("");
-    setSubmitMessage("You're done!  Check your email in a few mins.");
+    setSubmitMessage(
+      "You're done! Check your inbox (and spam folder) in a few mins."
+    );
 
     const fileBuffer = await file.arrayBuffer();
     const fileName = file.name;
@@ -60,8 +62,8 @@ function App() {
       <h1 className="text-5xl font-bold my-4">paper2audio</h1>
       <div className="mb-4 text-sm">
         paper2audio creates an audio version of your research paper PDF. It
-        narrates all the text of the paper, plus AI-generated summaries of any
-        tables, figures, math or code.
+        narrates all the text of the paper without summarizing it, plus
+        AI-generated summaries of any tables, figures, or code.
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <input
@@ -94,6 +96,11 @@ function App() {
             Better Abstract + Tables and Figures Only
           </option>
         </select> */}
+        <div className="text-sm">
+          This is a new project that we’re actively improving. The audio output
+          is generally good, but not perfect. AI-generated summaries may not be
+          100% accurate.
+        </div>
         <button
           type="submit"
           className="p-2 bg-blue-500 text-white rounded hover:bg-blue-700"
@@ -104,10 +111,10 @@ function App() {
           <div className="text-sm text-red-500">{errorMessage}</div>
         )}
         <div className="text-sm">
-          This is a new project that we’re actively improving. The audio output
-          is generally good, but not perfect. Math heavy papers unfortunately do
-          not naturally translate well to audio. AI-generated summaries may not
-          be 100% accurate.
+          We don't currently support processing complex math notation. We will
+          attempt to read math to you, but it may be too difficult to understand
+          it via audio, and maybe have some inaccuracies. We are actively
+          working on these issues.
         </div>
       </form>
       <div className="mt-16">
