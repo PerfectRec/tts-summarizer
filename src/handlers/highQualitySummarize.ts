@@ -154,7 +154,12 @@ export default async function handler(
       }
       const arrayBuffer = await response.arrayBuffer();
       fileBuffer = Buffer.from(arrayBuffer);
-      cleanedFileName = path.parse(url.pathname).name; // Set the filename from the link
+      const pathParts = url.pathname.split("/");
+      cleanedFileName = pathParts[pathParts.length - 1];
+
+      if (cleanedFileName.endsWith(".pdf")) {
+        cleanedFileName = cleanedFileName.slice(0, -4);
+      }
     } catch (error) {
       return reply
         .status(400)
