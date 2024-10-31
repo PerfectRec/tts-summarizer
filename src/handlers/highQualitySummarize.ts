@@ -170,6 +170,9 @@ export default async function handler(
     cleanedFileName = path.parse(fileName).name;
   }
 
+  // console.log(cleanedFileName);
+  // return;
+
   if (fileBuffer.length > 100 * 1024 * 1024) {
     throw new Error("File size exceeds 100MB which is currently not supported");
   }

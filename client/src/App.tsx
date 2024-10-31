@@ -19,12 +19,14 @@ function App() {
   const handlePdfLinkChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setPdfLink(event.target.value);
     setSubmitMessage("Generate audio");
+    setFile(null);
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       setFile(event.target.files[0]);
       setSubmitMessage("Generate audio");
+      setPdfLink("");
     }
   };
 
