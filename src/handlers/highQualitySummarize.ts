@@ -17,7 +17,7 @@ import {
 } from "openai/resources";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
-import { pdfToPng } from "pdf-to-png-converter";
+import { pdfToPng, PngPageOutput } from "pdf-to-png-converter";
 import { timeStamp } from "console";
 import { uploadFile } from "@aws/s3";
 import { sendEmail } from "@email/transactional";
@@ -48,6 +48,10 @@ type Model =
 const { db } = getDB();
 
 const modelConfig: { [task: string]: { temperature: number; model: Model } } = {
+  pageClassifier: {
+    temperature: 0.2,
+    model: "gpt-4o-2024-08-06",
+  },
   extraction: {
     temperature: 0.3,
     model: "gpt-4o-2024-08-06",
@@ -85,6 +89,7 @@ interface Item {
   optimizedMath?: boolean;
   replacedCitations?: Boolean;
   repositioned?: Boolean;
+  page: number;
 }
 
 interface ItemAudioMetadata {
@@ -92,6 +97,8 @@ interface ItemAudioMetadata {
   startTime: number;
   itemDuration: number;
   transcript: string;
+  page: number;
+  index: number;
 }
 
 interface ItemAudioResult {
@@ -266,6 +273,8 @@ export default async function handler(
       message:
         "Received file and validated summarization method. Wait for result.",
       urls: {
+        title: cleanedFileName,
+        runId: runId,
         uploadedFileUrl: s3pdfFilePath,
         metadataFileUrl: s3metadataFilePath,
         errorFileUrl: s3encodedErrorFilePath,
@@ -279,7 +288,38 @@ export default async function handler(
       let allItems: Item[] = [];
       let abstractDetected = false;
       let authorInfoContents = "";
-      const pngPages = pngPagesOriginal;
+      let allBatchResults: { index: number; relevant: boolean }[] = [];
+
+      console.log(`PASS 0: Determining which pages are relevant`);
+
+      // for (let i = 0; i < pngPagesOriginal.length; i += batchSize) {
+      //   const batch = pngPagesOriginal.slice(i, i + batchSize);
+
+      //   const batchResults = await Promise.all(
+      //     batch.map(async (pngPageOriginal, index) => {
+      //       const pageIsUseful = await classifyPageContent(
+      //         pngPageOriginal.path
+      //       );
+      //       console.log(`Page ${i + index + 1} is relevant: `, pageIsUseful);
+      //       return { index: index + i, relevant: pageIsUseful };
+      //     })
+      //   );
+
+      //   allBatchResults = allBatchResults.concat(batchResults);
+      // }
+
+      const pngPages = pngPagesOriginal.filter((_, index) => {
+        const result = allBatchResults.find((result) => result.index === index);
+        return result?.relevant ?? true;
+      });
+
+      console.log(
+        `Filtered out ${
+          pngPagesOriginal.length - pngPages.length
+        } irrelevant pages`
+      );
+
+      //return;
 
       console.log(
         `PASS 1: Extracting text from the images\n\nPASS 1.5: Summarizing special items`
@@ -352,6 +392,9 @@ export default async function handler(
             );
 
             let items = pageItems?.items;
+            items.forEach((item: any) => {
+              item.page = i + index + 1; // Set the page number
+            });
 
             console.log("processed page ", i + index + 1);
 
@@ -937,6 +980,33 @@ export default async function handler(
   return;
 }
 
+const classifyPageContent = async (pagePath: string): Promise<boolean> => {
+  // Define criteria for useful content
+  const USEFUL_CONTENT_PROMPT = `Determine if the following page is relevant and contains on topic information. If it contains meta information about journal or publisher or some other meta information, return false. For example if it a research paper anything that is not the main content of the paper is irrelevant. Accurately judge what is and what is not relevant`;
+
+  const classificationSchema = z.object({
+    isRelevant: z.boolean(),
+  });
+
+  try {
+    const classificationResult = await getStructuredOpenAICompletion(
+      USEFUL_CONTENT_PROMPT,
+      ``,
+      modelConfig.pageClassifier.model,
+      modelConfig.pageClassifier.temperature,
+      classificationSchema,
+      [pagePath],
+      64,
+      0.7
+    );
+
+    return classificationResult?.isRelevant ?? true;
+  } catch (error) {
+    console.error("Error during classification", error);
+    return true;
+  }
+};
+
 async function getWebContext(link: string): Promise<string> {
   console.log("Searching the web for: ", link);
   const result = await firecrawl.search(link);
@@ -1034,6 +1104,8 @@ async function synthesizeSpeechInChunks(items: Item[]): Promise<AudioResult> {
       startTime: 0,
       itemDuration: itemMetadata.format.duration || 0,
       transcript: removeBreaks(item.content),
+      page: item.page,
+      index: 0,
     };
 
     return { itemAudioBuffer, itemAudioMetadata };
@@ -1058,8 +1130,11 @@ async function synthesizeSpeechInChunks(items: Item[]): Promise<AudioResult> {
 
   //We need to adjust the start times here
   let startTime = 0;
+  let index = 0;
   for (const itemMetadata of audioMetadata) {
     itemMetadata.startTime = startTime;
+    itemMetadata.index = index;
+    index += 1;
     startTime += itemMetadata.itemDuration;
   }
 
