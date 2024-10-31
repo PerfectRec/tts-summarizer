@@ -503,12 +503,12 @@ export default async function handler(
       }
 
       console.log("Improving author section");
-      const IMPROVE_AUTHOR_INFO_PROMPT = `Rearrange all the author info to make it more readable. Keep only the author names and affiliations.
+      const IMPROVE_AUTHOR_INFO_PROMPT = `Rearrange all the author info to make it more readable. Keep only the author names and affiliations. Group authors by affiliation. 
       
       Example:
-      Author1, Affiliation1[break1]Author2, Affiliation2[break1]Author3, Affiliation3[break1] .....
+      Author 1_1, Author 1_2, Author 1_3,.. Affiliation1[break1]Author 2_1, Author 2_2,.. Affiliation2[break1]Author3_1, Author 3_2,.. Affiliation3[break1] .....
       
-      If the affiliation is not available leave it empty. Do not repeat the same author multiple times.`;
+      If the affiliation is not available for a user leave it empty. Do not repeat the same author or affiliation multiple times.`;
 
       const improveAuthorInfoSchema = z.object({
         authorInfo: z.string(),
