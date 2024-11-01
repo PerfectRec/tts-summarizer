@@ -35,3 +35,38 @@ export const uploadFile = async (
     throw error;
   }
 };
+
+export const getFileContent = async (fileName: string): Promise<string> => {
+  const params = {
+    Bucket: bucketName,
+    Key: fileName,
+  };
+
+  try {
+    const data = await s3.getObject(params).promise();
+    return data.Body?.toString("utf-8") || "";
+  } catch (err) {
+    const error = err as Error;
+    console.error(`Error fetching file. ${error.message}`);
+    throw error;
+  }
+};
+
+export const uploadStatus = async (
+  runId: string,
+  status: string,
+  additionalData: Record<string, any>
+): Promise<void> => {
+  const combinedData = { status, ...additionalData };
+  const fileName = `${runId}.json`;
+  const fileContent = Buffer.from(JSON.stringify(combinedData));
+
+  try {
+    await uploadFile(fileContent, fileName);
+    console.log(`Status for ${runId} uploaded successfully.`);
+  } catch (err) {
+    const error = err as Error;
+    console.error(`Error uploading status for ${runId}: ${error.message}`);
+    throw error;
+  }
+};

@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import fastifyStatic from "@fastify/static";
 // Handler imports
 import highQualitySummarizeHandler from "@handlers/highQualitySummarize";
+import checkStatusHandler from "@handlers/checkStatus";
 
 const envToLogger = {
   development: {
@@ -58,9 +59,10 @@ fastify.register(fastifyStatic, {
 
 // Routes
 fastify.post("/summarize", highQualitySummarizeHandler);
+fastify.get("/checkStatus", checkStatusHandler);
 
 const port = Number(process.env.PORT) || 4242;
-const host = ("RENDER" in process.env) ? `0.0.0.0` : `localhost`;
+const host = "RENDER" in process.env ? `0.0.0.0` : `localhost`;
 
 // Run the server!
 try {

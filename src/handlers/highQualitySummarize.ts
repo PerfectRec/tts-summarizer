@@ -19,7 +19,7 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { pdfToPng, PngPageOutput } from "pdf-to-png-converter";
 import { timeStamp } from "console";
-import { uploadFile } from "@aws/s3";
+import { uploadFile, uploadStatus } from "@aws/s3";
 import { sendEmail } from "@email/transactional";
 import { subscribeEmail } from "@email/marketing";
 import { v4 as uuidv4 } from "uuid";
@@ -146,6 +146,21 @@ export default async function handler(
   let fileBuffer: Buffer;
   let cleanedFileName: string;
 
+  const runId = uuidv4();
+
+  /* Supported Status
+  - Received
+  - Processing
+  - Completed
+  - Error
+  */
+
+  uploadStatus(runId, "Received", {
+    message: "Request received",
+  });
+
+  console.log(`Created ${runId}.json in S3`);
+
   if (link && link !== "") {
     try {
       const url = new URL(link);
@@ -194,8 +209,6 @@ export default async function handler(
     fs.mkdirSync(tempDir);
   }
 
-  const runId = uuidv4();
-
   const tempImageDir = path.join(
     tempDir,
     "images",
@@ -235,6 +248,7 @@ export default async function handler(
   const pdfFileName = `${cleanedFileName}.pdf`;
   const pdfFilePath = `${email}/${pdfFileName}`;
   const s3pdfFilePath = `https://${process.env.AWS_BUCKET_NAME}/${pdfFilePath}`;
+  const pdfFileUrl = await uploadFile(fileBuffer, pdfFilePath);
 
   //MP3
   const audioFileName = `${cleanedFileName}.mp3`;
@@ -256,6 +270,11 @@ export default async function handler(
   )}/${encodeURIComponent(cleanedFileName)}-error.json`;
   const s3encodedErrorFilePath = `https://${process.env.AWS_BUCKET_NAME}/${encodedErrorFilePath}`;
 
+  uploadStatus(runId, "Processing", {
+    message: "Started processing",
+    uploadedFileUrl: s3pdfFilePath,
+  });
+
   console.log("converted pdf pages to images");
 
   if (summarizationMethod === "ultimate") {
@@ -270,16 +289,8 @@ export default async function handler(
     */
 
     reply.status(200).send({
-      message:
-        "Received file and validated summarization method. Wait for result.",
-      urls: {
-        title: cleanedFileName,
-        runId: runId,
-        uploadedFileUrl: s3pdfFilePath,
-        metadataFileUrl: s3metadataFilePath,
-        errorFileUrl: s3encodedErrorFilePath,
-        audioFileUrl: s3encodedAudioFilePath,
-      },
+      fileName: cleanedFileName,
+      runId: runId,
     });
 
     //convert to JSON
@@ -902,12 +913,28 @@ export default async function handler(
       );
       console.log("Generated audio file");
 
-      const pdfFileUrl = await uploadFile(fileBuffer, pdfFilePath);
       const audioFileUrl = await uploadFile(audioBuffer, audioFilePath);
       const metadataFileUrl = await uploadFile(
         Buffer.from(JSON.stringify(audioMetadata)),
         metadataFilePath
       );
+
+      let extractedTitle = "Title does not exist in processed doc";
+      // Extract the title from the main_title item
+      const mainTitleItem = filteredItems.find(
+        (item) => item.type === "main_title"
+      );
+      if (mainTitleItem) {
+        extractedTitle = mainTitleItem.content;
+      }
+
+      uploadStatus(runId, "Completed", {
+        message: "Generated audio output and metadata",
+        uploadedFileUrl: s3pdfFilePath,
+        audioFileUrl: s3encodedAudioFilePath,
+        metadataFileUrl: s3metadataFilePath,
+        extractedTitle,
+      });
 
       if (shouldSendEmailToUser) {
         const emailSubject = `Your audio paper ${cleanedFileName} is ready!`;
@@ -924,11 +951,16 @@ export default async function handler(
         console.log("Email sent successfully to:", email);
       }
     } catch (error) {
-      const pdfFileUrl = await uploadFile(fileBuffer, pdfFilePath);
       const errorFileUrl = await uploadFile(
         Buffer.from(JSON.stringify(error, Object.getOwnPropertyNames(error))),
         errorFilePath
       );
+
+      uploadStatus(runId, "Error", {
+        message: `Error: ${error}`,
+        errorFileUrl: s3encodedErrorFilePath,
+        uploadedFileUrl: s3pdfFilePath,
+      });
 
       if (shouldSendEmailToUser) {
         const emailSubject = `Failed to generate audio paper ${cleanedFileName} for ${email}`;
