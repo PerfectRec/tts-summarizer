@@ -65,7 +65,7 @@ const modelConfig: { [task: string]: { temperature: number; model: Model } } = {
     model: "gpt-4o-2024-08-06",
   },
   mathOptimization: {
-    temperature: 0.2,
+    temperature: 0.4,
     model: "gpt-4o-2024-08-06",
   },
   citation: {
@@ -825,7 +825,9 @@ export default async function handler(
         
         Convert math notation and special formatting to english words and sentences as much as possble.
         
-        Note special LaTeX commands like "\\sqrt{x}" that must be changed to "square root of x" or "\\text{something}" that should be changed to just "something". Use your knowledge of LaTeX to remove these commands.`;
+        Note special LaTeX commands like "\\sqrt{x}" that must be changed to "square root of x" or "\\text{something}" that should be changed to just "something". Use your knowledge of LaTeX to remove these commands.
+        
+        If there is no math notation in the provided item do not change anything. Only change existing math do not change anything else.`;
 
         const mathOptimizationSchema = z.object({
           optimizedContent: z.string(),
@@ -851,7 +853,7 @@ export default async function handler(
               if (item.type === "math" || item.type === "text") {
                 const processedItem = await getStructuredOpenAICompletion(
                   MATH_OPTIMIZATION_PROMPT,
-                  `Text to optimize:\n${item.content}`,
+                  `Text to optimize:\n\n${item.content}`,
                   modelConfig.mathOptimization.model,
                   modelConfig.mathOptimization.temperature,
                   mathOptimizationSchema,
