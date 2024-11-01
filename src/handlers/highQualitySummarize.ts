@@ -822,7 +822,9 @@ export default async function handler(
       );
 
       if (itemsWithCitations.length > 0) {
-        const CITATION_REPLACEMENT_PROMPT = `Remove citations from the user text unless they are part of the sentence structure and removing them will make the sentence invalid. 
+        const CITATION_REPLACEMENT_PROMPT = `Remove citations from the user text. 
+        
+        If the citation is part of a phrase like "such as <citations>" then remove the phrase.
         
         Please return the provided text with only citations removed.`;
 
