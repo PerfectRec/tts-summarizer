@@ -154,13 +154,18 @@ function App() {
             {" "}
             Joe Golden
           </a>{" "}
-          and
+          ,
           <a
             href="https://www.linkedin.com/in/chandradeepc/"
             className="text-blue-500"
           >
             {" "}
             Chandradeep Chowdhury
+          </a>
+          and
+          <a href="https://www.linkedin.com/in/muralirkrishnan/" className="">
+            {" "}
+            Murali Krishnan
           </a>
           . Its goal: completely or partially replace reading a research paper.
         </p>
