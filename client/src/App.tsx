@@ -153,17 +153,20 @@ function App() {
           >
             {" "}
             Joe Golden
-          </a>{" "}
+          </a>
           ,
           <a
             href="https://www.linkedin.com/in/chandradeepc/"
             className="text-blue-500"
           >
             {" "}
-            Chandradeep Chowdhury
+            Chandradeep Chowdhury{" "}
           </a>
           and
-          <a href="https://www.linkedin.com/in/muralirkrishnan/" className="">
+          <a
+            href="https://www.linkedin.com/in/muralirkrishnan/"
+            className="text-blue-500"
+          >
             {" "}
             Murali Krishnan
           </a>
