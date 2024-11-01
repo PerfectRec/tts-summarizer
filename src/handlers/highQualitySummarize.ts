@@ -60,7 +60,7 @@ const modelConfig: { [task: string]: { temperature: number; model: Model } } = {
     temperature: 0.2,
     model: "gpt-4o-2024-08-06",
   },
-  authorInfoEditor: {
+  authorInfoExtractor: {
     temperature: 0.2,
     model: "gpt-4o-2024-08-06",
   },
@@ -81,6 +81,11 @@ type PollyGenerativeVoices = "Ruth" | "Matthew" | "Stephen";
 
 type OpenAIVoice = "alloy" | "onyx" | "echo" | "fable" | "shimmer" | "nova";
 
+interface Author {
+  authorName: string;
+  affiliation: string;
+}
+
 interface Item {
   type: string;
   content: string;
@@ -90,6 +95,8 @@ interface Item {
   replacedCitations?: Boolean;
   repositioned?: Boolean;
   page: number;
+  mathSymbolFrequency?: number;
+  hasCitations: boolean;
 }
 
 interface ItemAudioMetadata {
@@ -352,7 +359,9 @@ export default async function handler(
             
             Please use your best judgement to determine the abstract even if it is not explicitly labeled as such.
             
-            Usually, text item starting with a superscript number is an endnote.`;
+            Usually, text item starting with a superscript number is an endnote.
+            
+            Score each item on a scale of 0-5 based on how many complex math symbols appear in it.`;
 
             const extractSchema = z.object({
               items: z.array(
@@ -386,6 +395,8 @@ export default async function handler(
                     "keywords",
                   ]),
                   content: z.string(),
+                  mathSymbolFrequency: z.number(),
+                  hasCitations: z.boolean(),
                 })
               ),
             });
@@ -418,7 +429,11 @@ export default async function handler(
                   combinedContent += " " + items[i + 1].content;
                   i++;
                 }
-                combinedItems.push({ type: "math", content: combinedContent });
+                combinedItems.push({
+                  type: "math",
+                  content: combinedContent,
+                  mathSymbolFrequency: 5,
+                });
               } else {
                 combinedItems.push(items[i]);
               }
@@ -557,32 +572,62 @@ export default async function handler(
       }
 
       console.log("Improving author section");
-      const IMPROVE_AUTHOR_INFO_PROMPT = `Rearrange all the author info to make it more readable. Keep only the author names and affiliations. Group authors by affiliation. 
-      
-      Example:
-      Author 1_1, Author 1_2, Author 1_3,.. Affiliation1[break1]Author 2_1, Author 2_2,.. Affiliation2[break1]Author3_1, Author 3_2,.. Affiliation3[break1] .....
+      const IMPROVE_AUTHOR_INFO_PROMPT = `Extract all the author info to make. Keep only the author names and affiliations.
       
       If the affiliation is not available for a user leave it empty. Do not repeat the same author or affiliation multiple times.`;
 
-      const improveAuthorInfoSchema = z.object({
-        authorInfo: z.string(),
+      const authorExtractSchema = z.object({
+        authors: z.array(
+          z.object({
+            authorName: z.string(),
+            affiliation: z.string(),
+          })
+        ),
       });
 
       const improvedAuthorInfo = await getStructuredOpenAICompletion(
         IMPROVE_AUTHOR_INFO_PROMPT,
         `Here is the author info: ${authorInfoContents}`,
-        modelConfig.authorInfoEditor.model,
-        modelConfig.authorInfoEditor.temperature,
-        improveAuthorInfoSchema,
+        modelConfig.authorInfoExtractor.model,
+        modelConfig.authorInfoExtractor.temperature,
+        authorExtractSchema,
         pngPages.slice(0, 5).map((page) => page.path)
       );
 
       const firstAuthorInfoIndex = allItems.findIndex(
         (item) => item.type === "author_info"
       );
+
       if (firstAuthorInfoIndex !== -1) {
+        const authors = improvedAuthorInfo?.authors || [];
+        const totalAuthors = authors.length;
+        const maxAuthors = 5;
+        const authorGroups: { [affiliation: string]: string[] } = {};
+
+        // Group authors by affiliation
+        authors
+          .slice(0, maxAuthors)
+          .forEach(({ authorName, affiliation }: Author) => {
+            if (!authorGroups[affiliation]) {
+              authorGroups[affiliation] = [];
+            }
+            authorGroups[affiliation].push(authorName);
+          });
+
+        // Compile the author info into the desired format
+        let compiledAuthorInfo = Object.entries(authorGroups)
+          .map(([affiliation, authorNames]) => {
+            return `[break1]${authorNames.join(", ")} from ${affiliation}`;
+          })
+          .join(", ");
+
+        // Add the total number of authors if more than 5
+        if (totalAuthors > maxAuthors) {
+          compiledAuthorInfo = `There are ${totalAuthors} authors, including ${compiledAuthorInfo}`;
+        }
+
         allItems[firstAuthorInfoIndex].type = "improved_author_info";
-        allItems[firstAuthorInfoIndex].content = improvedAuthorInfo?.authorInfo;
+        allItems[firstAuthorInfoIndex].content = compiledAuthorInfo;
       }
 
       const abstractExists = allItems.some(
@@ -771,16 +816,18 @@ export default async function handler(
       console.log("Saved raw text extract to", parsedItemsPath);
 
       console.log("PASS 2: processing citations");
-      const referencesItems = allItems.filter(
-        (item) =>
-          item.type === "references_item" || item.type === "references_heading"
+
+      const itemsWithCitations = filteredItems.filter(
+        (item) => item.hasCitations
       );
 
-      if (referencesItems.length > 0) {
-        const CITATION_REPLACEMENT_PROMPT = `Remove citations unless they are part of the sentence structure and removing them will make the sentence invalid.`;
+      if (itemsWithCitations.length > 0) {
+        const CITATION_REPLACEMENT_PROMPT = `Remove citations from the user text unless they are part of the sentence structure and removing them will make the sentence invalid. 
+        
+        Please return the provided text with only citations removed.`;
 
         const referenceSchema = z.object({
-          processedContent: z.string(),
+          textWithCitationsRemoved: z.string(),
         });
 
         // const referencesContent = referencesItems
@@ -789,8 +836,15 @@ export default async function handler(
 
         const MAX_CONCURRENT_ITEMS = 20;
 
-        for (let i = 0; i < filteredItems.length; i += MAX_CONCURRENT_ITEMS) {
-          const itemBatch = filteredItems.slice(i, i + MAX_CONCURRENT_ITEMS);
+        for (
+          let i = 0;
+          i < itemsWithCitations.length;
+          i += MAX_CONCURRENT_ITEMS
+        ) {
+          const itemBatch = itemsWithCitations.slice(
+            i,
+            i + MAX_CONCURRENT_ITEMS
+          );
           console.log(
             `processing text items ${i} through ${i + MAX_CONCURRENT_ITEMS}`
           );
@@ -800,7 +854,7 @@ export default async function handler(
               if (item.type === "text") {
                 const processedItem = await getStructuredOpenAICompletion(
                   CITATION_REPLACEMENT_PROMPT,
-                  `Text to process:\n${item.content}`,
+                  `User text:\n${item.content}`,
                   modelConfig.citation.model,
                   modelConfig.citation.temperature,
                   referenceSchema,
@@ -809,7 +863,7 @@ export default async function handler(
                   0.2
                 );
 
-                item.content = processedItem?.processedContent;
+                item.content = processedItem?.textWithCitationsRemoved;
                 item.replacedCitations = true;
               }
             })
@@ -817,16 +871,14 @@ export default async function handler(
         }
       }
 
-      //It is important to replace citations first and then optimize the math
+      //It is important to replace citations first and then optimize the math - but only in content with math.
       console.log("PASS 3: optimizing math for audio");
-      const itemsThatCanIncludeMath = filteredItems.filter((item) =>
-        [
-          "figure_image",
-          "table_rows",
-          "math",
-          "text",
-          "code_or_algorithm",
-        ].includes(item.type)
+      const itemsThatCanIncludeMath = filteredItems.filter(
+        (item) =>
+          ["figure_image", "table_rows", "code_or_algorithm"].includes(
+            item.type
+          ) ||
+          (item.mathSymbolFrequency && item.mathSymbolFrequency > 1)
       );
 
       if (itemsThatCanIncludeMath.length > 0) {
@@ -834,11 +886,7 @@ export default async function handler(
         
         Some examples includes changing "+" to "plus" and inserting a "times" when multiplication is implied. Use your best judgment to make the text as pleasant for audio as possible.
         
-        Convert math notation and special formatting to english words and sentences as much as possble.
-        
-        Note special LaTeX commands like "\\sqrt{x}" that must be changed to "square root of x" or "\\text{something}" that should be changed to just "something". Use your knowledge of LaTeX to remove these commands.
-        
-        If there is no math notation in the provided item do not change anything. Only change existing math do not change anything else.`;
+        Only convert math notation, do not alter the rest of the text.`;
 
         const mathOptimizationSchema = z.object({
           optimizedContent: z.string(),
@@ -864,7 +912,7 @@ export default async function handler(
               if (item.type === "math" || item.type === "text") {
                 const processedItem = await getStructuredOpenAICompletion(
                   MATH_OPTIMIZATION_PROMPT,
-                  `Text to optimize:\n\n${item.content}`,
+                  `Text to optimize:\n${item.content}`,
                   modelConfig.mathOptimization.model,
                   modelConfig.mathOptimization.temperature,
                   mathOptimizationSchema,
