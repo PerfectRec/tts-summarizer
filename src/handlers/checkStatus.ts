@@ -12,7 +12,7 @@ export default async function handler(
   reply: FastifyReply
 ) {
   const { runId } = request.query;
-  const fileName = `${runId}.json`;
+  const fileName = `runStatus/${runId}.json`;
 
   try {
     const fileContent = await getFileContent(fileName);

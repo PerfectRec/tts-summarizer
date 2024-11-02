@@ -58,7 +58,7 @@ export const uploadStatus = async (
   additionalData: Record<string, any>
 ): Promise<void> => {
   const combinedData = { status, ...additionalData };
-  const fileName = `${runId}.json`;
+  const fileName = `runStatus/${runId}.json`;
   const fileContent = Buffer.from(JSON.stringify(combinedData));
 
   try {

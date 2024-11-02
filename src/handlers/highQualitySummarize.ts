@@ -166,7 +166,7 @@ export default async function handler(
     message: "Request received",
   });
 
-  console.log(`Created ${runId}.json in S3`);
+  console.log(`Created runStatus/${runId}.json in S3`);
 
   if (link && link !== "") {
     try {
