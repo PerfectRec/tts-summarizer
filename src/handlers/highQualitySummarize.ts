@@ -96,7 +96,9 @@ interface Item {
   repositioned?: Boolean;
   page: number;
   mathSymbolFrequency?: number;
-  hasCitations: boolean;
+  hasCitations?: boolean;
+  isStartCutoff?: boolean;
+  isEndCutOff?: boolean;
 }
 
 interface ItemAudioMetadata {
@@ -414,9 +416,6 @@ export default async function handler(
             );
 
             let items = pageItems?.items;
-            items.forEach((item: any) => {
-              item.page = i + index + 1; // Set the page number
-            });
 
             console.log("processed page ", i + index + 1);
 
@@ -439,6 +438,10 @@ export default async function handler(
               }
             }
             items = combinedItems;
+
+            items.forEach((item: any) => {
+              item.page = i + index + 1; // Set the page number
+            });
 
             //console.log(JSON.stringify(items, null, 2));
 
@@ -553,9 +556,13 @@ export default async function handler(
               //   .replaceAll("\\)", "")
               //   .replaceAll("\\", "");
 
-              // if (item.type === "text") {
-              //   item.content === item.content.replace(" - ", " minus ");
-              // }
+              if (item.type === "text") {
+                const { isStartCutoff, isEndCutoff } = isTextCutoff(
+                  item.content
+                );
+                item.isStartCutoff = isStartCutoff;
+                item.isEndCutoff = isEndCutoff;
+              }
             }
 
             return { index: i + index, items };
@@ -1507,4 +1514,17 @@ async function synthesizeSpeechInChunksOpenAI(items: Item[]): Promise<Buffer> {
   }
 
   return Buffer.concat(audioBuffers);
+}
+
+function isTextCutoff(text: string): {
+  isStartCutoff: boolean;
+  isEndCutoff: boolean;
+} {
+  // Check if the first sentence starts with a properly capitalized word
+  const isStartCutoff = !/^[A-Z]/.test(text.trim());
+
+  // Check if the last sentence ends with a proper terminating punctuation
+  const isEndCutoff = !/(?<!\.)[.!?)\]]$/.test(text.trim());
+
+  return { isStartCutoff, isEndCutoff };
 }
