@@ -97,7 +97,7 @@ interface Item {
   page: number;
   mathSymbolFrequency?: number;
   hasCitations?: boolean;
-  isStartCutoff?: boolean;
+  isStartCutOff?: boolean;
   isEndCutOff?: boolean;
 }
 
@@ -378,7 +378,7 @@ export default async function handler(
                     "non_figure_image",
                     "table_rows",
                     "table_descrption_or_heading",
-                    "table_note",
+                    "table_notes",
                     "author_info",
                     "footnotes",
                     "meta_or_publication_info",
@@ -557,11 +557,11 @@ export default async function handler(
               //   .replaceAll("\\", "");
 
               if (item.type === "text") {
-                const { isStartCutoff, isEndCutoff } = isTextCutoff(
+                const { isStartCutOff, isEndCutOff } = isTextCutoff(
                   item.content
                 );
-                item.isStartCutoff = isStartCutoff;
-                item.isEndCutoff = isEndCutoff;
+                item.isStartCutOff = isStartCutOff;
+                item.isEndCutOff = isEndCutOff;
               }
             }
 
@@ -738,6 +738,7 @@ export default async function handler(
         console.log("repositioning ", labelType, " ", labelNumber);
         let mentionIndex = -1;
         let headingIndex = -1;
+        let textWithoutEndCutoffIndex = -1;
 
         if (labelNumber !== "unlabeled") {
           console.log("searching for matches for", labelType, labelNumber);
@@ -787,9 +788,9 @@ export default async function handler(
         }
 
         const startIndex =
-          mentionIndex !== -1 ? mentionIndex : filteredItems.indexOf(item);
+          mentionIndex !== -1 ? mentionIndex : filteredItems.indexOf(item) + 1;
 
-        for (let i = startIndex + 1; i < filteredItems.length; i++) {
+        for (let i = startIndex; i < filteredItems.length; i++) {
           if (filteredItems[i].type.includes("heading")) {
             headingIndex = i;
             console.log(
@@ -798,14 +799,34 @@ export default async function handler(
             );
             break;
           }
+          if (
+            filteredItems[i].type === "text" &&
+            !filteredItems[i].isEndCutOff
+          ) {
+            textWithoutEndCutoffIndex = i;
+            console.log(
+              "found the first text without end cutoff below mention in",
+              JSON.stringify(filteredItems[i])
+            );
+            break;
+          }
         }
 
-        console.log("moving the item above the first heading or to the end");
+        console.log(
+          "moving the item based on end cutoff logic or above the first heading or to the end"
+        );
         const currentIndex = filteredItems.indexOf(item);
-        const insertIndex =
-          headingIndex !== -1 && headingIndex > currentIndex
-            ? headingIndex - 1
-            : headingIndex;
+        let insertIndex;
+
+        if (textWithoutEndCutoffIndex !== -1) {
+          insertIndex =
+            textWithoutEndCutoffIndex +
+            (currentIndex < textWithoutEndCutoffIndex ? 0 : 1);
+        } else if (headingIndex !== -1) {
+          insertIndex = headingIndex + (currentIndex < headingIndex ? -1 : 0);
+        } else {
+          insertIndex = filteredItems.length; // Default to end if no suitable position is found
+        }
 
         const [movedItem] = filteredItems.splice(currentIndex, 1);
 
@@ -825,15 +846,17 @@ export default async function handler(
       console.log("PASS 2: processing citations");
 
       const itemsWithCitations = filteredItems.filter(
-        (item) => item.hasCitations
+        (item) => item.hasCitations && !item.isEndCutOff
       );
 
       if (itemsWithCitations.length > 0) {
         const CITATION_REPLACEMENT_PROMPT = `Remove citations from the user text. 
         
         If the citation is part of a phrase like "such as <citations>" then remove the phrase.
+
+        Keep references to tables and figures.
         
-        Please return the provided text as it is with only citations removed.`;
+        Please return the provided text as it is with only citations removed. Do not attempt to complete the text.`;
 
         const referenceSchema = z.object({
           textWithCitationsRemoved: z.string(),
@@ -860,20 +883,26 @@ export default async function handler(
 
           await Promise.all(
             itemBatch.map(async (item) => {
-              if (item.type === "text") {
-                const processedItem = await getStructuredOpenAICompletion(
-                  CITATION_REPLACEMENT_PROMPT,
-                  `User text:\n${item.content}`,
-                  modelConfig.citation.model,
-                  modelConfig.citation.temperature,
-                  referenceSchema,
-                  [],
-                  16384,
-                  0.2
-                );
+              try {
+                if (item.type === "text") {
+                  const processedItem = await getStructuredOpenAICompletion(
+                    CITATION_REPLACEMENT_PROMPT,
+                    `User text:\n${item.content}`,
+                    modelConfig.citation.model,
+                    modelConfig.citation.temperature,
+                    referenceSchema,
+                    [],
+                    16384,
+                    0.1
+                  );
 
-                item.content = processedItem?.textWithCitationsRemoved;
-                item.replacedCitations = true;
+                  item.content = processedItem?.textWithCitationsRemoved;
+                  item.replacedCitations = true;
+                }
+              } catch (error) {
+                console.log(
+                  `Non fatal error while processing citations: ${error}`
+                );
               }
             })
           );
@@ -918,20 +947,24 @@ export default async function handler(
 
           await Promise.all(
             itemBatch.map(async (item) => {
-              if (item.type === "math" || item.type === "text") {
-                const processedItem = await getStructuredOpenAICompletion(
-                  MATH_OPTIMIZATION_PROMPT,
-                  `Text to optimize:\n${item.content}`,
-                  modelConfig.mathOptimization.model,
-                  modelConfig.mathOptimization.temperature,
-                  mathOptimizationSchema,
-                  [],
-                  16384,
-                  0.2
-                );
+              try {
+                if (item.type === "math" || item.type === "text") {
+                  const processedItem = await getStructuredOpenAICompletion(
+                    MATH_OPTIMIZATION_PROMPT,
+                    `Text to optimize:\n${item.content}`,
+                    modelConfig.mathOptimization.model,
+                    modelConfig.mathOptimization.temperature,
+                    mathOptimizationSchema,
+                    [],
+                    16384,
+                    0.2
+                  );
 
-                item.content = processedItem?.optimizedContent;
-                item.optimizedMath = true;
+                  item.content = processedItem?.optimizedContent;
+                  item.optimizedMath = true;
+                }
+              } catch (error) {
+                console.log(`Non fatal error while processing math: ${error}`);
               }
             })
           );
@@ -1517,14 +1550,14 @@ async function synthesizeSpeechInChunksOpenAI(items: Item[]): Promise<Buffer> {
 }
 
 function isTextCutoff(text: string): {
-  isStartCutoff: boolean;
-  isEndCutoff: boolean;
+  isStartCutOff: boolean;
+  isEndCutOff: boolean;
 } {
   // Check if the first sentence starts with a properly capitalized word
-  const isStartCutoff = !/^[A-Z]/.test(text.trim());
+  const isStartCutOff = !/^[A-Z]/.test(text.trim());
 
   // Check if the last sentence ends with a proper terminating punctuation
-  const isEndCutoff = !/(?<!\.)[.!?)\]]$/.test(text.trim());
+  const isEndCutOff = !/(?<!\.)[.!?)\]]$/.test(text.trim());
 
-  return { isStartCutoff, isEndCutoff };
+  return { isStartCutOff, isEndCutOff };
 }
