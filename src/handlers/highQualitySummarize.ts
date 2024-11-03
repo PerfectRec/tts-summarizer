@@ -69,7 +69,7 @@ const modelConfig: { [task: string]: { temperature: number; model: Model } } = {
     model: "gpt-4o-2024-08-06",
   },
   citation: {
-    temperature: 0.1,
+    temperature: 0,
     model: "gpt-4o-2024-08-06",
   },
 };
@@ -453,7 +453,7 @@ export default async function handler(
               }
 
               if (item.type.includes("heading")) {
-                item.content = `[break1]${item.content}[break1]`;
+                item.content = `[break0.7]${item.content}[break0.7]`;
               }
 
               if (item.type === "figure_image" || item.type === "table_rows") {
@@ -617,7 +617,7 @@ export default async function handler(
         // Compile the author info into the desired format
         let compiledAuthorInfo = Object.entries(authorGroups)
           .map(([affiliation, authorNames]) => {
-            return `[break1]${authorNames.join(", ")} from ${affiliation}`;
+            return `[break0.6]${authorNames.join(", ")} from ${affiliation}`;
           })
           .join(", ");
 
@@ -826,7 +826,7 @@ export default async function handler(
         
         If the citation is part of a phrase like "such as <citations>" then remove the phrase.
         
-        Please return the provided text with only citations removed.`;
+        Please return the provided text as it is with only citations removed.`;
 
         const referenceSchema = z.object({
           textWithCitationsRemoved: z.string(),
@@ -1452,11 +1452,13 @@ function escapeSSMLCharacters(text: string): string {
 }
 
 function convertBreaks(text: string): string {
-  return text.replace(/\[break(\d+)\]/g, '<break time="$1s"/>');
+  // Adjust the regex to match decimal numbers
+  return text.replace(/\[break(\d+(\.\d+)?)\]/g, '<break time="$1s"/>');
 }
 
 function removeBreaks(text: string): string {
-  return text.replace(/\[break\d+\]/g, "");
+  // Adjust the regex to match decimal numbers
+  return text.replace(/\[break\d+(\.\d+)?\]/g, "");
 }
 
 async function synthesizeOpenAISpeech(
