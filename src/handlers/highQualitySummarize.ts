@@ -4,7 +4,7 @@ import { LlamaParseReader } from "llamaindex";
 import Anthropic from "@anthropic-ai/sdk";
 import FirecrawlApp, { FirecrawlDocument } from "@mendable/firecrawl-js";
 import "dotenv/config";
-import fs from "fs-extra";
+import fs, { remove } from "fs-extra";
 import path, { parse } from "path";
 import os from "os";
 import { ImageBlockParam, MessageParam } from "@anthropic-ai/sdk/resources";
@@ -99,6 +99,11 @@ interface Item {
   hasCitations?: boolean;
   isStartCutOff?: boolean;
   isEndCutOff?: boolean;
+  allAbbreviations?: {
+    abbreviation: string;
+    expansion: string;
+    type: "pronounced_as_a_single_word" | "pronounced_with_initials";
+  }[];
 }
 
 interface ItemAudioMetadata {
@@ -353,6 +358,8 @@ export default async function handler(
 
             const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
 
+            One paragraph should always be one single item.
+
             Please include math expressions.
             
             Include partial items cut off at the start or end of the page. 
@@ -395,10 +402,24 @@ export default async function handler(
                     "endnotes_heading",
                     "JEL_classification",
                     "keywords",
+                    "acknowledgements_heading",
+                    "acknowledgements_content",
                   ]),
                   content: z.string(),
                   mathSymbolFrequency: z.number(),
                   hasCitations: z.boolean(),
+                  allAbbreviations: z.array(
+                    z.object({
+                      abbreviation: z.string(),
+                      expansion: z.string().optional(),
+                      type: z
+                        .enum([
+                          "pronounced_as_a_single_word",
+                          "pronounced_with_initials",
+                        ])
+                        .optional(),
+                    })
+                  ),
                 })
               ),
             });
@@ -473,7 +494,7 @@ export default async function handler(
                   }),
                 });
 
-                const FIGURE_SUMMARIZE_PROMPT = `Write a detailed explanation for the figures. Replace the content field with a detailed explanation. Summarize the size of changes / effects / estimates / results in the figures. To help understand them better, use context from the paper and any note below them.
+                const FIGURE_SUMMARIZE_PROMPT = `Write a concise and effective summary for the figures. Replace the content field with the summary. Describe the size of changes / effects / estimates / results in the figures. To help understand them better, use context from the paper and any note below them. Make sure to describe the main purpose of the figure by identifying the key pattern or idea being displayed. 
                 
                 Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct label type and label number. This is very important. Look for cues around the figure and use your best judgement to determine it. Possible label types can be Figure, Chart, Image etc.
                 
@@ -481,7 +502,7 @@ export default async function handler(
                 
                 Do not use markdown. Use plain text.`;
 
-                const TABLE_SUMMARIZE_PROMPT = `Write a concise and effective summary for the table. Replace the raw rows in the content field with the summary. Summarize the size of changes / effects / estimates / results in the tables. To help understand them better, use context from the paper and any note below them. The summary should capture the main point of the table. Try to use as few numbers as possible. Keep in mind that the user cannot see the table as they will be listening to your summary. 
+                const TABLE_SUMMARIZE_PROMPT = `Write a concise and effective summary for the table. Replace the raw rows in the content field with the summary. Summarize the size of changes / effects / estimates / results in the tables. Be very accurate while doing this analysis. You must get the patterns correct. To help understand them better, use context from the paper and any note below them. The summary should capture the main point of the table. Try to use as few numbers as possible. Keep in mind that the user cannot see the table as they will be listening to your summary. 
                 
                 Add the label "Table X" where X is the table number indicated in the page. You need to extract the correct table number. This is very important. Look for cues around the table and use your best judgement to determine it. Add the panel number that is being summarized, if it is mentioned.
                 
@@ -654,6 +675,8 @@ export default async function handler(
       // }
 
       console.log("filtering unnecessary item types");
+
+      let inAcknowledgementsSection = true;
       const filteredItems = abstractExists
         ? allItems.filter((item: Item, index: number, array: any[]) => {
             if (!abstractDetected) {
@@ -673,6 +696,16 @@ export default async function handler(
                 "abstract_content",
               ].includes(item.type);
             } else {
+              // Check for acknowledgements section
+              if (item.type === "acknowledgements_heading") {
+                inAcknowledgementsSection = true;
+              } else if (item.type.includes("heading")) {
+                inAcknowledgementsSection = false;
+              }
+
+              if (inAcknowledgementsSection) {
+                return false; // Skip items in the acknowledgements section
+              }
               // Check for math items between endnotes
               if (
                 item.type === "math" &&
@@ -688,6 +721,14 @@ export default async function handler(
                   return false; // Remove this math item
                 }
               }
+
+              if (
+                !removeBreaks(item.content).trim() ||
+                removeBreaks(item.content).trim() === ""
+              ) {
+                return false;
+              }
+
               return [
                 "text",
                 "heading",
@@ -700,6 +741,16 @@ export default async function handler(
             }
           })
         : allItems.filter((item: Item, index: number, array: any[]) => {
+            // Check for acknowledgements section
+            if (item.type === "acknowledgements_heading") {
+              inAcknowledgementsSection = true;
+            } else if (item.type.includes("heading")) {
+              inAcknowledgementsSection = false;
+            }
+
+            if (inAcknowledgementsSection) {
+              return false; // Skip items in the acknowledgements section
+            }
             // Check for math items between endnotes
             if (item.type === "math" && index > 0 && index < array.length - 1) {
               const prevItem = array[index - 1];
@@ -711,6 +762,14 @@ export default async function handler(
                 return false; // Remove this math item
               }
             }
+
+            if (
+              !removeBreaks(item.content).trim() ||
+              removeBreaks(item.content).trim() === ""
+            ) {
+              return false;
+            }
+
             return [
               "main_title",
               "improved_author_info",
@@ -829,6 +888,19 @@ export default async function handler(
         }
 
         const [movedItem] = filteredItems.splice(currentIndex, 1);
+
+        // Check if the item at the insert index is the same type and has the same label
+        // while (
+        //   insertIndex < filteredItems.length &&
+        //   filteredItems[insertIndex].type === movedItem.type &&
+        //   filteredItems[insertIndex].label &&
+        //   filteredItems[insertIndex].label?.labelType ===
+        //     movedItem.label?.labelType &&
+        //   filteredItems[insertIndex].label?.labelNumber ===
+        //     movedItem.label?.labelNumber
+        // ) {
+        //   insertIndex += 1; // Move below the item
+        // }
 
         if (insertIndex !== -1) {
           filteredItems.splice(insertIndex, 0, movedItem);
@@ -970,6 +1042,64 @@ export default async function handler(
           );
         }
       }
+
+      //Process abbreviations
+      console.log("Processing abbreviations");
+
+      const abbreviationMap: {
+        [key: string]: { expansion: string; type: string };
+      } = {};
+      const abbreviationOccurrences: { [key: string]: number } = {};
+
+      filteredItems.forEach((item) => {
+        if (item.allAbbreviations) {
+          item.allAbbreviations.forEach((abbr) => {
+            try {
+              const abbrKey = abbr.abbreviation.toLowerCase().replace(/s$/, "");
+              const expansion = abbr.expansion || "";
+
+              // Track occurrences
+              abbreviationOccurrences[abbrKey] =
+                (abbreviationOccurrences[abbrKey] || 0) + 1;
+
+              // Store the first expansion found
+              if (!abbreviationMap[abbrKey] && expansion) {
+                abbreviationMap[abbrKey] = { expansion, type: abbr.type || "" };
+              }
+
+              // Check first two appearances
+              if (
+                abbreviationOccurrences[abbrKey] <= 2 &&
+                !item.content.includes(expansion)
+              ) {
+                item.content = item.content.replace(
+                  new RegExp(`\\b${abbr.abbreviation}\\b`, "g"),
+                  expansion
+                );
+              }
+
+              //Add periods for "pronounced_with_initials"
+              if (
+                abbr.type === "pronounced_with_initials" &&
+                !abbr.abbreviation.includes(".")
+              ) {
+                const baseAbbr = abbr.abbreviation.replace(/s$/, "");
+                const withPeriods = baseAbbr.split("").join(".");
+
+                // Create a regex to match both singular and plural forms
+                const regex = new RegExp(`\\b(${baseAbbr})(s?)\\b`, "g");
+
+                // Replace based on whether the matched item has 's' or not
+                item.content = item.content.replace(regex, (match, p1, p2) => {
+                  return p2 ? `${withPeriods}s` : withPeriods;
+                });
+              }
+            } catch (error) {
+              console.log("Error while processing abbreviations: ", error);
+            }
+          });
+        }
+      });
 
       const filteredItemsPath = path.join(fileNameDir, "filteredItems.json");
       fs.writeFileSync(
@@ -1188,7 +1318,9 @@ function splitTextIntoChunks(text: string, maxLength: number): string[] {
   return chunks;
 }
 
-async function synthesizeSpeechInChunks(items: Item[]): Promise<AudioResult> {
+export async function synthesizeSpeechInChunks(
+  items: Item[]
+): Promise<AudioResult> {
   const itemAudioResults: ItemAudioResult[] = [];
   const MAX_CONCURRENT_ITEMS = 10;
 
