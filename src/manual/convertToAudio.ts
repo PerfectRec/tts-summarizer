@@ -1,7 +1,7 @@
 import fs from "fs-extra";
-import path from "path";
-import { synthesizeSpeechInChunks } from "../handlers/highQualitySummarize"; // Adjust the import path as necessary
+import path from "path"; // Adjust the import path as necessary
 import { uploadFile } from "@aws/s3";
+import { synthesizeSpeechInChunks } from "@utils/polly";
 
 interface Item {
   type: string;

@@ -19,14 +19,16 @@ export default async function handler(
 
     if (!fileContent) {
       return reply.status(200).send({
-        status: "Missing",
+        status: "Error",
+        errorType: "MissingFile",
         message: "No such file exists",
       });
     }
     reply.status(200).send(JSON.parse(fileContent));
   } catch (error) {
     reply.status(500).send({
-      status: "Corrupted",
+      status: "Error",
+      errorType: "CorruptedFile",
       message: "The requested file is not properly formatted.",
     });
   }
