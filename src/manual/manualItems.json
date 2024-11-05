@@ -1,7 +1,7 @@
 [
   {
     "type": "introduction",
-    "content": "Hello Babak, We are excited to share the audio version of your research paper on the Cognitive Training Trial. At Paper2Audio, we use AI to create Our audio narratives all the text of the paper without summarizing it, plus include AI-generated summaries of all tables, figures and math. This is our work in progress. We appreciate your feedback. This paper concludes that advanced cognitive training resulted in improvements for the elderly population studied. Now let us proceed with the paper.",
+    "content": "Hello Babak, We are excited to share the audio version of your research paper on the Cognitive Training Trial. At Paper2Audio, we use AI to create our audio narratives, including all the text of the paper without summarizing it, plus AI-generated summaries of all tables, figures and math. This is a work in progress. We appreciate your feedback. This paper concludes that advanced cognitive training resulted in improvements for the elderly population studied. Now let us proceed with the paper.",
     "page": 1
   },
   {
@@ -9,18 +9,12 @@
     "content": "Ten-Year Effects of the Advanced Cognitive Training for Independent and Vital Elderly Cognitive Training Trial on Cognition and Everyday Functioning in Older Adults",
     "mathSymbolFrequency": 0,
     "hasCitations": false,
-    "allAbbreviations": [
-      {
-        "abbreviation": "ACTIVE",
-        "expansion": "Advanced Cognitive Training for Independent and Vital Elderly",
-        "type": "pronounced_as_a_single_word"
-      }
-    ],
+    "allAbbreviations": [],
     "page": 1
   },
   {
     "type": "improved_author_info",
-    "content": "There are 11 authors, including [break0.6]George W. Rebok from Department of Mental Health, Johns Hopkins University, Baltimore, Maryland, [break0.6]Karlene Ball from Department of Psychology, University of Alabama at Birmingham, Alabama, [break0.6]Lin T. Guey, Hae-Young Kim from New England Research Institutes, Watertown, Massachusetts, [break0.6]Richard N. Jones from Social and Health Policy Research, Hebrew SeniorLife, Boston, Massachusetts",
+    "content": "There are 11 authors, including [break0.6]George W. Rebok from Johns Hopkins University, [break0.6]Karlene Ball from University of Alabama at Birmingham, [break0.6]Lin T. Guey, Hae-Young Kim from New England Research Institutes, [break0.6]Richard N. Jones from Hebrew SeniorLife",
     "mathSymbolFrequency": 0,
     "hasCitations": false,
     "allAbbreviations": [],
@@ -28,15 +22,10 @@
   },
   {
     "type": "abstract_content",
-    "content": "OBJECTIVES: To determine the effects of cognitive training on cognitive abilities and everyday function over 10 years.\nDESIGN: Ten-year follow-up of a randomized, controlled single-blind trial (Advanced Cognitive Training for Independent and Vital Elderly (ACTIVE)) with three intervention groups and a no-contact control group.\nSETTING: Six U.S. cities.\nPARTICIPANTS: A volunteer sample of 2,832 persons (mean baseline age 73.6; 26% African American) living independently.\nINTERVENTION: Ten training sessions for memory, reasoning, or speed of processing; four sessions of booster training 11 and 35 months after initial training.\nMEASUREMENTS: Objectively measured cognitive abilities and self-reported and performance-based measures of everyday function.\nRESULTS: Participants in each intervention group reported less difficulty with instrumental activities of daily living (I.A.D.Ls) (memory: effect size = 0.48, 99% confidence interval (C.I) = 0.12–0.84; reasoning: effect size = 0.38, 99% C.I = 0.02–0.74; speed of processing: effect size = 0.36, 99% C.I = 0.01–0.72). At a mean age of 82, approximately 60% of trained participants, versus 50% of controls (P < .05), were at or above their baseline level of self-reported I.A.D.L function at 10 years. The reasoning and speed-of-processing interventions maintained their effects on their targeted cognitive abilities at 10 years (reasoning: effect size = 0.23, 99% C.I = 0.09–0.38; speed of processing: effect size = 0.66, 99% C.I = 0.43–0.88). Memory training effects were no longer maintained for memory performance. Booster training produced additional and durable improvement for the reasoning intervention for reasoning performance (effect size = 0.21, 99% C.I = 0.01–0.41) and the speed-of-processing intervention for speed-of-processing performance (effect size = 0.62, 99% C.I = 0.31–0.93).\nCONCLUSION: Each Advanced Cognitive Training for Independent and Vital Elderly cognitive intervention resulted in less decline in self-reported I.A.D.L compared with the control group. Reasoning and speed, but not memory, training resulted in improved targeted cognitive abilities for 10 years.",
-    "mathSymbolFrequency": 4,
-    "hasCitations": true,
+    "content": "OBJECTIVES: To determine the effects of cognitive training on cognitive abilities and everyday function over 10 years. DESIGN: Ten-year follow-up of a randomized, controlled single-blind trial (Advanced Cognitive Training for Independent and Vital Elderly (ACTIVE)) with three intervention groups and a no-contact control group. SETTING: Six U.S. cities. PARTICIPANTS: A volunteer sample of 2,832 persons (mean baseline age 73.6; 26% African American) living independently. INTERVENTION: Ten training sessions for memory, reasoning, or speed of processing; four sessions of booster training 11 and 35 months after initial training. MEASUREMENTS: Objectively measured cognitive abilities and self-reported and performance-based measures of everyday functioning. RESULTS: Participants in each intervention group reported less difficulty with instrumental activities of daily living (I.A.D.Ls) (memory: effect size = 0.48, 99% confidence interval (C.I) = 0.12–0.84; reasoning: effect size = 0.38, 99% C.I = 0.02–0.74; speed of processing: effect size = 0.36, 99% C.I = 0.01–0.72). At a mean age of 82, approximately 60% of trained participants, versus 50% of controls (P < .05), were at or above their baseline level of self-reported I.A.D.L function at 10 years. The reasoning and speed-of-processing interventions maintained their effects on their targeted cognitive abilities at 10 years (reasoning: effect size = 0.23, 99% C.I = 0.09–0.38; speed of processing: effect size = 0.66, 99% C.I = 0.43–0.88). Memory training effects were no longer maintained for memory performance. Booster training produced additional and durable improvement for the reasoning intervention for reasoning performance (effect size = 0.21, 99% C.I = 0.01–0.41) and the speed-of-processing intervention for speed-of-processing performance (effect size = 0.62, 99% C.I = 0.31–0.93). CONCLUSION: Each Advanced Cognitive Training for Independent and Vital Elderly cognitive intervention resulted in less decline in self-reported I.A.D.L compared with the control group. Reasoning and speed, but not memory, training resulted in improved targeted cognitive abilities for 10 years.",
+    "mathSymbolFrequency": 5,
+    "hasCitations": false,
     "allAbbreviations": [
-      {
-        "abbreviation": "ACTIVE",
-        "expansion": "Advanced Cognitive Training for Independent and Vital Elderly",
-        "type": "pronounced_as_a_single_word"
-      },
       {
         "abbreviation": "IADLs",
         "expansion": "instrumental activities of daily living",
@@ -46,6 +35,11 @@
         "abbreviation": "CI",
         "expansion": "confidence interval",
         "type": "pronounced_with_initials"
+      },
+      {
+        "abbreviation": "ACTIVE",
+        "expansion": "Advanced Cognitive Training for Independent and Vital Elderly",
+        "type": "pronounced_as_a_single_word"
       }
     ],
     "page": 1
@@ -68,10 +62,15 @@
   },
   {
     "type": "text",
-    "content": "ACTIVE is a multisite, randomized, controlled clinical trial, with recruitment from March 1998 through October 1999 in six metropolitan areas. Community-dwelling adults aged 65 and older were eligible. Exclusion criteria were significant cognitive dysfunction (Mini-Mental State Examination (M.M.S.E) score <23); functional impairment (dependency or regular assistance in activities of daily living (A.D.Ls) on Minimum Dataset (M.D.S) Home Care); self-reported diagnosis of Alzheimer’s disease, stroke within the last 12 months, or certain cancers; current chemotherapy or radiation therapy; or poor vision, hearing, or communicative ability that would have interfered with the intervention or outcome assessments. Participants (N = 2,832, average age 73.6, average education 13 years, 74% white and 26% African American, 76% female) were randomly assigned to one of three intervention groups (memory, reasoning, or speed-of-processing training) or a no-contact control group. Outcome assessments were conducted immediately and 1, 2, 3, 5, and 10 years after the intervention. Institutional review boards at participating institutions approved study procedures, and all participants provided written informed consent.",
+    "content": "Advanced Cognitive Training for Independent and Vital Elderly is a multisite, randomized, controlled clinical trial, with recruitment from March 1998 through October 1999 in six metropolitan areas. Community-dwelling adults aged 65 and older were eligible. Exclusion criteria were significant cognitive dysfunction (Mini-Mental State Examination (M.M.S.E) score <23); functional impairment (dependency or regular assistance in activities of daily living (A.D.Ls) on Minimum Dataset (M.D.S) Home Care); self-reported diagnosis of Alzheimer’s disease, stroke within the last 12 months, or certain cancers; current chemotherapy or radiation therapy; or poor vision, hearing, or communicative ability that would have interfered with the intervention or outcome assessments. Participants (N = 2,832, average age 73.6, average education 13 years, 74% white and 26% African American, 76% female) were randomly assigned to one of three intervention groups (memory, reasoning, or speed-of-processing training) or a no-contact control group. Outcome assessments were conducted immediately and 1, 2, 3, 5, and 10 years after the intervention. Institutional review boards at participating institutions approved study procedures, and all participants provided written informed consent.",
     "mathSymbolFrequency": 0,
     "hasCitations": true,
     "allAbbreviations": [
+      {
+        "abbreviation": "ACTIVE",
+        "expansion": "Advanced Cognitive Training for Independent and Vital Elderly",
+        "type": "pronounced_as_a_single_word"
+      },
       {
         "abbreviation": "MMSE",
         "expansion": "Mini-Mental State Examination",
@@ -127,7 +126,7 @@
   },
   {
     "type": "text",
-    "content": "Cognitive outcome measures assessed the effect of each cognitive training intervention on its targeted cognitive ability. Memory outcomes involved measures of episodic verbal memory: Rey Auditory-Verbal Learning Test total of five learning trials, the Hopkins Verbal Learning Test total of three learning trials, and the Rivermead Behavioural Paragraph Recall test immediate recall. Reasoning outcomes involved measures requiring identification of patterns including total correct for Letter Series, Letter Sets, and Word Series. Speed-of-processing outcomes involved three Useful Field of View (U.F.O.V) tasks requiring identification and location of information, with 75% accuracy, under varying levels of cognitive demand. Functional outcome measures were used to assess whether training-related cognitive improvements improved everyday function. There were three measure of daily function. The self-reported measure of everyday instrumental activities of daily living function was the instrumental activities of daily living difficulty subscore from the Minimum Dataset Home Care, which assesses performance in the past 7 days on 19 daily tasks spanning meal preparation, housework, finances, health care, telephoning, shopping, travel, and need for assistance in dressing, personal hygiene, and bathing. The validity and clinical utility of Minimum Dataset scores have been demonstrated.",
+    "content": "Cognitive outcome measures assessed the effect of each cognitive training intervention on its targeted cognitive ability. Memory outcomes involved measures of episodic verbal memory: Rey Auditory-Verbal Learning Test total of five learning trials, the Hopkins Verbal Learning Test total of three learning trials, and the Rivermead Behavioural Paragraph Recall test immediate recall. Reasoning outcomes involved measures requiring identification of patterns including total correct for Letter Series, Letter Sets, and Word Series. Speed-of-processing outcomes involved three Useful Field of View (U.F.O.V) tasks requiring identification and location of information, with 75% accuracy, under varying levels of cognitive demand. Functional outcome measures were used to assess whether training-related cognitive improvements improved everyday function. There were three measure of daily function. The self-reported measure of everyday Instrumental Activities of Daily Living function was the Instrumental Activities of Daily Living difficulty subscore from the Minimum Dataset Home Care, which assesses performance in the past 7 days on 19 daily tasks spanning meal preparation, housework, finances, health care, telephoning, shopping, travel, and need for assistance in dressing, personal hygiene, and bathing. The validity and clinical utility of Minimum Dataset scores have been demonstrated. The performance-based measure of daily function were Everyday Problem Solving, comprising the Everyday Problems Test and Observed Tasks of Daily Living; and Everyday Speed, comprising Complex Reaction Time and Timed Instrumental Activities of Daily Living.",
     "mathSymbolFrequency": 0,
     "hasCitations": true,
     "allAbbreviations": [
@@ -138,7 +137,7 @@
       },
       {
         "abbreviation": "IADL",
-        "expansion": "instrumental activities of daily living",
+        "expansion": "Instrumental Activities of Daily Living",
         "type": "pronounced_with_initials"
       },
       {
@@ -149,23 +148,6 @@
     ],
     "page": 2,
     "isStartCutOff": false,
-    "isEndCutOff": false,
-    "replacedCitations": true
-  },
-  {
-    "type": "text",
-    "content": "21-22 The second measure involved observed performance on everyday Problem Solving, comprising the Everyday Problems Test and Observed Tasks of Daily Living; and Everyday Speed comprising Complex Reaction Time and Timed I.A.D.L.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": true,
-    "allAbbreviations": [
-      {
-        "abbreviation": "IADL",
-        "expansion": "instrumental activities of daily living",
-        "type": "pronounced_with_initials"
-      }
-    ],
-    "page": 2,
-    "isStartCutOff": true,
     "isEndCutOff": false,
     "replacedCitations": true
   },
@@ -183,6 +165,11 @@
     "mathSymbolFrequency": 0,
     "hasCitations": true,
     "allAbbreviations": [
+      {
+        "abbreviation": "ACTIVE",
+        "expansion": "Advanced Cognitive Training for Independent and Vital Elderly",
+        "type": "pronounced_as_a_single_word"
+      },
       {
         "abbreviation": "MMSE",
         "expansion": "Mini-Mental State Examination",
@@ -276,7 +263,7 @@
   },
   {
     "type": "figure_image",
-    "content": "Figure 1  summary:\nThe flowchart in Figure 1 illustrates the profile of the ACTIVE trial, detailing the 10-year effects on cognition and functioning. It shows the progression from baseline assessment of 5,000 individuals to the randomization of 2,832 participants into different training groups: Memory, Reasoning, Speed, and Control. The chart tracks the number of participants completing interventions, receiving booster sessions, and being assessed at various intervals (immediate post-test, 1 year, 2 years, 3 years, 5 years, and 10 years). It also notes attrition due to deactivations, including deaths, withdrawals, and site decisions, with specific numbers provided for each stage.",
+    "content": "Figure 1  summary:\nThe flowchart illustrates the profile of the ACTIVE trial, starting with 5,000 participants assessed for eligibility. Out of these, 2,832 were randomized into four groups: Memory Training, Reasoning Training, Speed Training, and a Control group. The chart details the intervention process, immediate post-test results, booster sessions, and follow-ups at 1, 2, 3, 5, and 10 years. It includes information on participant attrition due to death, withdrawal, and site decisions, as well as the number of participants assessed at each stage. The chart highlights the long-term follow-up and attrition rates over the 10-year period.",
     "mathSymbolFrequency": 0,
     "hasCitations": false,
     "allAbbreviations": [],
@@ -306,23 +293,13 @@
   },
   {
     "type": "table_rows",
-    "content": "Table 1  summary:\nThe table presents baseline characteristics of participants across four groups: Memory, Reasoning, Speed of Processing, and Control. The average age is around 73.5 years, with a majority being female (about 76%). Most participants are White (around 73-75%), followed by Black (about 25-27%). Education averages 13.5 years. Marriage rates are similar across groups, around 35-37%. Cognitive scores are consistent, with Mini-Mental State Examination scores averaging 27.3-27.4. Physical function scores vary slightly, with the Speed of Processing group scoring highest. Alcohol consumption shows most are light drinkers, and disease history is similar across groups, with hypertension being the most common condition.",
+    "content": "Table 1  summary:\nThe table presents baseline characteristics of participants across four groups: Memory, Reasoning, Speed of Processing, and Control. The average age is around 73.5 years, with a slightly higher average in the Control group. The majority of participants are female, ranging from 73.6% to 76.8%. Most participants are White, followed by Black, with a small percentage categorized as Other or unknown. Education levels are similar across groups, averaging about 13.5 years. Marriage rates are around 35-37%. Cognitive scores and physical function scores are comparable among groups. Alcohol consumption varies, with the Control group having the highest percentage of nondrinkers. Depression scores are low across all groups. Common health issues include hypertension, diabetes, and chronic obstructive pulmonary disease, with similar prevalence across groups.",
     "mathSymbolFrequency": 0,
     "hasCitations": false,
     "allAbbreviations": [
       {
         "abbreviation": "SD",
         "expansion": "Standard Deviation",
-        "type": "pronounced_with_initials"
-      },
-      {
-        "abbreviation": "ADLs",
-        "expansion": "Activities of Daily Living",
-        "type": "pronounced_with_initials"
-      },
-      {
-        "abbreviation": "IADLs",
-        "expansion": "Instrumental Activities of Daily Living",
         "type": "pronounced_with_initials"
       }
     ],
@@ -336,7 +313,7 @@
   },
   {
     "type": "text",
-    "content": "Sixty-seven percent of the sample was retained 5 years after training and 44% at 10 years. Death (40%) was the primary reason for nonparticipation at 10 years, followed by participant decision to withdraw (35%) or site decision not to withdraw the participant because of continued missed visits in the absence of explicit refusal (17%). Predictors of attrition at 10 years included older age, male sex, not being married, higher alcohol consumption, more physical and mental health problems, and worse performance on cognitive outcomes. Attrition rates and predictors of attrition were similar between intervention groups.",
+    "content": "Sixty-seven percent of the sample was retained 5 years after training and 44% at 10 years. Death (40%) was the primary reason for nonparticipation at 10 years, followed by participant decision to withdraw (35%) or site decision to withdraw the participant because of continued missed visits in the absence of explicit refusal (17%). Predictors of attrition at 10 years included older age, male sex, not being married, higher alcohol consumption, more physical and mental health problems, and worse performance on cognitive outcomes. Attrition rates and predictors of attrition were similar between intervention groups.",
     "mathSymbolFrequency": 0,
     "hasCitations": false,
     "allAbbreviations": [],
@@ -354,7 +331,7 @@
   },
   {
     "type": "text",
-    "content": "Mean scores at baseline, change from baseline to Year 10, and the effect size of the intervention on each cognitive outcome are shown in Table 2. All interventions led to immediate improvement in the trained cognitive ability (Figure 2). This improvement was retained for 10 years in the reasoning and speed trained groups (Table 2). The effect sizes indicate a small effect of the reasoning intervention (0.23) on the reasoning outcome and a medium to large effect of the speed intervention (0.66) on the speed outcome at 10 years. The effect of the memory intervention (0.06) on the memory outcome at 10 years was not significant.",
+    "content": "Mean scores at baseline, change from baseline to Year 10, and the effect size of the intervention on each cognitive outcome are shown in Table 2. All interventions produced immediate improvement in the trained cognitive ability (Figure 2). This improvement was retained for 10 years in the reasoning and speed trained groups (Table 2). The effect sizes indicate a small effect of the reasoning intervention (0.23) on the reasoning outcome and a medium to large effect of the speed intervention (0.66) on the speed outcome at 10 years. The effect of the memory intervention (0.06) on the memory outcome at 10 years was not significant.",
     "mathSymbolFrequency": 1,
     "hasCitations": false,
     "allAbbreviations": [],
@@ -364,7 +341,7 @@
   },
   {
     "type": "figure_image",
-    "content": "Figure 2  summary:\nFigure 2 illustrates the cognitive outcomes over time for different training groups. It shows mean scores for three cognitive abilities: memory, reasoning, and speed of processing. Each training group is evaluated at various time points, with higher scores indicating better performance. The figure also notes the sample sizes, representing the number of participants with complete data for each cognitive outcome at each time point.",
+    "content": "Figure 2  summary:\nFigure 2 shows cognitive outcomes over time for different training groups. Graph A represents memory scores, Graph B shows reasoning scores, and Graph C illustrates speed of processing scores. Each graph displays mean scores for each cognitive outcome across various time points, with higher scores indicating better performance. The sample sizes indicate the number of participants with complete data at each time point.",
     "mathSymbolFrequency": 0,
     "hasCitations": false,
     "allAbbreviations": [],
@@ -378,9 +355,9 @@
   },
   {
     "type": "table_rows",
-    "content": "Table 2  summary:\nThe table presents the effect of training on cognitive and functional outcomes over 10 years. In the memory domain, the intervention group showed a mean change of -10.6, with an effect size of 0.06, and 35.9% remained at or above baseline. For reasoning, the intervention group had a mean change of -3.2, with an effect size of -0.02, and 60% stayed at or above baseline. In speed of processing, the intervention group experienced a mean change of -144.4, with an effect size of -0.07, and 47.2% remained at or above baseline. The control group generally showed similar declines across all domains.",
-    "mathSymbolFrequency": 4,
-    "hasCitations": false,
+    "content": "Table 2  summary:\nThe table presents the effect of training on cognitive and functional outcomes over ten years. It compares the three treatments, memory, reasoning and speed of processing, to a control group.  The memory treatment did not produce a statistically significant change in the the memory assessment, whereas the reasoning and speed treatments did for their assessments.  After the reasoning treatment, 73.6 percent scored at or above their baseline level after 10 years, compared to 61.7 percent in the control group.  Similarly, after the speed of processing treatment, 70.7 percent scored at or above their baseline level after 10 years, compared to 47.8 in the control group.  In both of these cases, the comparison is statistically significant, with P less than 0.01.  All three treatments improved instrumental activity of daily living difficulty, with the 3 changes all being statistically significant.  The other two outcomes measured were everyday problem solving and everyday speed of processing, both of which did not have statistically significant changes from the treatments.",
+    "mathSymbolFrequency": 5,
+    "hasCitations": true,
     "allAbbreviations": [],
     "page": 6,
     "label": {
@@ -392,10 +369,16 @@
   },
   {
     "type": "text",
-    "content": "Similarly, there were significant effects of booster training for the reasoning (effect size = 0.21, CI = 0.01–0.41) and speed (effect size = 0.62, 99% CI = 0.31–0.93) interventions but not for the memory intervention.",
+    "content": "Similarly, there were significant effects of booster training for the reasoning (effect size = 0.21, confidence interval = 0.01–0.41) and speed (effect size = 0.62, 99% confidence interval = 0.31–0.93) interventions but not for the memory intervention.",
     "mathSymbolFrequency": 1,
     "hasCitations": false,
-    "allAbbreviations": [],
+    "allAbbreviations": [
+      {
+        "abbreviation": "CI",
+        "expansion": "confidence interval",
+        "type": "pronounced_with_initials"
+      }
+    ],
     "page": 3,
     "isStartCutOff": false,
     "isEndCutOff": false
@@ -420,7 +403,7 @@
   },
   {
     "type": "text",
-    "content": "At Year 10, participants in all three intervention groups reported less difficulty performing I.A.D.Ls than did those in control groups; however, only reasoning-trained participants reported significantly less difficulty than control participants at Year 10 (effect sizes: reasoning = −0.48; memory = −0.38; speed = −0.36 for self-reported I.A.D.L difficulty over years; Figure 3). The functional decline was first evident between Years 2 and 3 for all groups.",
+    "content": "At Year 10, participants in all three intervention groups reported less difficulty performing I.A.D.Ls than did those in control groups during Years 3 to 5 but not thereafter (Table S1). The decline in self-reported I.A.D.L function was first evident between Years 2 and 3 for all groups. From Years 3 to 5, the decline was less in the three intervention groups than in the control group. This difference in self-reported I.A.D.L function between trained participants and nontrained control participants was then maintained as all participants continued to decline (report more I.A.D.L difficulties) from Years 5 to 10.",
     "mathSymbolFrequency": 1,
     "hasCitations": false,
     "allAbbreviations": [
@@ -436,43 +419,7 @@
   },
   {
     "type": "text",
-    "content": "From Years 3 to 5, the decline was less in the three intervention groups than in the control group.",
-    "mathSymbolFrequency": 1,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 3,
-    "isStartCutOff": false,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "This difference in self-reported I.A.D.L function between trained participants and nontrained control participants was then maintained as all participants continued to decline (report more I.A.D.L difficulties) from Years 5 to 10.",
-    "mathSymbolFrequency": 1,
-    "hasCitations": false,
-    "allAbbreviations": [
-      {
-        "abbreviation": "IADL",
-        "expansion": "Instrumental Activities of Daily Living",
-        "type": "pronounced_with_initials"
-      }
-    ],
-    "page": 3,
-    "isStartCutOff": false,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "Results of the reliable maintenance analysis (Table 2) are consistent with this pattern of temporal decline.",
-    "mathSymbolFrequency": 1,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 3,
-    "isStartCutOff": false,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "Whereas at 10 years, 49.3% of control participants reported the same or improved level of I.A.D.L difficulty as at baseline, the proportions of trained participants reporting the same or improved level of I.A.D.L difficulty were significantly higher (memory, 61.6%; reasoning, 60.2%; speed, 58.5%). There was no effect of training (Table 2) or added booster training (not shown) on their performance-based measures of everyday function.",
+    "content": "Results of the reliable maintenance analysis (Table 2) are consistent with this pattern of temporal decline. Whereas at Year 10 years, 49.3% of control participants assessed the same or improved level of I.A.D.L difficulty as at baseline, the proportions of trained participants reporting the same or improved level of I.A.D.L difficulty were significantly higher (memory, 61.6%; reasoning, 60.2%; speed, 58.5%). There was no effect of training (Table S2) or added booster training (not shown) on performance-based measures of everyday function. Finally, the results of models using multiple imputation for missing data and results of the sensitivity analysis (data not shown) were the same as the main results reported above.",
     "mathSymbolFrequency": 1,
     "hasCitations": true,
     "allAbbreviations": [
@@ -486,16 +433,6 @@
     "isStartCutOff": false,
     "isEndCutOff": false,
     "replacedCitations": true
-  },
-  {
-    "type": "text",
-    "content": "Finally, the results described using multiple imputation for missing data and results of the sensitivity analysis (data not shown) were the same as the main results reported above.",
-    "mathSymbolFrequency": 1,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 3,
-    "isStartCutOff": false,
-    "isEndCutOff": false
   },
   {
     "type": "heading",
@@ -507,240 +444,36 @@
   },
   {
     "type": "text",
-    "content": "In the ACTIVE trial, 10 to 14 weeks of organized cognitive training delivered to community-dwelling older adults resulted in significant improvements in cognitive abilities and better preserved functional status than in nontrained",
+    "content": "In the ACTIVE trial, 10 to 14 weeks of organized cognitive training delivered to community-dwelling older adults resulted in significant improvements in cognitive abilities and better preserved functional status than in nontrained individuals.",
     "mathSymbolFrequency": 0,
     "hasCitations": false,
-    "allAbbreviations": [],
+    "allAbbreviations": [
+      {
+        "abbreviation": "ACTIVE",
+        "expansion": "",
+        "type": "pronounced_as_a_single_word"
+      }
+    ],
     "page": 3,
-    "isStartCutOff": true,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "persons ten years later.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": true,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "Each training intervention produced large and significant improvements in the trained cognitive ability.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 5,
     "isStartCutOff": false,
     "isEndCutOff": false
   },
   {
     "type": "text",
-    "content": "These improvements dissipated slowly but persisted to at least five years for memory training and to ten years for reasoning and speed-of-processing training.",
+    "content": "persons 10 years later Each training intervention produced large and significant improvements in the trained cognitive ability These improvements dissipated slowly but persisted to at least years for memory training and to years for reasoning and speed-of-processing training This is the first demonstration of long-term transfer of the training effects on cognitive abilities to daily function Unlike for the nontrained participants cognitive function for the majority of the reasoning and speed-trained participants was at or above their baseline level for the trained cognitive ability years later A significant percentage of participants in all trained groups continued to report less difficulty performing I.A.D.Ls than nontrained participants After years to of participants were as well off as or better off than when they started Others have reported the absence of long-term memory training effects It is possible that the memory training used in ACTIVE requires more extensive practice or greater dosage to reach durability levels than reasoning and speed training It is also possible that age-related structural changes in the medial temporal lobe including age-related neuropathology and even incipient Alzheimer’s disease in some participants limits the durability of memory training in older adults There are a number of possible reasons for the finding that training effects on self-reported daily function are maintained over time whereas the training effects on cognitive abilities dissipate over time First this could reflect a cascade relationship between cognitive ability and daily function Prospective observational studies indicate that changes in cognition precede changes in daily function by several years Second improved cognitive processing may alter patterns of neural activation over the long term Third training-based improvements in cognitive abilities may produce changes in behavior and social interaction that promote broad-based engagement in functional activities and maintenance over many years The effects of cognitive training on daily function in this study were modest This is probably because many factors beyond cognition affect daily function and functional independence including sex social class mood sarcopenia obesity chronic diseases and social isolation Even within the cognitive realm some domains such as general cognitive status and executive cognitive ability may be more closely related to daily function than other domains eg spatial skills The current study showed weak to absent effects of cognitive training on performance-based measures of daily function It is probably a mistake to conceive of these performance-based functional measures as something other than cognitive tests The administration formats task demands and scoring all have more in common with standard cognitive tests than with actual A.D.Ls In addition",
     "mathSymbolFrequency": 0,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "This is the first demonstration of long-term transfer of the training effects on cognitive abilities to daily function.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "Unlike for the nontrained participants, cognitive function for the majority of the reasoning and speed-trained participants was at or above their baseline level for the trained cognitive ability ten years later.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "A significant percentage of participants in all trained groups (>60%) continued to report less difficulty performing I.A.D.Ls than nontrained participants.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": false,
+    "hasCitations": true,
     "allAbbreviations": [
       {
         "abbreviation": "IADLs",
         "expansion": "Instrumental Activities of Daily Living",
         "type": "pronounced_with_initials"
-      }
-    ],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "After ten years, sixty to seventy percent of participants were as well off as or better off than when they started.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "Others have reported the absence of long-term memory training effects.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": true,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false,
-    "replacedCitations": true
-  },
-  {
-    "type": "text",
-    "content": "It is possible that the memory training used in ACTIVE requires more-extensive practice or greater dosing to reach durability levels than reasoning and speed training.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": true,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false,
-    "replacedCitations": true
-  },
-  {
-    "type": "text",
-    "content": "It is also possible that age-related structural changes in the medial temporal lobe, including age-related neuropathology and even incipient Alzheimer’s disease in some participants, limits the durability of memory training in older adults.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": true,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false,
-    "replacedCitations": true
-  },
-  {
-    "type": "text",
-    "content": "There are a number of possible reasons for the finding that training effects on self-reported daily function are maintained over time, whereas the training effects on cognitive abilities dissipate over time.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "First, this could reflect a cascade relationship between cognitive ability and daily function.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "Prospective observational studies indicate that changes in cognition precede changes in daily function by several years.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": true,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false,
-    "replacedCitations": true
-  },
-  {
-    "type": "text",
-    "content": "Second, improved cognitive processing may alter patterns of neural activation over the long term.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": true,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false,
-    "replacedCitations": true
-  },
-  {
-    "type": "text",
-    "content": "Third, training-based improvements in cognitive abilities may produce changes in behavior and social interaction that promote broad-based engagement in functional activities and maintenance over many years.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": true,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false,
-    "replacedCitations": true
-  },
-  {
-    "type": "text",
-    "content": "The effects of cognitive training on daily function in this study were modest.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "This is probably because many factors beyond cognition affect daily function and functional independence, including sex, social class, mood, sarcopenia, obesity, chronic diseases, and social isolation.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": true,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false,
-    "replacedCitations": true
-  },
-  {
-    "type": "text",
-    "content": "Even within the cognitive realm, some domains may be more closely related to daily function than other domains.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": true,
-    "allAbbreviations": [
+      },
       {
-        "abbreviation": "e.g.",
-        "expansion": "for example",
-        "type": "pronounced_with_initials"
-      }
-    ],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false,
-    "replacedCitations": true
-  },
-  {
-    "type": "text",
-    "content": "The current study showed weak to absent effects of cognitive training on performance-based measures of daily function.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "It is probably a mistake to conceive of these performance-based functional measures as something other than cognitive tests.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "The administration formats, task demands, and scoring all have more in common with standard cognitive tests than with actual A.D.Ls.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": true,
-    "allAbbreviations": [
+        "abbreviation": "ACTIVE",
+        "expansion": "Advanced Cognitive Training for Independent and Vital Elderly",
+        "type": "pronounced_as_a_single_word"
+      },
       {
         "abbreviation": "ADLs",
         "expansion": "Activities of Daily Living",
@@ -748,9 +481,8 @@
       }
     ],
     "page": 5,
-    "isStartCutOff": false,
-    "isEndCutOff": false,
-    "replacedCitations": true
+    "isStartCutOff": true,
+    "isEndCutOff": true
   },
   {
     "type": "text",
@@ -767,7 +499,13 @@
     "content": "A main lesson of the ACTIVE study and other cognitive intervention trials is that the benefits of cognitive training are specific to the cognitive ability trained.",
     "mathSymbolFrequency": 0,
     "hasCitations": false,
-    "allAbbreviations": [],
+    "allAbbreviations": [
+      {
+        "abbreviation": "ACTIVE",
+        "expansion": "Advanced Cognitive Training for Independent and Vital Elderly",
+        "type": "pronounced_as_a_single_word"
+      }
+    ],
     "page": 6,
     "isStartCutOff": false,
     "isEndCutOff": false
@@ -777,7 +515,13 @@
     "content": "Viewed in this way, it is not surprising that specific forms of cognitive training used in ACTIVE did not result in improvements on performance-based measures of daily function that are really multi-ability cognitive tests.",
     "mathSymbolFrequency": 0,
     "hasCitations": false,
-    "allAbbreviations": [],
+    "allAbbreviations": [
+      {
+        "abbreviation": "ACTIVE",
+        "expansion": "Advanced Cognitive Training for Independent and Vital Elderly",
+        "type": "pronounced_as_a_single_word"
+      }
+    ],
     "page": 6,
     "isStartCutOff": false,
     "isEndCutOff": false
@@ -787,7 +531,13 @@
     "content": "The ACTIVE 10-year retention rate was 44%.",
     "mathSymbolFrequency": 0,
     "hasCitations": false,
-    "allAbbreviations": [],
+    "allAbbreviations": [
+      {
+        "abbreviation": "ACTIVE",
+        "expansion": "Advanced Cognitive Training for Independent and Vital Elderly",
+        "type": "pronounced_as_a_single_word"
+      }
+    ],
     "page": 6,
     "isStartCutOff": false,
     "isEndCutOff": false
@@ -804,8 +554,30 @@
   },
   {
     "type": "text",
-    "content": ". In comparison, the Diabetes Prevention Program (D.P.P) reported a 10-year retention rate of 59%, although D.P.P participants were more than 20 years younger (50.",
+    "content": "In comparison, the Diabetes Prevention Program (D.P.P) reported a 10-year retention rate of 59%, although D.P.P participants were more than 20 years younger (50±6) at enrollment than were ACTIVE participants at enrollment (73).",
     "mathSymbolFrequency": 1,
+    "hasCitations": true,
+    "allAbbreviations": [
+      {
+        "abbreviation": "DPP",
+        "expansion": "Diabetes Prevention Program",
+        "type": "pronounced_with_initials"
+      },
+      {
+        "abbreviation": "ACTIVE",
+        "expansion": "Advanced Cognitive Training for Independent and Vital Elderly",
+        "type": "pronounced_as_a_single_word"
+      }
+    ],
+    "page": 6,
+    "isStartCutOff": false,
+    "isEndCutOff": false,
+    "replacedCitations": true
+  },
+  {
+    "type": "text",
+    "content": "The 10-year retention rate compares favorably with rates in observational studies of similar duration and samples of similar ages and ethnic diversity.",
+    "mathSymbolFrequency": 0,
     "hasCitations": true,
     "allAbbreviations": [
       {
@@ -821,29 +593,8 @@
   },
   {
     "type": "text",
-    "content": "6) at enrollment than were ACTIVE participants at enrollment (73.",
-    "mathSymbolFrequency": 1,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 6,
-    "isStartCutOff": true,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "The 10-year retention rate compares favorably with rates in observational studies of similar duration and samples of similar ages and ethnic diversity.",
-    "mathSymbolFrequency": 1,
-    "hasCitations": true,
-    "allAbbreviations": [],
-    "page": 6,
-    "isStartCutOff": false,
-    "isEndCutOff": false,
-    "replacedCitations": true
-  },
-  {
-    "type": "text",
     "content": "Although retained subjects were younger and had fewer physical and mental health problems at baseline, there was no difference between groups in attrition.",
-    "mathSymbolFrequency": 1,
+    "mathSymbolFrequency": 0,
     "hasCitations": false,
     "allAbbreviations": [],
     "page": 6,
@@ -864,12 +615,11 @@
     "type": "text",
     "content": "Furthermore, in recognition of this attrition, appropriate methods were used to test assumptions about missing data and the validity of the inferences.",
     "mathSymbolFrequency": 1,
-    "hasCitations": true,
+    "hasCitations": false,
     "allAbbreviations": [],
     "page": 6,
     "isStartCutOff": false,
-    "isEndCutOff": false,
-    "replacedCitations": true
+    "isEndCutOff": false
   },
   {
     "type": "text",
@@ -884,7 +634,7 @@
   },
   {
     "type": "text",
-    "content": "In addition, the effect of missing data on the outcomes were analyzed using multiple imputation and a sensitivity analysis that assumed missing outcome scores were low.",
+    "content": "In addition, the effect of missing data on the outcomes were analyzed using multiple imputation and a sensitivity analysis that assumed that missing outcome scores were low.",
     "mathSymbolFrequency": 1,
     "hasCitations": true,
     "allAbbreviations": [],
@@ -897,12 +647,11 @@
     "type": "text",
     "content": "Results of the analysis using multiple imputation and the sensitivity analysis were similar to the results of the mixed-effects models.",
     "mathSymbolFrequency": 1,
-    "hasCitations": true,
+    "hasCitations": false,
     "allAbbreviations": [],
     "page": 6,
     "isStartCutOff": false,
-    "isEndCutOff": false,
-    "replacedCitations": true
+    "isEndCutOff": false
   },
   {
     "type": "text",
@@ -956,17 +705,7 @@
   },
   {
     "type": "text",
-    "content": "complete baseline training and reflected neither participants who completed baseline training nor nontrained participants (the control group) but something in between.",
-    "mathSymbolFrequency": 0,
-    "hasCitations": false,
-    "allAbbreviations": [],
-    "page": 7,
-    "isStartCutOff": true,
-    "isEndCutOff": false
-  },
-  {
-    "type": "text",
-    "content": "In summary, ACTIVE was the first multisite clinical trial to test the effects of cognitive training interventions on cognitive abilities and daily function. Results at 10 years demonstrate that cognitive training has beneficial effects on cognitive abilities and on self-reported I.A.D.L function. These results provide support for the development of other interventions, particularly those that target multiple cognitive abilities and are more likely to have an effect on I.A.D.L performance. Such interventions have the potential to delay onset of functional decline and possibly dementia and are consistent with comprehensive geriatric care that strives to maintain and support functional independence. If interventions that could delay onset of functional impairment by even 6 years were introduced, the number of people affected by 2050 would be reduced by 38%, which would be of great public health significance.",
+    "content": "complete baseline training and reflected neither participants who completed baseline training nor nontrained participants (the control group) but something in between. In summary, ACTIVE was the first multisite clinical trial to test the effects of cognitive training interventions on cognitive abilities and daily function. Results at 10 years demonstrate that cognitive training has beneficial effects on cognitive abilities and on self-reported I.A.D.L function. These results provide support for the development of other interventions, particularly those that target multiple cognitive abilities and are more likely to have an effect on I.A.D.L performance. Such interventions have the potential to delay onset of functional decline and possibly dementia and are consistent with comprehensive geriatric care that strives to maintain and support functional independence. If interventions that could delay onset of functional impairment by even 6 years were introduced, the number of people affected by 2050 would be reduced by 38%, which would be of great public health significance.",
     "mathSymbolFrequency": 0,
     "hasCitations": true,
     "allAbbreviations": [
@@ -977,18 +716,18 @@
       },
       {
         "abbreviation": "IADL",
-        "expansion": "Instrumental Activities of Daily Living",
+        "expansion": "Instrumental Activity of Daily Living",
         "type": "pronounced_with_initials"
       }
     ],
     "page": 7,
-    "isStartCutOff": false,
+    "isStartCutOff": true,
     "isEndCutOff": false,
     "replacedCitations": true
   },
   {
     "type": "figure_image",
-    "content": "Figure 3  summary:\nFigure 3 shows the effects of training on self-reported instrumental activity of daily living (I.A.D.L) difficulty scores. It presents mean I.A.D.L difficulty scores for each training group over time, with higher scores indicating better functioning. The figure includes sample sizes, indicating the number of participants with complete data at each time point.",
+    "content": "Figure 3  summary:\nFigure 3 shows the effects of training on self-reported Instrumental Activity of Daily Living (IADL) difficulty scores over time for different training groups. The graph displays mean IADL difficulty scores at various time points, with higher scores indicating better functioning. The sample sizes indicate the number of participants with complete data at each time point.",
     "mathSymbolFrequency": 0,
     "hasCitations": false,
     "allAbbreviations": [],

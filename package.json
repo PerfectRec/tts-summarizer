@@ -31,7 +31,8 @@
   "scripts": {
     "start": "yarn build:client && tsx src/server.ts",
     "dev": "concurrently \"nodemon --watch client/src --ext js,jsx,ts,tsx --exec yarn build:client\" \"nodemon --watch src --exec tsx src/server.ts\"",
-    "build:client": "yarn --cwd client build"
+    "build:client": "yarn --cwd client build",
+    "manual": "npx tsx src/manual/convertToAudio.ts"
   },
   "devDependencies": {
     "concurrently": "^9.0.1",

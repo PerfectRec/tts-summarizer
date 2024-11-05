@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import path from "path";
 import { synthesizeSpeechInChunks } from "../handlers/highQualitySummarize"; // Adjust the import path as necessary
+import { uploadFile } from "@aws/s3";
 
 interface Item {
   type: string;
@@ -34,25 +35,18 @@ async function generateAudioFromFilteredItems(
       filteredItems
     );
 
-    // Define the output paths
-    const audioOutputPath = path.join(
-      path.dirname(jsonFilePath),
-      "outputAudio.mp3"
-    );
-    const metadataOutputPath = path.join(
-      path.dirname(jsonFilePath),
-      "audioMetadata.json"
-    );
+    const email = "babak@extrayear.ai";
+    const fileName = "Ten-Year Effects";
 
-    // Save the audio buffer to a file
-    await fs.writeFile(audioOutputPath, audioBuffer);
+    const audioFileName = `${email}/${fileName}.mp3`;
 
-    // Save the audio metadata to a file
-    await fs.writeJson(metadataOutputPath, audioMetadata);
+    // Upload the audio buffer directly to S3
+    const audioFileUrl = await uploadFile(audioBuffer, audioFileName);
 
-    console.log(
-      `Audio and metadata have been saved to ${audioOutputPath} and ${metadataOutputPath}`
-    );
+    // Optionally, upload the audio metadata to S3
+    const metadataFileName = `${email}/${fileName}.json`;
+    const metadataBuffer = Buffer.from(JSON.stringify(audioMetadata));
+    const metadataFileUrl = await uploadFile(metadataBuffer, metadataFileName);
   } catch (error) {
     console.error("Error generating audio from filtered items:", error);
   }
