@@ -1147,6 +1147,7 @@ export default async function handler(
 
   //cleanup temp subdirectories
   try {
+    await fs.remove(tempImageDir);
     await fs.remove(fileNameDir);
     console.log("Temporary directories deleted");
   } catch (cleanupError) {
