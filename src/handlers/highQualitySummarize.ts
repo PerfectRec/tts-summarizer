@@ -750,7 +750,7 @@ export default async function handler(
 
       console.log("filtering unnecessary item types");
 
-      let inAcknowledgementsSection = true;
+      let inAcknowledgementsSection = false;
       const filteredItems = abstractExists
         ? allItems.filter((item: Item, index: number, array: any[]) => {
             if (!abstractDetected) {
