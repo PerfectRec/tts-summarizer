@@ -69,6 +69,10 @@ export default async function handler(
 
   const runId = uuidv4();
 
+  reply.status(200).send({
+    runId: runId,
+  });
+
   /* Supported Status
   - Received
   - Processing
@@ -110,8 +114,6 @@ export default async function handler(
         cleanedFileName = cleanedFileName.slice(0, -4);
       }
     } catch (error) {
-      reply.status(400).send({ runId: runId });
-
       uploadStatus(runId, "Error", {
         errorType: "InvalidLink",
         message: "Failed to download PDF from link",
@@ -155,7 +157,6 @@ export default async function handler(
   // return;
 
   if (fileBuffer.length > 100 * 1024 * 1024) {
-    reply.status(400).send({ runId });
     uploadStatus(runId, "Error", {
       errorType: "FileSizeExceeded",
       message: "File size exceeds 100MB which is currently not supported",
@@ -206,7 +207,6 @@ export default async function handler(
       outputFolder: tempImageDir,
     });
   } catch (error) {
-    reply.status(400).send({ runId });
     uploadStatus(runId, "Error", {
       errorType: "InvalidPDFFormat",
       message: "File has invalid format",
@@ -217,7 +217,6 @@ export default async function handler(
   }
 
   if (pngPagesOriginal.length > 100) {
-    reply.status(400).send({ runId });
     uploadStatus(runId, "Error", {
       errorType: "FileNumberOfPagesExceeded",
       message: "pdf has more than 100 pages which is not currently supported",
@@ -244,11 +243,6 @@ export default async function handler(
     - Process items again to make them audio optimized. (LLM)
     - Join the items. (code)
     */
-
-    reply.status(200).send({
-      fileName: cleanedFileName,
-      runId: runId,
-    });
 
     //convert to JSON
     try {
@@ -1270,9 +1264,20 @@ export default async function handler(
       console.error("Error generating audio file:", error);
     }
   } else {
-    reply
-      .status(400)
-      .send({ message: "This summarization method is not supported yet!" });
+    uploadStatus(runId, "Error", {
+      errorType: "SummarizationMethodNotSupported",
+      message: "This summarization method is not supported",
+      uploadedFileUrl: s3pdfFilePath,
+    });
+
+    if (shouldSendEmailToUser) {
+      await sendErrorEmail(
+        email,
+        cleanedFileName,
+        runId,
+        s3encodedErrorFilePath
+      );
+    }
   }
 
   //cleanup temp subdirectories

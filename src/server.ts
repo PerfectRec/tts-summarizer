@@ -6,6 +6,7 @@ import fastifyStatic from "@fastify/static";
 // Handler imports
 import highQualitySummarizeHandler from "@handlers/highQualitySummarize";
 import checkStatusHandler from "@handlers/checkStatus";
+import mockSummarizeHandler from "@handlers/mockSummarize";
 
 const envToLogger = {
   development: {
@@ -60,6 +61,7 @@ fastify.register(fastifyStatic, {
 // Routes
 fastify.post("/summarize", highQualitySummarizeHandler);
 fastify.get("/checkStatus", checkStatusHandler);
+fastify.post("/mockSummarize", mockSummarizeHandler);
 
 const port = Number(process.env.PORT) || 4242;
 const host = "RENDER" in process.env ? `0.0.0.0` : `localhost`;
