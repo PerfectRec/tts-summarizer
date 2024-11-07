@@ -27,7 +27,15 @@ const modelConfig: ModelConfig = {
     temperature: 0.3,
     model: "gpt-4o-2024-08-06",
   },
-  summarization: {
+  figureSummarization: {
+    temperature: 0.2,
+    model: "gpt-4o-2024-08-06",
+  },
+  tableSummarization: {
+    temperature: 0.2,
+    model: "gpt-4o-2024-08-06",
+  },
+  codeSummarization: {
     temperature: 0.2,
     model: "gpt-4o-2024-08-06",
   },
@@ -436,11 +444,11 @@ export default async function handler(
                 item.content = `[break0.7]${item.content}[break0.7]`;
               }
 
-              if (item.type === "figure_image" || item.type === "table_rows") {
-                console.log("summarizing figure/table on page ", i + index + 1);
+              if (item.type === "table_rows") {
+                console.log("summarizing table on page ", i + index + 1);
                 const summarizationSchema = z.object({
                   summarizedItem: z.object({
-                    type: z.enum(["figure_image", "table_rows"]),
+                    type: z.enum(["table_rows"]),
                     label: z.object({
                       labelType: z.string(),
                       labelNumber: z.string(),
@@ -450,32 +458,19 @@ export default async function handler(
                   }),
                 });
 
-                const FIGURE_SUMMARIZE_PROMPT = `Write a concise and effective summary for the figures. Replace the content field with the summary. Describe the size of changes / effects / estimates / results in the figures. To help understand them better, use context from the paper and any note below them. Make sure to describe the main purpose of the figure by identifying the key pattern or idea being displayed. 
-                
-                Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct label type and label number. This is very important. Look for cues around the figure and use your best judgement to determine it. Possible label types can be Figure, Chart, Image etc.
-                
-                If there is no label or label number set the labelType as "Image" and labelNumber as "unlabeled".
-                
-                Do not use markdown. Use plain text.`;
-
                 const TABLE_SUMMARIZE_PROMPT = `Write a concise and effective summary for the table. Replace the raw rows in the content field with the summary. Summarize the size of changes / effects / estimates / results in the tables. Be very accurate while doing this analysis. You must get the patterns correct. To help understand them better, use context from the paper and any note below them. The summary should capture the main point of the table. Try to use as few numbers as possible. Keep in mind that the user cannot see the table as they will be listening to your summary. 
                 
                 Add the label "Table X" where X is the table number indicated in the page. You need to extract the correct table number. This is very important. Look for cues around the table and use your best judgement to determine it. Add the panel number that is being summarized, if it is mentioned.
                 
                 Do not use markdown. Use plain text.`;
 
-                const summarizePrompt =
-                  item.type === "figure_image"
-                    ? FIGURE_SUMMARIZE_PROMPT
-                    : TABLE_SUMMARIZE_PROMPT;
-
                 const summarizedItem = await getStructuredOpenAICompletion(
-                  summarizePrompt,
-                  `Item to summarize on this page:\n${JSON.stringify(
+                  TABLE_SUMMARIZE_PROMPT,
+                  `Table to summarize on this page:\n${JSON.stringify(
                     item
                   )}\n\nPage context:\n${JSON.stringify(items)}`,
-                  modelConfig.summarization.model,
-                  modelConfig.summarization.temperature,
+                  modelConfig.tableSummarization.model,
+                  modelConfig.tableSummarization.temperature,
                   summarizationSchema,
                   [pagePath]
                 );
@@ -491,7 +486,130 @@ export default async function handler(
                     ? `Panel ${item.label.panelNumber}`
                     : ""
                 } summary:\n${summarizedItem?.summarizedItem.content}`;
-              } else if (item.type === "code_or_algorithm") {
+              }
+
+              if (item.type === "figure_image") {
+                console.log("summarizing figure on page ", i + index + 1);
+                const summarizationSchema = z.object({
+                  summarizedItem: z.object({
+                    type: z.enum(["figure_image"]),
+                    label: z.object({
+                      labelType: z.string(),
+                      labelNumber: z.string(),
+                      panelNumber: z.string().optional(),
+                    }),
+                    content: z.string(),
+                  }),
+                });
+
+                const examplePairs = [
+                  {
+                    userImage: "./src/prompt/figures/AIAYN_FIG_1.png",
+                    assistantOutput: `{
+                            type: "figure_image",
+                            label: {
+                              labelType: "Figure",
+                              labelNumber: "1",
+                              panelNumber: ""
+                            }
+                            "This figure is a diagram of the transformer model’s architecture, showing the steps take input tokens and produce output probabilities.  It has two components.  The left side is the encoder which begins with inputs, and the right side is the decoder which begins with outputs that are shifted right.  On the encoder side, first the input tokens are transformed into embeddings, which are then added to positional embeddings.  Then, there are 6 identical layers which include first a multi-head attention step, then a feed forward network. On the decoder side, the first steps are the same.  The input tokens are transformed into embeddings with positional embeddings added next.  Then, there are also 6 identical layers which are similar to this part of the encoder, but with an extra step.  The first step is masked multi-head attention, followed by multi-head attention over the output of the encoder stack.  Next comes the feed forward layer, just like in the encoder.  Finally, the last steps are a linear projection layer, and a softmax step which produces output probabilities."
+                          }`,
+                  },
+                  {
+                    userImage: "./src/prompt/figures/ALHGALW_FIG_2.png",
+                    assistantOutput: `{
+                            type: "figure_image",
+                            label: {
+                              labelType: "Figure",
+                              labelNumber: "2",
+                              panelNumber: ""
+                            }
+                            content: "This figure plots the fraction of correct next-token predictions for 4 language models during training on a subset of the Pile training set, as a function of the number of training steps.  The four models are: SLM, Baseline, RKD and SALT.  Over the 200K steps shown, accuracy increases from around 55% to 58-60% after 200K steps, with increases slowing down as steps increase.  SALT outperforms baseline slightly for any number of steps, whereas SLM performs worse.  RKD performs better than baseline at first, but after around 75 thousand steps, begins to perform worse."
+                          }`,
+                  },
+                  {
+                    userImage: "./src/prompt/figures/COCD_FIG_1.png",
+                    assistantOutput: `{
+                            type: "figure_image",
+                            label: {
+                              labelType: "Figure",
+                              labelNumber: "1",
+                              panelNumber: ""
+                            }
+                            content: "This figure plots settler mortality against GDP per capita adjusted for purchasing power parity, both on a log scale.  Each data point is a country and a downward sloping line represents the strong negative correlation.  Data points are generally close to the line, with a few outliers."
+                          }`,
+                  },
+                  {
+                    userImage: "./src/prompt/figures/TYE_FIG_2.png",
+                    assistantOutput: `{
+                            type: "figure_image",
+                            label: {
+                              labelType: "Figure",
+                              labelNumber: "1",
+                              panelNumber: ""
+                            }
+                            content: "This figure shows cognitive outcome scores over 10 years.  It has 3 panels, each showing a different outcome for each of the four arms of the experiment, treatments for memory, reasoning, and speed, along with the control group.  The outcomes are scores for memory, reasoning and speed.  Each panel shows that the treatment associated with the each outcome resulted in larger increases in the score for that outcome, especially so for speed.  Each score for each treatment generally increase within the first year, peaks, and then declines after 3 years, especially between years 5 and 10."
+                          }`,
+                  },
+                  {
+                    userImage: "./src/prompt/figures/TYE_FIG_3.png",
+                    assistantOutput: `{
+                            type: "figure_image",
+                            label: {
+                              labelType: "Figure",
+                              labelNumber: "1",
+                              panelNumber: ""
+                            }
+                            content: "This figure plots self-reported IADL scores over 10 years for each of the 4 experimental groups, the 3 treatments, memory, reasoning, speed, as well as the control group. All groups have similar, roughly flat IADL scores for the first 3 years, which decline after.  In years 5 and 10, the control group’s scores are substantially lower than each of the treatments."
+                          }`,
+                  },
+                ];
+
+                const FIGURE_SUMMARIZE_PROMPT = `Write a detailed and effective summary for the figures. Replace the content field with the summary. 
+
+                Every summary must have three subsections:
+                1. Physical description of the image
+                2. Description of the content of the figure
+                3. Accurate inferences and conclusions from the content of the figure. 
+
+                No need to explicitly mention each subsection.
+
+                Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct label type and label number. This is very important. Look for cues around the figure and use your best judgement to determine it. Possible label types can be Figure, Chart, Image etc.
+                
+                If there is no label or label number set the labelType as "Image" and labelNumber as "unlabeled".
+                
+                Do not use markdown. Use plain text.
+                
+                Remember that the user is going to listen to the output and cannot see the figure. Take that into account while producing the summary.`;
+
+                const summarizedItem = await getStructuredOpenAICompletion(
+                  FIGURE_SUMMARIZE_PROMPT,
+                  `Figure to summarize on this page:\n${JSON.stringify(
+                    item
+                  )}\n\nPage context:\n${JSON.stringify(items)}`,
+                  modelConfig.figureSummarization.model,
+                  modelConfig.figureSummarization.temperature,
+                  summarizationSchema,
+                  [pagePath],
+                  16384,
+                  0,
+                  examplePairs
+                );
+
+                item["label"] = summarizedItem?.summarizedItem.label;
+                item.content = `${item.label.labelType} ${
+                  item.label.labelNumber === "unlabeled"
+                    ? ""
+                    : item.label.labelNumber
+                } ${
+                  item.label.panelNumber &&
+                  item.label.panelNumber !== "unlabeled"
+                    ? `Panel ${item.label.panelNumber}`
+                    : ""
+                } summary:\n${summarizedItem?.summarizedItem.content}`;
+              }
+
+              if (item.type === "code_or_algorithm") {
                 console.log(
                   "summarizing code or algorithm on page ",
                   i + index + 1
@@ -512,8 +630,8 @@ export default async function handler(
                   `Code or algorithm to summarize:\n${JSON.stringify(
                     item
                   )}\n\nPage context:\n${JSON.stringify(items)}`,
-                  modelConfig.summarization.model,
-                  modelConfig.summarization.temperature,
+                  modelConfig.codeSummarization.model,
+                  modelConfig.codeSummarization.temperature,
                   codeSummarizationSchema,
                   [],
                   1024

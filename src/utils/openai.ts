@@ -28,7 +28,8 @@ export async function getStructuredOpenAICompletion(
   schema: z.AnyZodObject,
   imagePaths: string[] = [],
   maxTokens: number = 16384,
-  frequencyPenalty: number = 0
+  frequencyPenalty: number = 0,
+  examplePairs: { userImage: string; assistantOutput: string }[] = []
 ) {
   const imageUrls = imagePaths.map((imagePath) => {
     const imageBuffer = fs.readFileSync(imagePath);
@@ -41,6 +42,37 @@ export async function getStructuredOpenAICompletion(
       },
     } as ChatCompletionContentPart;
   });
+
+  const exampleMessages: ChatCompletionMessageParam[] = examplePairs
+    .map((pair) => {
+      const userImageBuffer = fs.readFileSync(pair.userImage);
+      const userMediaType = mime.getType(pair.userImage);
+      const base64UserImage = userImageBuffer.toString("base64");
+      const examplePairProcessed: ChatCompletionMessageParam[] = [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${userMediaType};base64,${base64UserImage}`,
+              },
+            } as ChatCompletionContentPart,
+          ],
+        },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: pair.assistantOutput,
+            },
+          ],
+        },
+      ];
+      return examplePairProcessed;
+    })
+    .flat();
 
   const messages: ChatCompletionMessageParam[] =
     imagePaths.length > 0
@@ -65,6 +97,7 @@ export async function getStructuredOpenAICompletion(
         role: "system",
         content: systemPrompt,
       },
+      ...exampleMessages,
       ...messages,
     ],
     response_format: zodResponseFormat(schema, "schema"),
