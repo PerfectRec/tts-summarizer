@@ -12,7 +12,7 @@ import { getDB } from "db/db";
 import { sendErrorEmail, sendSuccessEmail } from "@utils/email";
 import { clearDirectory } from "@utils/io";
 import { synthesizeSpeechInChunks } from "@utils/polly";
-import { getStructuredOpenAICompletion } from "@utils/openai";
+import { getStructuredOpenAICompletionWithRetries } from "@utils/openai";
 import { isTextCutoff } from "@utils/text";
 import { removeBreaks } from "@utils/ssml";
 
@@ -389,12 +389,13 @@ export default async function handler(
             });
 
             const pagePath = pngPage.path;
-            const pageItems = await getStructuredOpenAICompletion(
+            const pageItems = await getStructuredOpenAICompletionWithRetries(
               EXTRACT_PROMPT,
               ``,
               modelConfig.extraction.model,
               modelConfig.extraction.temperature,
               extractSchema,
+              3,
               [pagePath],
               16384,
               0.2
@@ -464,16 +465,18 @@ export default async function handler(
                 
                 Do not use markdown. Use plain text.`;
 
-                const summarizedItem = await getStructuredOpenAICompletion(
-                  TABLE_SUMMARIZE_PROMPT,
-                  `Table to summarize on this page:\n${JSON.stringify(
-                    item
-                  )}\n\nPage context:\n${JSON.stringify(items)}`,
-                  modelConfig.tableSummarization.model,
-                  modelConfig.tableSummarization.temperature,
-                  summarizationSchema,
-                  [pagePath]
-                );
+                const summarizedItem =
+                  await getStructuredOpenAICompletionWithRetries(
+                    TABLE_SUMMARIZE_PROMPT,
+                    `Table to summarize on this page:\n${JSON.stringify(
+                      item
+                    )}\n\nPage context:\n${JSON.stringify(items)}`,
+                    modelConfig.tableSummarization.model,
+                    modelConfig.tableSummarization.temperature,
+                    summarizationSchema,
+                    3,
+                    [pagePath]
+                  );
 
                 item["label"] = summarizedItem?.summarizedItem.label;
                 item.content = `${item.label.labelType} ${
@@ -582,19 +585,21 @@ export default async function handler(
                 
                 Remember that the user is going to listen to the output and cannot see the figure. Take that into account while producing the summary.`;
 
-                const summarizedItem = await getStructuredOpenAICompletion(
-                  FIGURE_SUMMARIZE_PROMPT,
-                  `Figure to summarize on this page:\n${JSON.stringify(
-                    item
-                  )}\n\nPage context:\n${JSON.stringify(items)}`,
-                  modelConfig.figureSummarization.model,
-                  modelConfig.figureSummarization.temperature,
-                  summarizationSchema,
-                  [pagePath],
-                  16384,
-                  0,
-                  examplePairs
-                );
+                const summarizedItem =
+                  await getStructuredOpenAICompletionWithRetries(
+                    FIGURE_SUMMARIZE_PROMPT,
+                    `Figure to summarize on this page:\n${JSON.stringify(
+                      item
+                    )}\n\nPage context:\n${JSON.stringify(items)}`,
+                    modelConfig.figureSummarization.model,
+                    modelConfig.figureSummarization.temperature,
+                    summarizationSchema,
+                    3,
+                    [pagePath],
+                    16384,
+                    0,
+                    examplePairs
+                  );
 
                 item["label"] = summarizedItem?.summarizedItem.label;
                 item.content = `${item.label.labelType} ${
@@ -625,17 +630,19 @@ export default async function handler(
                 
                 Also extract the title of the algorithm or code block. If no title is mentioned, then generate an appropriate one yourself.`;
 
-                const summarizedCode = await getStructuredOpenAICompletion(
-                  CODE_SUMMARIZE_PROMPT,
-                  `Code or algorithm to summarize:\n${JSON.stringify(
-                    item
-                  )}\n\nPage context:\n${JSON.stringify(items)}`,
-                  modelConfig.codeSummarization.model,
-                  modelConfig.codeSummarization.temperature,
-                  codeSummarizationSchema,
-                  [],
-                  1024
-                );
+                const summarizedCode =
+                  await getStructuredOpenAICompletionWithRetries(
+                    CODE_SUMMARIZE_PROMPT,
+                    `Code or algorithm to summarize:\n${JSON.stringify(
+                      item
+                    )}\n\nPage context:\n${JSON.stringify(items)}`,
+                    modelConfig.codeSummarization.model,
+                    modelConfig.codeSummarization.temperature,
+                    codeSummarizationSchema,
+                    3,
+                    [],
+                    1024
+                  );
 
                 item.content = `Code or Algorithm, title: ${summarizedCode?.summarizedCode.title}, summary: ${summarizedCode?.summarizedCode.content}`;
               }
@@ -687,12 +694,13 @@ export default async function handler(
         ),
       });
 
-      const improvedAuthorInfo = await getStructuredOpenAICompletion(
+      const improvedAuthorInfo = await getStructuredOpenAICompletionWithRetries(
         IMPROVE_AUTHOR_INFO_PROMPT,
         `Here is the author info: ${authorInfoContents}`,
         modelConfig.authorInfoExtractor.model,
         modelConfig.authorInfoExtractor.temperature,
         authorExtractSchema,
+        3,
         pngPages.slice(0, 5).map((page) => page.path)
       );
 
@@ -1031,16 +1039,18 @@ export default async function handler(
             itemBatch.map(async (item) => {
               try {
                 if (item.type === "text") {
-                  const processedItem = await getStructuredOpenAICompletion(
-                    CITATION_REPLACEMENT_PROMPT,
-                    `User text:\n${item.content}`,
-                    modelConfig.citation.model,
-                    modelConfig.citation.temperature,
-                    referenceSchema,
-                    [],
-                    16384,
-                    0.1
-                  );
+                  const processedItem =
+                    await getStructuredOpenAICompletionWithRetries(
+                      CITATION_REPLACEMENT_PROMPT,
+                      `User text:\n${item.content}`,
+                      modelConfig.citation.model,
+                      modelConfig.citation.temperature,
+                      referenceSchema,
+                      3,
+                      [],
+                      16384,
+                      0.1
+                    );
 
                   item.content = processedItem?.textWithCitationsRemoved;
                   item.replacedCitations = true;
@@ -1095,16 +1105,18 @@ export default async function handler(
             itemBatch.map(async (item) => {
               try {
                 if (item.type === "math" || item.type === "text") {
-                  const processedItem = await getStructuredOpenAICompletion(
-                    MATH_OPTIMIZATION_PROMPT,
-                    `Text to optimize:\n${item.content}`,
-                    modelConfig.mathOptimization.model,
-                    modelConfig.mathOptimization.temperature,
-                    mathOptimizationSchema,
-                    [],
-                    16384,
-                    0.2
-                  );
+                  const processedItem =
+                    await getStructuredOpenAICompletionWithRetries(
+                      MATH_OPTIMIZATION_PROMPT,
+                      `Text to optimize:\n${item.content}`,
+                      modelConfig.mathOptimization.model,
+                      modelConfig.mathOptimization.temperature,
+                      mathOptimizationSchema,
+                      3,
+                      [],
+                      16384,
+                      0.2
+                    );
 
                   item.content = processedItem?.optimizedContent;
                   item.optimizedMath = true;

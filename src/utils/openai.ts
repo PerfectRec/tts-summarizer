@@ -20,7 +20,7 @@ const openai = new OpenAI({
   },
 });
 
-export async function getStructuredOpenAICompletion(
+async function getStructuredOpenAICompletion(
   systemPrompt: string,
   userPrompt: string,
   model: string,
@@ -164,7 +164,7 @@ export async function synthesizeSpeechInChunksOpenAI(
   return Buffer.concat(audioBuffers);
 }
 
-export async function getOpenAICompletion(
+async function getOpenAICompletion(
   systemPrompt: string,
   userPrompt: string,
   model: string,
@@ -219,4 +219,37 @@ export async function getOpenAICompletion(
   const parsedCompletion = match ? match[1] : completionText;
 
   return parsedCompletion;
+}
+
+export async function getStructuredOpenAICompletionWithRetries(
+  systemPrompt: string,
+  userPrompt: string,
+  model: string,
+  temperature: number,
+  schema: z.AnyZodObject,
+  retries: number = 3,
+  imagePaths: string[] = [],
+  maxTokens: number = 16384,
+  frequencyPenalty: number = 0,
+  examplePairs: { userImage: string; assistantOutput: string }[] = []
+) {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      console.log(`Attempt ${attempt + 1}`);
+      return await getStructuredOpenAICompletion(
+        systemPrompt,
+        userPrompt,
+        model,
+        temperature,
+        schema,
+        imagePaths,
+        maxTokens,
+        frequencyPenalty,
+        examplePairs
+      );
+    } catch (error) {
+      console.error(`Attempt ${attempt + 1} failed:`, error);
+      if (attempt === retries - 1) throw error;
+    }
+  }
 }
