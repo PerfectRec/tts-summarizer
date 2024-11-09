@@ -18,7 +18,7 @@ type Model =
   | "claude-3-haiku-20240307";
 
 interface ModelConfig {
-  [task: string]: { temperature: number; model: Model };
+  [task: string]: { temperature: number; model: Model; concurrency: number };
 }
 
 interface Author {

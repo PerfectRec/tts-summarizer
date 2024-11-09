@@ -22,34 +22,57 @@ const modelConfig: ModelConfig = {
   pageClassifier: {
     temperature: 0.2,
     model: "gpt-4o-2024-08-06",
+    concurrency: 20,
   },
   extraction: {
-    temperature: 0.3,
+    temperature: 0.5,
     model: "gpt-4o-2024-08-06",
+    concurrency: 20,
   },
   figureSummarization: {
     temperature: 0.2,
     model: "gpt-4o-2024-08-06",
+    concurrency: 0,
   },
   tableSummarization: {
     temperature: 0.2,
     model: "gpt-4o-2024-08-06",
+    concurrency: 0,
   },
   codeSummarization: {
     temperature: 0.2,
     model: "gpt-4o-2024-08-06",
+    concurrency: 0,
   },
   authorInfoExtractor: {
     temperature: 0.2,
     model: "gpt-4o-2024-08-06",
+    concurrency: 0,
+  },
+  mathSymbolFrequencyAssignment: {
+    temperature: 0.1,
+    model: "gpt-4o-2024-08-06",
+    concurrency: 20,
   },
   mathOptimization: {
     temperature: 0.4,
     model: "gpt-4o-2024-08-06",
+    concurrency: 20,
   },
-  citation: {
+  citationDetection: {
+    temperature: 0.1,
+    model: "gpt-4o-2024-08-06",
+    concurrency: 20,
+  },
+  abbreviationExtraction: {
+    temperature: 0.2,
+    model: "gpt-4o-2024-08-06",
+    concurrency: 20,
+  },
+  citationOptimization: {
     temperature: 0,
     model: "gpt-4o-2024-08-06",
+    concurrency: 20,
   },
 };
 
@@ -203,7 +226,7 @@ export default async function handler(
   let pngPagesOriginal: PngPageOutput[] = [];
   try {
     pngPagesOriginal = await pdfToPng(fileBuffer, {
-      viewportScale: 3.0,
+      viewportScale: 4.0,
       outputFolder: tempImageDir,
     });
   } catch (error) {
@@ -234,19 +257,7 @@ export default async function handler(
   console.log("converted pdf pages to images");
 
   if (summarizationMethod === "ultimate") {
-    /* Algorithm:
-    - Convert the pdf pages to custom JSON (LLM)
-    - Process the pages again to process images and tables to generate better summaries (LLM)
-    - Try to place the image/figure entry above the text entry where it is mentioned for the first time. (code)
-    - Remove redundant items. Replace math with disclaimer. (code)
-      - Remove everything before the abstract heading that is not author_info or main_title
-    - Process items again to make them audio optimized. (LLM)
-    - Join the items. (code)
-    */
-
-    //convert to JSON
     try {
-      const batchSize = 20;
       let allItems: Item[] = [];
       let abstractDetected = false;
       let authorInfoContents = "";
@@ -305,10 +316,14 @@ export default async function handler(
       //return;
 
       console.log(
-        `PASS 1: Extracting text from the images\n\nPASS 1.5: Summarizing special items`
+        `PASS 1-1: Extracting text from the images\nPASS 1-2: Summarizing special items`
       );
-      for (let i = 0; i < pngPages.length; i += batchSize) {
-        const batch = pngPages.slice(i, i + batchSize);
+      for (
+        let i = 0;
+        i < pngPages.length;
+        i += modelConfig.extraction.concurrency
+      ) {
+        const batch = pngPages.slice(i, i + modelConfig.extraction.concurrency);
 
         const batchResults = await Promise.all(
           batch.map(async (pngPage, index) => {
@@ -320,15 +335,15 @@ export default async function handler(
 
             Please include math expressions.
             
-            Include partial items cut off at the start or end of the page. 
+            Include partial text cut off at the start or end of the page. 
             
             Combine all rows of a table into a single table_rows item.
             
             Please use your best judgement to determine the abstract even if it is not explicitly labeled as such.
             
-            Usually, text item starting with a superscript number is an endnote.
-            
-            Score each item on a scale of 0-5 based on how many complex math symbols appear in it.`;
+            Usually, text item starting with a superscript number is an endnote.`;
+
+            // Score each item on a scale of 0-5 based on how many complex math symbols appear in it.;
 
             const extractSchema = z.object({
               items: z.array(
@@ -364,26 +379,27 @@ export default async function handler(
                     "acknowledgements_content",
                   ]),
                   content: z.string(),
-                  mathSymbolFrequency: z.number(),
-                  hasCitations: z.boolean(),
-                  allAbbreviations: z.array(
-                    z.object({
-                      abbreviation: z.string(),
-                      expansion: z.string().optional(),
-                      type: z
-                        .enum([
-                          "pronounced_as_a_single_word",
-                          "pronounced_with_initials",
-                        ])
-                        .optional(),
-                    })
-                  ),
+                  //mathSymbolFrequency: z.number(),
+                  //hasCitations: z.boolean(),
+                  // allAbbreviations: z.array(
+                  //   z.object({
+                  //     abbreviation: z.string(),
+                  //     expansion: z.string().optional(),
+                  //     type: z
+                  //       .enum([
+                  //         "pronounced_as_a_single_word",
+                  //         "pronounced_with_initials",
+                  //       ])
+                  //       .optional(),
+                  //   })
+                  // ),
                 })
               ),
             });
 
             const pagePath = pngPage.path;
             const pageItems = await getStructuredOpenAICompletionWithRetries(
+              runId,
               EXTRACT_PROMPT,
               ``,
               modelConfig.extraction.model,
@@ -461,6 +477,7 @@ export default async function handler(
 
                 const summarizedItem =
                   await getStructuredOpenAICompletionWithRetries(
+                    runId,
                     TABLE_SUMMARIZE_PROMPT,
                     `Table to summarize on this page:\n${JSON.stringify(
                       item
@@ -581,6 +598,7 @@ export default async function handler(
 
                 const summarizedItem =
                   await getStructuredOpenAICompletionWithRetries(
+                    runId,
                     FIGURE_SUMMARIZE_PROMPT,
                     `Figure to summarize on this page:\n${JSON.stringify(
                       item
@@ -626,6 +644,7 @@ export default async function handler(
 
                 const summarizedCode =
                   await getStructuredOpenAICompletionWithRetries(
+                    runId,
                     CODE_SUMMARIZE_PROMPT,
                     `Code or algorithm to summarize:\n${JSON.stringify(
                       item
@@ -689,6 +708,7 @@ export default async function handler(
       });
 
       const improvedAuthorInfo = await getStructuredOpenAICompletionWithRetries(
+        runId,
         IMPROVE_AUTHOR_INFO_PROMPT,
         `Here is the author info: ${authorInfoContents}`,
         modelConfig.authorInfoExtractor.model,
@@ -991,7 +1011,52 @@ export default async function handler(
       fs.writeFileSync(parsedItemsPath, JSON.stringify(allItems, null, 2));
       console.log("Saved raw text extract to", parsedItemsPath);
 
-      console.log("PASS 2: processing citations");
+      console.log("PASS 2-1: detecting citations");
+      const CITATION_DETECTION_PROMPT = `Analyze the following text and determine if it contains citations. Return true if citations are present, otherwise return false.`;
+
+      const citationDetectionSchema = z.object({
+        hasCitations: z.boolean(),
+      });
+
+      for (
+        let i = 0;
+        i < filteredItems.length;
+        i += modelConfig.citationDetection.concurrency
+      ) {
+        const itemBatch = filteredItems.slice(
+          i,
+          i + modelConfig.citationDetection.concurrency
+        );
+
+        await Promise.all(
+          itemBatch.map(async (item) => {
+            try {
+              const result = await getStructuredOpenAICompletionWithRetries(
+                runId,
+                CITATION_DETECTION_PROMPT,
+                `Text to analyze:\n${item.content}`,
+                modelConfig.citationDetection.model,
+                modelConfig.citationDetection.temperature,
+                citationDetectionSchema,
+                3,
+                [],
+                256,
+                0.1
+              );
+
+              item.hasCitations = result?.hasCitations || false;
+            } catch (error) {
+              console.error(
+                "Non fatal error while detecting citations:",
+                error
+              );
+              item.hasCitations = false; // Default to false if there's an error
+            }
+          })
+        );
+      }
+
+      console.log("PASS 2-2: optimzing citations");
 
       const itemsWithCitations = filteredItems.filter(
         (item) => item.hasCitations && !item.isEndCutOff
@@ -1014,19 +1079,19 @@ export default async function handler(
         //   .map((refItem) => refItem.content)
         //   .join("\n");
 
-        const MAX_CONCURRENT_ITEMS = 20;
-
         for (
           let i = 0;
           i < itemsWithCitations.length;
-          i += MAX_CONCURRENT_ITEMS
+          i += modelConfig.citationOptimization.concurrency
         ) {
           const itemBatch = itemsWithCitations.slice(
             i,
-            i + MAX_CONCURRENT_ITEMS
+            i + modelConfig.citationOptimization.concurrency
           );
           console.log(
-            `processing text items ${i} through ${i + MAX_CONCURRENT_ITEMS}`
+            `processing text items ${i} through ${
+              i + modelConfig.citationOptimization.concurrency
+            }`
           );
 
           await Promise.all(
@@ -1035,10 +1100,11 @@ export default async function handler(
                 if (item.type === "text") {
                   const processedItem =
                     await getStructuredOpenAICompletionWithRetries(
+                      runId,
                       CITATION_REPLACEMENT_PROMPT,
                       `User text:\n${item.content}`,
-                      modelConfig.citation.model,
-                      modelConfig.citation.temperature,
+                      modelConfig.citationOptimization.model,
+                      modelConfig.citationOptimization.temperature,
                       referenceSchema,
                       3,
                       [],
@@ -1060,13 +1126,60 @@ export default async function handler(
       }
 
       //It is important to replace citations first and then optimize the math - but only in content with math.
-      console.log("PASS 3: optimizing math for audio");
+      console.log("PASS 3-1: detecting math symbol frequency");
+
+      const MATH_SYMBOL_FREQUENCY_PROMPT = `Analyze the following text and determine the frequency of complex math symbols. Provide a score between 0 and 5, where 0 means no complex math symbols and 5 means a high frequency of complex math symbols.`;
+
+      const mathSymbolFrequencySchema = z.object({
+        mathSymbolFrequency: z.number(),
+      });
+
+      for (
+        let i = 0;
+        i < filteredItems.length;
+        i += modelConfig.mathSymbolFrequencyAssignment.concurrency
+      ) {
+        const itemBatch = filteredItems.slice(
+          i,
+          i + modelConfig.mathSymbolFrequencyAssignment.concurrency
+        );
+
+        await Promise.all(
+          itemBatch.map(async (item) => {
+            if (item.type === "math") {
+              item.mathSymbolFrequency = 5;
+            } else {
+              try {
+                const result = await getStructuredOpenAICompletionWithRetries(
+                  runId,
+                  MATH_SYMBOL_FREQUENCY_PROMPT,
+                  `Text to analyze:\n${item.content}`,
+                  modelConfig.mathSymbolFrequencyAssignment.model,
+                  modelConfig.mathSymbolFrequencyAssignment.temperature,
+                  mathSymbolFrequencySchema,
+                  3,
+                  [],
+                  256,
+                  0.1
+                );
+
+                item.mathSymbolFrequency = result?.mathSymbolFrequency || 0;
+              } catch (error) {
+                console.error(
+                  "Non fatal error while assigning math symbol frequency:",
+                  error
+                );
+                item.mathSymbolFrequency = 0; // Default to 0 if there's an error
+              }
+            }
+          })
+        );
+      }
+
+      console.log("PASS 3-2: optimizing items with high math symbol frequency");
+
       const itemsThatCanIncludeMath = filteredItems.filter(
-        (item) =>
-          ["figure_image", "table_rows", "code_or_algorithm"].includes(
-            item.type
-          ) ||
-          (item.mathSymbolFrequency && item.mathSymbolFrequency > 1)
+        (item) => item.mathSymbolFrequency && item.mathSymbolFrequency > 0
       );
 
       if (itemsThatCanIncludeMath.length > 0) {
@@ -1101,6 +1214,7 @@ export default async function handler(
                 if (item.type === "math" || item.type === "text") {
                   const processedItem =
                     await getStructuredOpenAICompletionWithRetries(
+                      runId,
                       MATH_OPTIMIZATION_PROMPT,
                       `Text to optimize:\n${item.content}`,
                       modelConfig.mathOptimization.model,
@@ -1124,8 +1238,58 @@ export default async function handler(
       }
 
       //Process abbreviations
-      console.log("Processing abbreviations");
+      console.log("PASS 4-1: Detecting abbreviations");
+      const ABBREVIATION_DETECTION_PROMPT = `Analyze the provided text and identify all abbreviations. Accurately determine if an abbreviation is pronounced as a single word or pronounced with its initials.`;
 
+      const abbreviationDetectionSchema = z.object({
+        abbreviations: z.array(
+          z.object({
+            abbreviation: z.string(),
+            expansion: z.string().optional(),
+            type: z.enum([
+              "pronounced_as_a_single_word",
+              "pronounced_with_initials",
+            ]),
+          })
+        ),
+      });
+
+      for (
+        let i = 0;
+        i < filteredItems.length;
+        i += modelConfig.abbreviationExtraction.concurrency
+      ) {
+        const itemBatch = filteredItems.slice(
+          i,
+          i + modelConfig.abbreviationExtraction.concurrency
+        );
+
+        await Promise.all(
+          itemBatch.map(async (item) => {
+            try {
+              const result = await getStructuredOpenAICompletionWithRetries(
+                runId,
+                ABBREVIATION_DETECTION_PROMPT,
+                `Text to analyze:\n${removeBreaks(item.content)}`,
+                modelConfig.abbreviationExtraction.model,
+                modelConfig.abbreviationExtraction.temperature,
+                abbreviationDetectionSchema,
+                3,
+                [],
+                16384,
+                0.1
+              );
+
+              item.allAbbreviations = result?.abbreviations || [];
+            } catch (error) {
+              console.error("Error detecting abbreviations:", error);
+              item.allAbbreviations = []; // Default to an empty array if there's an error
+            }
+          })
+        );
+      }
+
+      console.log("PASS 4-2: Optimizing abbreviations");
       const abbreviationMap: {
         [key: string]: { expansion: string; type: string };
       } = {};
@@ -1175,7 +1339,10 @@ export default async function handler(
                 });
               }
             } catch (error) {
-              console.log("Error while processing abbreviations: ", error);
+              console.log(
+                "Non fatal error while processing abbreviations: ",
+                error
+              );
             }
           });
         }

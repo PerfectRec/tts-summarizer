@@ -21,6 +21,7 @@ const openai = new OpenAI({
 });
 
 async function getStructuredOpenAICompletion(
+  runId: string,
   systemPrompt: string,
   userPrompt: string,
   model: string,
@@ -89,21 +90,28 @@ async function getStructuredOpenAICompletion(
           },
         ];
 
-  const completion = await openai.beta.chat.completions.parse({
-    model: model,
-    temperature: temperature,
-    messages: [
-      {
-        role: "system",
-        content: systemPrompt,
+  const completion = await openai.beta.chat.completions.parse(
+    {
+      model: model,
+      temperature: temperature,
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        ...exampleMessages,
+        ...messages,
+      ],
+      response_format: zodResponseFormat(schema, "schema"),
+      max_tokens: maxTokens,
+      frequency_penalty: frequencyPenalty,
+    },
+    {
+      headers: {
+        "Helicone-Property-runId": runId,
       },
-      ...exampleMessages,
-      ...messages,
-    ],
-    response_format: zodResponseFormat(schema, "schema"),
-    max_tokens: maxTokens,
-    frequency_penalty: frequencyPenalty,
-  });
+    }
+  );
 
   const response = completion.choices[0].message;
 
@@ -222,6 +230,7 @@ async function getOpenAICompletion(
 }
 
 export async function getStructuredOpenAICompletionWithRetries(
+  runId: string,
   systemPrompt: string,
   userPrompt: string,
   model: string,
@@ -237,6 +246,7 @@ export async function getStructuredOpenAICompletionWithRetries(
     try {
       console.log(`Attempt ${attempt + 1}`);
       return await getStructuredOpenAICompletion(
+        runId,
         systemPrompt,
         userPrompt,
         model,
