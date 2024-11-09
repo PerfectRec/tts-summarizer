@@ -26,7 +26,7 @@ export default async function mockHandler(
       uploadedFileUrl: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH.pdf`,
     });
     console.log("Processing status updated");
-  }, 60000); // 1 minute
+  }, 5000);
 
   setTimeout(() => {
     uploadStatus(runId, "Completed", {
@@ -37,7 +37,7 @@ export default async function mockHandler(
       extractedTitle: "Bloom Work From Home",
     });
     console.log("Completed status updated");
-  }, 120000); // 2 minutes
+  }, 30000);
 
   // No need to return anything as the response is sent in the timeout
 }
