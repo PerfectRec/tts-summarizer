@@ -33,7 +33,7 @@ export default async function mockHandler(
       message: "Generated audio output and metadata",
       uploadedFileUrl: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH.pdf`,
       audioFileUrl: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH.mp3`,
-      metadataFile: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH-metadata.json`,
+      metadataFileUrl: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH-metadata.json`,
       extractedTitle: "Bloom Work From Home",
     });
     console.log("Completed status updated");
