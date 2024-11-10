@@ -111,6 +111,7 @@ Checks the status of a summarization process using a run ID.
   - `CoreSystemFailure`: A general system failure occurred.
   - `InvalidLink`: Failed to download PDF from the provided link.
   - `SummarizationMethodNotSupported`: The requested summarization method is not supported.
+  - `SimulatedError`: When using `error=1` in `/mockSummarize`.
 
 ## 3. Mock Summarize Endpoint
 
@@ -125,7 +126,8 @@ Simulates a summarization process and returns a run ID and received time.
 ### Request Parameters
 
 - **Querystring**:
-  Same as `/summarize`
+  - Same as `/summarize`
+  - `error` (string, optional): If set to "1", simulates an error after 10 seconds.
 
 ### Request Body
 

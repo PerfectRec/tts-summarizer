@@ -9,6 +9,7 @@ interface SummarizeRequestParams {
   fileName: string;
   sendEmailToUser: string;
   link: string;
+  error?: string;
 }
 
 type Model =

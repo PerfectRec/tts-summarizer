@@ -10,7 +10,7 @@ export default async function mockHandler(
   }>,
   reply: FastifyReply
 ) {
-  const { email } = request.query;
+  const { email, error } = request.query;
   const runId = uuidv4();
 
   const receivedTime = getCurrentTimestamp();
@@ -26,6 +26,20 @@ export default async function mockHandler(
     receivedTime: receivedTime,
   });
   console.log(`Created runStatus/${runId}.json in S3`);
+
+  if (error && error === "1") {
+    setTimeout(() => {
+      const errorTime = getCurrentTimestamp();
+      uploadStatus(runId, "Error", {
+        errorType: "SimulatedError",
+        message: "Simulated error as requested",
+        receivedTime: receivedTime,
+        errorTime: errorTime,
+      });
+      console.log("Simulated error status uploaded");
+    }, 10000);
+    return;
+  }
 
   let startedProcessingTime: string;
 
