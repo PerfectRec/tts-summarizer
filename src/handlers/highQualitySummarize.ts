@@ -10,7 +10,7 @@ import { subscribeEmail } from "@email/marketing";
 import { v4 as uuidv4 } from "uuid";
 import { getDB } from "db/db";
 import { sendErrorEmail, sendSuccessEmail } from "@utils/email";
-import { clearDirectory } from "@utils/io";
+import { clearDirectory, getCurrentTimestamp } from "@utils/io";
 import { synthesizeSpeechInChunks } from "@utils/polly";
 import { getStructuredOpenAICompletionWithRetries } from "@utils/openai";
 import { isTextCutoff } from "@utils/text";
@@ -91,9 +91,11 @@ export default async function handler(
   let cleanedFileName: string;
 
   const runId = uuidv4();
+  const receivedTime = getCurrentTimestamp();
 
   reply.status(200).send({
     runId: runId,
+    receivedTime: receivedTime,
   });
 
   /* Supported Status
@@ -111,6 +113,7 @@ export default async function handler(
 
   uploadStatus(runId, "Received", {
     message: "Request received",
+    receivedTime: receivedTime,
   });
 
   console.log(`Created runStatus/${runId}.json in S3`);
@@ -137,9 +140,12 @@ export default async function handler(
         cleanedFileName = cleanedFileName.slice(0, -4);
       }
     } catch (error) {
+      const errorTime = getCurrentTimestamp();
       uploadStatus(runId, "Error", {
         errorType: "InvalidLink",
         message: "Failed to download PDF from link",
+        receivedTime: receivedTime,
+        errorTime: errorTime,
       });
       sendErrorEmail(email, link, runId);
       return;
@@ -180,10 +186,13 @@ export default async function handler(
   // return;
 
   if (fileBuffer.length > 100 * 1024 * 1024) {
+    const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
       errorType: "FileSizeExceeded",
       message: "File size exceeds 100MB which is currently not supported",
       uploadedFileUrl: s3pdfFilePath,
+      receivedTime: receivedTime,
+      errorTime: errorTime,
     });
     sendErrorEmail(email, cleanedFileName, runId);
     return;
@@ -230,28 +239,37 @@ export default async function handler(
       outputFolder: tempImageDir,
     });
   } catch (error) {
+    const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
       errorType: "InvalidPDFFormat",
       message: "File has invalid format",
       uploadedFileUrl: s3pdfFilePath,
+      receivedTime: receivedTime,
+      errorTime: errorTime,
     });
     sendErrorEmail(email, cleanedFileName, runId);
     return;
   }
 
   if (pngPagesOriginal.length > 100) {
+    const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
       errorType: "FileNumberOfPagesExceeded",
       message: "pdf has more than 100 pages which is not currently supported",
       uploadedFileUrl: s3pdfFilePath,
+      receivedTime: receivedTime,
+      errorTime: errorTime,
     });
     sendErrorEmail(email, cleanedFileName, runId);
     return;
   }
 
+  const startedProcessingTime = getCurrentTimestamp();
   uploadStatus(runId, "Processing", {
     message: "Started processing",
     uploadedFileUrl: s3pdfFilePath,
+    receivedTime: receivedTime,
+    startedProcessingTime: startedProcessingTime,
   });
 
   console.log("converted pdf pages to images");
@@ -1395,12 +1413,16 @@ export default async function handler(
         extractedTitle = mainTitleItem.content;
       }
 
+      const completedTime = getCurrentTimestamp();
       uploadStatus(runId, "Completed", {
         message: "Generated audio output and metadata",
         uploadedFileUrl: s3pdfFilePath,
         audioFileUrl: s3encodedAudioFilePath,
         metadataFileUrl: s3metadataFilePath,
         extractedTitle,
+        receivedTime: receivedTime,
+        startedProcessingTime: startedProcessingTime,
+        completedTime: completedTime,
       });
 
       if (shouldSendEmailToUser) {
@@ -1412,11 +1434,14 @@ export default async function handler(
         errorFilePath
       );
 
+      const errorTime = getCurrentTimestamp();
       uploadStatus(runId, "Error", {
         errorType: "CoreSystemFailure",
         message: `Error: ${error}`,
         errorFileUrl: s3encodedErrorFilePath,
         uploadedFileUrl: s3pdfFilePath,
+        receivedTime: receivedTime,
+        errorTime: errorTime,
       });
 
       if (shouldSendEmailToUser) {
@@ -1431,10 +1456,13 @@ export default async function handler(
       console.error("Error generating audio file:", error);
     }
   } else {
+    const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
       errorType: "SummarizationMethodNotSupported",
       message: "This summarization method is not supported",
       uploadedFileUrl: s3pdfFilePath,
+      receivedTime: receivedTime,
+      errorTime: errorTime,
     });
 
     if (shouldSendEmailToUser) {

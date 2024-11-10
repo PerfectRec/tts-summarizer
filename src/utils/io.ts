@@ -14,3 +14,7 @@ export function clearDirectory(directoryPath: string) {
     });
   }
 }
+
+export function getCurrentTimestamp() {
+  return new Date().toISOString();
+}
