@@ -38,13 +38,18 @@ interface Item {
   page: number;
   mathSymbolFrequency?: number;
   hasCitations?: boolean;
+  citations?: string[];
   isStartCutOff?: boolean;
   isEndCutOff?: boolean;
   allAbbreviations?: {
     abbreviation: string;
     expansion: string;
-    type: "pronounced_as_a_single_word" | "pronounced_with_initials";
+    type:
+      | "pronounced_as_a_single_word"
+      | "pronounced_with_initials"
+      | "partially_pronounced_with_initials";
   }[];
+  audioIssues?: string[];
 }
 
 interface ItemAudioMetadata {
@@ -54,6 +59,7 @@ interface ItemAudioMetadata {
   transcript: string;
   page: number;
   index: number;
+  audioIssues: string[];
 }
 
 interface ItemAudioResult {

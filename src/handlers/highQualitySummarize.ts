@@ -65,12 +65,17 @@ const modelConfig: ModelConfig = {
     concurrency: 20,
   },
   abbreviationExtraction: {
-    temperature: 0.2,
+    temperature: 0.4,
     model: "gpt-4o-2024-08-06",
     concurrency: 20,
   },
   citationOptimization: {
     temperature: 0,
+    model: "gpt-4o-2024-08-06",
+    concurrency: 20,
+  },
+  audioPleasantnessCheck: {
+    temperature: 0.2,
     model: "gpt-4o-2024-08-06",
     concurrency: 20,
   },
@@ -320,10 +325,14 @@ export default async function handler(
       //   allBatchResults = allBatchResults.concat(batchResults);
       // }
 
-      const pngPages = pngPagesOriginal.filter((_, index) => {
-        const result = allBatchResults.find((result) => result.index === index);
-        return result?.relevant ?? true;
-      });
+      const pngPages = pngPagesOriginal
+        .filter((_, index) => {
+          const result = allBatchResults.find(
+            (result) => result.index === index
+          );
+          return result?.relevant ?? true;
+        })
+        .slice(21, 24);
 
       console.log(
         `Filtered out ${
@@ -759,7 +768,9 @@ export default async function handler(
         // Compile the author info into the desired format
         let compiledAuthorInfo = Object.entries(authorGroups)
           .map(([affiliation, authorNames]) => {
-            return `[break0.6]${authorNames.join(", ")} from ${affiliation}`;
+            return affiliation && affiliation !== ""
+              ? `[break0.6]${authorNames.join(", ")} from ${affiliation}`
+              : `[break0.6]${authorNames.join(", ")}`;
           })
           .join(", ");
 
@@ -790,7 +801,34 @@ export default async function handler(
 
       console.log("filtering unnecessary item types");
 
+      let conclusionInsertionIndex = -1;
+      let conclusionInsertionPage = 0;
+
+      // Find the references_heading or the first references_item
+      for (let i = 0; i < allItems.length; i++) {
+        if (
+          allItems[i].type === "references_heading" ||
+          allItems[i].type === "references_item"
+        ) {
+          conclusionInsertionIndex = i;
+          conclusionInsertionPage = allItems[i].page;
+          break;
+        }
+      }
+
+      // Insert the message if a suitable insertion point was found
+      if (conclusionInsertionIndex !== -1) {
+        allItems.splice(conclusionInsertionIndex, 0, {
+          type: "end_marker",
+          content:
+            "[break0.4]You have reached the end of the main paper.[break0.4]",
+          page: conclusionInsertionPage,
+        });
+      }
+
       let inAcknowledgementsSection = false;
+      let inReferencesSection = false;
+      let mainTitleDetected = false;
       const filteredItems = abstractExists
         ? allItems.filter((item: Item, index: number, array: any[]) => {
             if (!abstractDetected) {
@@ -817,7 +855,14 @@ export default async function handler(
                 inAcknowledgementsSection = false;
               }
 
-              if (inAcknowledgementsSection) {
+              // Check for references section
+              if (item.type === "references_heading") {
+                inReferencesSection = true;
+              } else if (item.type.includes("heading")) {
+                inReferencesSection = false;
+              }
+
+              if (inAcknowledgementsSection || inReferencesSection) {
                 return false; // Skip items in the acknowledgements section
               }
               // Check for math items between endnotes
@@ -851,6 +896,7 @@ export default async function handler(
                 "math",
                 "abstract_content",
                 "code_or_algorithm",
+                "end_marker",
               ].includes(item.type);
             }
           })
@@ -862,8 +908,15 @@ export default async function handler(
               inAcknowledgementsSection = false;
             }
 
-            if (inAcknowledgementsSection) {
-              return false; // Skip items in the acknowledgements section
+            // Check for references section
+            if (item.type === "references_heading") {
+              inReferencesSection = true;
+            } else if (item.type.includes("heading")) {
+              inReferencesSection = false;
+            }
+
+            if (inAcknowledgementsSection || inReferencesSection) {
+              return false; // Skip items in the acknowledgements or references section
             }
             // Check for math items between endnotes
             if (item.type === "math" && index > 0 && index < array.length - 1) {
@@ -884,6 +937,13 @@ export default async function handler(
               return false;
             }
 
+            if (item.type === "main_title") {
+              if (mainTitleDetected) {
+                return false; // Skip subsequent main_title items
+              }
+              mainTitleDetected = true;
+            }
+
             return [
               "main_title",
               "improved_author_info",
@@ -895,8 +955,18 @@ export default async function handler(
               "abstract_content",
               "abstract_heading",
               "code_or_algorithm",
+              "end_marker",
             ].includes(item.type);
           });
+
+      const endMarkerIndex = filteredItems.findIndex(
+        (item) => item.type === "end_marker"
+      );
+
+      if (endMarkerIndex !== -1 && endMarkerIndex < filteredItems.length - 1) {
+        filteredItems[endMarkerIndex].content =
+          "[break0.4]You have reached the end of the main paper. Appendix sections follow.[break0.4]";
+      }
 
       const specialItems = filteredItems.filter(
         (item) => item.type === "figure_image" || item.type === "table_rows"
@@ -1034,6 +1104,7 @@ export default async function handler(
 
       const citationDetectionSchema = z.object({
         hasCitations: z.boolean(),
+        citations: z.array(z.string()),
       });
 
       for (
@@ -1063,12 +1134,14 @@ export default async function handler(
               );
 
               item.hasCitations = result?.hasCitations || false;
+              item.citations = result?.citations || [];
             } catch (error) {
               console.error(
                 "Non fatal error while detecting citations:",
                 error
               );
               item.hasCitations = false; // Default to false if there's an error
+              item.citations = [];
             }
           })
         );
@@ -1143,6 +1216,22 @@ export default async function handler(
         }
       }
 
+      console.log(
+        "PASS 2-3: processing citations for items that have end cut off"
+      );
+      for (const item of filteredItems) {
+        if (
+          item.hasCitations &&
+          item.citations &&
+          item.citations.length > 0 &&
+          !item.replacedCitations
+        ) {
+          item.citations.forEach((citation) => {
+            item.content = item.content.replaceAll(citation, "");
+          });
+        }
+      }
+
       //It is important to replace citations first and then optimize the math - but only in content with math.
       console.log("PASS 3-1: detecting math symbol frequency");
 
@@ -1211,19 +1300,19 @@ export default async function handler(
           optimizedContent: z.string(),
         });
 
-        const MAX_CONCURRENT_ITEMS = 20;
-
         for (
           let i = 0;
           i < itemsThatCanIncludeMath.length;
-          i += MAX_CONCURRENT_ITEMS
+          i += modelConfig.mathOptimization.concurrency
         ) {
           const itemBatch = itemsThatCanIncludeMath.slice(
             i,
-            i + MAX_CONCURRENT_ITEMS
+            i + modelConfig.mathOptimization.concurrency
           );
           console.log(
-            `processing math items ${i} through ${i + MAX_CONCURRENT_ITEMS}`
+            `processing math items ${i} through ${
+              i + modelConfig.mathOptimization.concurrency
+            }`
           );
 
           await Promise.all(
@@ -1257,7 +1346,13 @@ export default async function handler(
 
       //Process abbreviations
       console.log("PASS 4-1: Detecting abbreviations");
-      const ABBREVIATION_DETECTION_PROMPT = `Analyze the provided text and identify all abbreviations. Accurately determine if an abbreviation is pronounced as a single word or pronounced with its initials.`;
+      const ABBREVIATION_DETECTION_PROMPT = `Analyze the provided text and identify all abbreviations. 
+      
+      Accurately determine if an abbreviation is pronounced as a single word,  pronounced with its initials or partially pronounced with its initials. The general rule of thumb is that if a word (excluding "s" at the end for plural) is a mix of uppercase and lowercase then it is partially pronounced with its initials. 
+      
+      Just because something is in () or [] does not mean it is an abbreviation. Be very careful in determining what is an abbreviation.
+      
+      If you do not know the expansion, leave it empty.`;
 
       const abbreviationDetectionSchema = z.object({
         abbreviations: z.array(
@@ -1267,6 +1362,7 @@ export default async function handler(
             type: z.enum([
               "pronounced_as_a_single_word",
               "pronounced_with_initials",
+              "partially_pronounced_with_initials",
             ]),
           })
         ),
@@ -1332,7 +1428,9 @@ export default async function handler(
               // Check first two appearances
               if (
                 abbreviationOccurrences[abbrKey] <= 2 &&
-                !item.content.includes(expansion)
+                !item.content
+                  .toLocaleLowerCase()
+                  .includes(expansion.toLocaleLowerCase())
               ) {
                 item.content = item.content.replace(
                   new RegExp(`\\b${abbr.abbreviation}\\b`, "g"),
@@ -1346,15 +1444,22 @@ export default async function handler(
                 !abbr.abbreviation.includes(".")
               ) {
                 const baseAbbr = abbr.abbreviation.replace(/s$/, "");
-                const withPeriods = baseAbbr.split("").join(".");
+                const hasVowel = /[aeiou]/i.test(baseAbbr);
 
-                // Create a regex to match both singular and plural forms
-                const regex = new RegExp(`\\b(${baseAbbr})(s?)\\b`, "g");
+                if (hasVowel) {
+                  const withPeriods = baseAbbr.split("").join(".");
 
-                // Replace based on whether the matched item has 's' or not
-                item.content = item.content.replace(regex, (match, p1, p2) => {
-                  return p2 ? `${withPeriods}s` : withPeriods;
-                });
+                  // Create a regex to match both singular and plural forms
+                  const regex = new RegExp(`\\b(${baseAbbr})(s?)\\b`, "g");
+
+                  // Replace based on whether the matched item has 's' or not
+                  item.content = item.content.replace(
+                    regex,
+                    (match, p1, p2) => {
+                      return p2 ? `${p1}s` : withPeriods; // Do not add periods if 's' is present
+                    }
+                  );
+                }
               }
             } catch (error) {
               console.log(
@@ -1365,6 +1470,66 @@ export default async function handler(
           });
         }
       });
+
+      console.log("PASS 5-1: Checking audio pleasantness");
+
+      const AUDIO_PLEASANTNESS_PROMPT = `Analyze the following item and detect issues that would make the content suboptimal as audio.`;
+
+      const audioPleasantnessSchema = z.object({
+        audioIssues: z.array(
+          z.enum([
+            "too_much_math_notation",
+            "very_long_list",
+            "high_repetition",
+            "too_many_citations",
+          ])
+        ),
+      });
+
+      for (
+        let i = 0;
+        i < filteredItems.length;
+        i += modelConfig.audioPleasantnessCheck.concurrency
+      ) {
+        const itemBatch = filteredItems.slice(
+          i,
+          i + modelConfig.audioPleasantnessCheck.concurrency
+        );
+
+        await Promise.all(
+          itemBatch.map(async (item) => {
+            try {
+              const result = await getStructuredOpenAICompletionWithRetries(
+                runId,
+                AUDIO_PLEASANTNESS_PROMPT,
+                `Item to analyze:\n${JSON.stringify(
+                  {
+                    type: item.type,
+                    content: removeBreaks(item.content),
+                  },
+                  null,
+                  2
+                )}`,
+                modelConfig.audioPleasantnessCheck.model,
+                modelConfig.audioPleasantnessCheck.temperature,
+                audioPleasantnessSchema,
+                3,
+                [],
+                256,
+                0.1
+              );
+
+              item.audioIssues = result?.audioIssues || [];
+            } catch (error) {
+              console.error(
+                "Non fatal error checking audio pleasantness:",
+                error
+              ); // Default to false if there's an error
+              item.audioIssues = [];
+            }
+          })
+        );
+      }
 
       const filteredItemsPath = path.join(fileNameDir, "filteredItems.json");
       fs.writeFileSync(

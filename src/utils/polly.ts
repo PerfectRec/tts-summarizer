@@ -77,6 +77,7 @@ export async function synthesizeSpeechInChunks(
       transcript: removeBreaks(item.content),
       page: item.page,
       index: 0,
+      audioIssues: item.audioIssues || [],
     };
 
     return { itemAudioBuffer, itemAudioMetadata };

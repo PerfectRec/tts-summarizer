@@ -244,7 +244,6 @@ export async function getStructuredOpenAICompletionWithRetries(
 ) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      console.log(`Attempt ${attempt + 1}`);
       return await getStructuredOpenAICompletion(
         runId,
         systemPrompt,
