@@ -325,14 +325,10 @@ export default async function handler(
       //   allBatchResults = allBatchResults.concat(batchResults);
       // }
 
-      const pngPages = pngPagesOriginal
-        .filter((_, index) => {
-          const result = allBatchResults.find(
-            (result) => result.index === index
-          );
-          return result?.relevant ?? true;
-        })
-        .slice(21, 24);
+      const pngPages = pngPagesOriginal.filter((_, index) => {
+        const result = allBatchResults.find((result) => result.index === index);
+        return result?.relevant ?? true;
+      });
 
       console.log(
         `Filtered out ${
