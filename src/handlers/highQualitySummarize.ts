@@ -49,6 +49,11 @@ const modelConfig: ModelConfig = {
     model: "gpt-4o-2024-08-06",
     concurrency: 0,
   },
+  mainTitleExtractor: {
+    temperature: 0.2,
+    model: "gpt-4o-2024-08-06",
+    concurrency: 0,
+  },
   mathSymbolFrequencyAssignment: {
     temperature: 0.1,
     model: "gpt-4o-2024-08-06",
@@ -284,6 +289,7 @@ export default async function handler(
       let allItems: Item[] = [];
       let abstractDetected = false;
       let authorInfoContents = "";
+      let mainTitleContents = "";
       let allBatchResults: { index: number; relevant: boolean }[] = [];
 
       console.log(`PASS 0: Determining which pages are relevant`);
@@ -458,6 +464,10 @@ export default async function handler(
 
               if (item.type === "author_info" && i < 5) {
                 authorInfoContents += `\n\n${item.content}`;
+              }
+
+              if (item.type === "main_title" && i < 5) {
+                mainTitleContents += `\n\n${item.content}`;
               }
 
               if (item.type.includes("heading")) {
@@ -702,7 +712,7 @@ export default async function handler(
         }
       }
 
-      console.log("Improving author section");
+      console.log("Improving author section and detecting main title.");
       const IMPROVE_AUTHOR_INFO_PROMPT = `Extract all the author info to make. Keep only the author names and affiliations.
       
       If the affiliation is not available for a user leave it empty. Do not repeat the same author or affiliation multiple times.`;
@@ -764,6 +774,27 @@ export default async function handler(
         allItems[firstAuthorInfoIndex].type = "improved_author_info";
         allItems[firstAuthorInfoIndex].content = compiledAuthorInfo;
       }
+
+      const MAIN_TITLE_EXTRACTION_PROMPT = `Extract the main title of the document from the following text. Use your judgement to accurately determine the main title.`;
+
+      const mainTitleSchema = z.object({
+        mainTitle: z.string(),
+      });
+
+      const extractedMainTitle = await getStructuredOpenAICompletionWithRetries(
+        runId,
+        MAIN_TITLE_EXTRACTION_PROMPT,
+        `Here is the text from the first 5 pages: ${mainTitleContents}`,
+        modelConfig.mainTitleExtractor.model,
+        modelConfig.mainTitleExtractor.temperature,
+        mainTitleSchema,
+        3,
+        pngPages.slice(0, 5).map((page) => page.path)
+      );
+
+      const extractedTitle = extractedMainTitle?.mainTitle || "NoTitleDetected";
+
+      console.log("\nThe main title is:\n\n", extractedTitle);
 
       const abstractExists = allItems.some(
         (item) =>
@@ -1572,15 +1603,6 @@ export default async function handler(
         Buffer.from(JSON.stringify(audioMetadata)),
         metadataFilePath
       );
-
-      let extractedTitle = "Title does not exist in processed doc";
-      // Extract the title from the main_title item
-      const mainTitleItem = filteredItems.find(
-        (item) => item.type === "main_title"
-      );
-      if (mainTitleItem) {
-        extractedTitle = mainTitleItem.content;
-      }
 
       const completedTime = getCurrentTimestamp();
       uploadStatus(runId, "Completed", {
