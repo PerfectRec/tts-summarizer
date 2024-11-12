@@ -354,11 +354,11 @@ export default async function handler(
 
             const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
 
-            One paragraph should always be one single item.
+            The text of one paragraph should always be one single text item.
 
             Please include math expressions.
             
-            Include partial text cut off at the start or end of the page. 
+            Please include partial sentences cut off at the start or end of the page. This is very very important.
             
             Combine all rows of a table into a single table_rows item.
             
@@ -402,20 +402,6 @@ export default async function handler(
                     "acknowledgements_content",
                   ]),
                   content: z.string(),
-                  //mathSymbolFrequency: z.number(),
-                  //hasCitations: z.boolean(),
-                  // allAbbreviations: z.array(
-                  //   z.object({
-                  //     abbreviation: z.string(),
-                  //     expansion: z.string().optional(),
-                  //     type: z
-                  //       .enum([
-                  //         "pronounced_as_a_single_word",
-                  //         "pronounced_with_initials",
-                  //       ])
-                  //       .optional(),
-                  //   })
-                  // ),
                 })
               ),
             });
@@ -816,8 +802,7 @@ export default async function handler(
       if (conclusionInsertionIndex !== -1) {
         allItems.splice(conclusionInsertionIndex, 0, {
           type: "end_marker",
-          content:
-            "[break0.4]You have reached the end of the main paper.[break0.4]",
+          content: "[break0.4]You have reached the end of the paper.[break0.4]",
           page: conclusionInsertionPage,
         });
       }
@@ -847,7 +832,10 @@ export default async function handler(
               // Check for acknowledgements section
               if (item.type === "acknowledgements_heading") {
                 inAcknowledgementsSection = true;
-              } else if (item.type.includes("heading")) {
+              } else if (
+                item.type.includes("heading") ||
+                item.type === "end_marker"
+              ) {
                 inAcknowledgementsSection = false;
               }
 
@@ -900,7 +888,10 @@ export default async function handler(
             // Check for acknowledgements section
             if (item.type === "acknowledgements_heading") {
               inAcknowledgementsSection = true;
-            } else if (item.type.includes("heading")) {
+            } else if (
+              item.type.includes("heading") ||
+              item.type === "end_marker"
+            ) {
               inAcknowledgementsSection = false;
             }
 
@@ -1069,18 +1060,12 @@ export default async function handler(
 
         const [movedItem] = filteredItems.splice(currentIndex, 1);
 
-        // Check if the item at the insert index is the same type and has the same label
-        // while (
-        //   insertIndex < filteredItems.length &&
-        //   filteredItems[insertIndex].type === movedItem.type &&
-        //   filteredItems[insertIndex].label &&
-        //   filteredItems[insertIndex].label?.labelType ===
-        //     movedItem.label?.labelType &&
-        //   filteredItems[insertIndex].label?.labelNumber ===
-        //     movedItem.label?.labelNumber
-        // ) {
-        //   insertIndex += 1; // Move below the item
-        // }
+        while (
+          insertIndex < filteredItems.length &&
+          filteredItems[insertIndex].type === movedItem.type
+        ) {
+          insertIndex += 1; // Move below the item
+        }
 
         if (insertIndex !== -1) {
           filteredItems.splice(insertIndex, 0, movedItem);
@@ -1347,8 +1332,10 @@ export default async function handler(
       Accurately determine if an abbreviation is pronounced as a single word,  pronounced with its initials or partially pronounced with its initials. The general rule of thumb is that if a word (excluding "s" at the end for plural) is a mix of uppercase and lowercase then it is partially pronounced with its initials. 
       
       Just because something is in () or [] does not mean it is an abbreviation. Be very careful in determining what is an abbreviation.
+
+      Be very conservative while detecting abbreviations. Do not detect people's names. If you are unsure about a word being an abbreviation, then do not detect it as such.
       
-      If you do not know the expansion, leave it empty.`;
+      If you do not know the expansion or are not confident, leave it empty.`;
 
       const abbreviationDetectionSchema = z.object({
         abbreviations: z.array(
@@ -1364,12 +1351,24 @@ export default async function handler(
         ),
       });
 
+      const itemsThatNeedAbbreviationOptimization = filteredItems.filter(
+        (item) =>
+          [
+            "text",
+            "abstract_content",
+            "table_rows",
+            "figure_image",
+            "math",
+            "code_or_algorithm",
+          ].includes(item.type)
+      );
+
       for (
         let i = 0;
-        i < filteredItems.length;
+        i < itemsThatNeedAbbreviationOptimization.length;
         i += modelConfig.abbreviationExtraction.concurrency
       ) {
-        const itemBatch = filteredItems.slice(
+        const itemBatch = itemsThatNeedAbbreviationOptimization.slice(
           i,
           i + modelConfig.abbreviationExtraction.concurrency
         );
@@ -1405,10 +1404,15 @@ export default async function handler(
       } = {};
       const abbreviationOccurrences: { [key: string]: number } = {};
 
-      filteredItems.forEach((item) => {
+      itemsThatNeedAbbreviationOptimization.forEach((item) => {
         if (item.allAbbreviations) {
           item.allAbbreviations.forEach((abbr) => {
             try {
+              // Check if abbreviation has at least two uppercase letters next to each other
+              if (!/[A-Z]{2,}/.test(abbr.abbreviation)) {
+                return;
+              }
+
               const abbrKey = abbr.abbreviation.toLowerCase().replace(/s$/, "");
               const expansion = abbr.expansion || "";
 
@@ -1418,7 +1422,10 @@ export default async function handler(
 
               // Store the first expansion found
               if (!abbreviationMap[abbrKey] && expansion) {
-                abbreviationMap[abbrKey] = { expansion, type: abbr.type || "" };
+                abbreviationMap[abbrKey] = {
+                  expansion,
+                  type: abbr.type || "",
+                };
               }
 
               // Check first two appearances
@@ -1469,7 +1476,7 @@ export default async function handler(
 
       console.log("PASS 5-1: Checking audio pleasantness");
 
-      const AUDIO_PLEASANTNESS_PROMPT = `Analyze the following item and detect issues that would make the content suboptimal as audio.`;
+      const AUDIO_PLEASANTNESS_PROMPT = `Analyze the following item and detect issues that would make the content suboptimal as audio. For example, a text item could be marked as heading.`;
 
       const audioPleasantnessSchema = z.object({
         audioIssues: z.array(
@@ -1478,6 +1485,7 @@ export default async function handler(
             "very_long_list",
             "high_repetition",
             "too_many_citations",
+            "mismatched_item_type",
           ])
         ),
       });

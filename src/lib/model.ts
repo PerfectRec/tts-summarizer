@@ -27,6 +27,17 @@ interface Author {
   affiliation: string;
 }
 
+type AbbreviationSubTypes =
+  | "pronounced_as_a_single_word"
+  | "pronounced_with_initials"
+  | "partially_pronounced_with_initials";
+
+interface Abbreviation {
+  abbreviation: string;
+  expansion: string;
+  type: AbbreviationSubTypes;
+}
+
 interface Item {
   type: string;
   content: string;
@@ -41,14 +52,7 @@ interface Item {
   citations?: string[];
   isStartCutOff?: boolean;
   isEndCutOff?: boolean;
-  allAbbreviations?: {
-    abbreviation: string;
-    expansion: string;
-    type:
-      | "pronounced_as_a_single_word"
-      | "pronounced_with_initials"
-      | "partially_pronounced_with_initials";
-  }[];
+  allAbbreviations?: Abbreviation[];
   audioIssues?: string[];
 }
 
