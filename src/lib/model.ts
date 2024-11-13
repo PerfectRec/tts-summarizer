@@ -40,8 +40,9 @@ interface Abbreviation {
 
 interface Item {
   type: string;
+  title?: string;
   content: string;
-  label?: { labelType: string; labelNumber: string };
+  label?: { labelType: string; labelNumber: string; panelNumber: string };
   summary?: string;
   optimizedMath?: boolean;
   replacedCitations?: Boolean;

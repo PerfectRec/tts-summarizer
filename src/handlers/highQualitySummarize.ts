@@ -60,7 +60,7 @@ const modelConfig: ModelConfig = {
     concurrency: 20,
   },
   mathOptimization: {
-    temperature: 0.4,
+    temperature: 0.7,
     model: "gpt-4o-2024-08-06",
     concurrency: 20,
   },
@@ -358,15 +358,17 @@ export default async function handler(
           batch.map(async (pngPage, index) => {
             console.log("processing page ", i + index + 1);
 
-            const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. 
+            const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. Do not exclude any text.
 
             The text of one paragraph should always be one single text item.
 
             Please include math expressions.
             
-            Please include partial sentences cut off at the start or end of the page. This is very very important.
+            Include partial text cut off at the start or end of the page. 
             
             Combine all rows of a table into a single table_rows item.
+
+            Make sure to detect code and algorithms as seperate items out of text.
             
             Please use your best judgement to determine the abstract even if it is not explicitly labeled as such.
             
@@ -652,14 +654,24 @@ export default async function handler(
                 );
                 const codeSummarizationSchema = z.object({
                   summarizedCode: z.object({
+                    type: z.string(z.enum(["code_or_algorithm"])),
                     content: z.string(),
                     title: z.string(),
+                    label: z.object({
+                      labelType: z.string(),
+                      labelNumber: z.string(),
+                      panelNumber: z.string().optional(),
+                    }),
                   }),
                 });
 
                 const CODE_SUMMARIZE_PROMPT = `Summarize the given code or algorithm. Explain what the code or algorithm does in simple terms including its input and output. Do not include any code syntax in the summary.
                 
-                Also extract the title of the algorithm or code block. If no title is mentioned, then generate an appropriate one yourself.`;
+                Also extract the title of the algorithm or code block. If no title is mentioned, then generate an appropriate one yourself.
+                
+                If there is no label or label number set the labelType as "Code" and labelNumber as "unlabeled".
+                
+                If there is no panel number set the panelNumber as "unlabeled"`;
 
                 const summarizedCode =
                   await getStructuredOpenAICompletionWithRetries(
@@ -672,11 +684,23 @@ export default async function handler(
                     modelConfig.codeSummarization.temperature,
                     codeSummarizationSchema,
                     3,
-                    [],
-                    1024
+                    [pagePath],
+                    16384,
+                    0
                   );
 
-                item.content = `Code or Algorithm, title: ${summarizedCode?.summarizedCode.title}, summary: ${summarizedCode?.summarizedCode.content}`;
+                item.label = summarizedCode?.summarizedCode?.label;
+                item.title = summarizedCode?.summarizedCode?.title;
+                item.content = `${item.label.labelType} ${
+                  item.label.labelNumber === "unlabeled"
+                    ? ""
+                    : item.label.labelNumber
+                } ${
+                  item.label.panelNumber &&
+                  item.label.panelNumber !== "unlabeled"
+                    ? `Panel ${item.label.panelNumber}`
+                    : ""
+                } summary:\n${summarizedCode?.summarizedCode.content}`;
               }
 
               //Some manual latex processing
@@ -712,7 +736,9 @@ export default async function handler(
         }
       }
 
-      console.log("Improving author section and detecting main title.");
+      console.log(
+        "PASS 1-3: Improving author section and detecting main title."
+      );
       const IMPROVE_AUTHOR_INFO_PROMPT = `Extract all the author info to make. Keep only the author names and affiliations.
       
       If the affiliation is not available for a user leave it empty. Do not repeat the same author or affiliation multiple times.`;
@@ -812,7 +838,9 @@ export default async function handler(
       //   }
       // }
 
-      console.log("filtering unnecessary item types");
+      console.log(
+        "PASS 1-4: Fixing potential issues with references and acknowledgements"
+      );
 
       //processing to correct some important headings
       for (const item of allItems) {
@@ -834,11 +862,31 @@ export default async function handler(
         }
       }
 
+      let lastReferencesHeadingIndex = -1;
+
+      // Find the last references_heading index
+      for (let i = allItems.length - 1; i >= 0; i--) {
+        if (allItems[i].type === "references_heading") {
+          lastReferencesHeadingIndex = i;
+          break;
+        }
+      }
+
+      // Update the type of all but the final references heading
+      for (let i = 0; i < allItems.length; i++) {
+        if (
+          allItems[i].type === "references_heading" &&
+          i !== lastReferencesHeadingIndex
+        ) {
+          allItems[i].type = "stray_references_heading";
+        }
+      }
+
       let conclusionInsertionIndex = -1;
       let conclusionInsertionPage = 0;
 
-      // Find the references_heading or the first references_item
-      for (let i = 0; i < allItems.length; i++) {
+      // Find the last references_heading or references_item
+      for (let i = allItems.length - 1; i >= 0; i--) {
         if (
           allItems[i].type === "references_heading" ||
           allItems[i].type === "references_item"
@@ -851,12 +899,13 @@ export default async function handler(
 
       // Insert the message if a suitable insertion point was found
       if (conclusionInsertionIndex !== -1) {
-        allItems.splice(conclusionInsertionIndex, 0, {
+        allItems.splice(conclusionInsertionIndex + 1, 0, {
           type: "end_marker",
           content: "[break0.4]You have reached the end of the paper.[break0.4]",
           page: conclusionInsertionPage,
         });
       }
+      console.log("PASS 1-5: filtering unnecessary item types");
 
       let inAcknowledgementsSection = false;
       let inReferencesSection = false;
@@ -880,13 +929,13 @@ export default async function handler(
                 "abstract_content",
               ].includes(item.type);
             } else {
+              if (item.type === "end_marker") {
+                return true;
+              }
               // Check for acknowledgements section
               if (item.type === "acknowledgements_heading") {
                 inAcknowledgementsSection = true;
-              } else if (
-                item.type.includes("heading") ||
-                item.type === "end_marker"
-              ) {
+              } else if (item.type.includes("heading")) {
                 inAcknowledgementsSection = false;
               }
 
@@ -936,13 +985,14 @@ export default async function handler(
             }
           })
         : allItems.filter((item: Item, index: number, array: any[]) => {
+            if (item.type === "end_marker") {
+              return true;
+            }
+
             // Check for acknowledgements section
             if (item.type === "acknowledgements_heading") {
               inAcknowledgementsSection = true;
-            } else if (
-              item.type.includes("heading") ||
-              item.type === "end_marker"
-            ) {
+            } else if (item.type.includes("heading")) {
               inAcknowledgementsSection = false;
             }
 
@@ -1007,9 +1057,12 @@ export default async function handler(
       }
 
       const specialItems = filteredItems.filter(
-        (item) => item.type === "figure_image" || item.type === "table_rows"
+        (item) =>
+          item.type === "figure_image" ||
+          item.type === "table_rows" ||
+          item.type === "code_or_algorithm"
       );
-      console.log("repositioning images and figures");
+      console.log("repositioning images and figures and code");
       for (const item of specialItems) {
         if (item.repositioned || !item.label) {
           continue;
@@ -1051,6 +1104,14 @@ export default async function handler(
             );
           } else if (labelType === "Table") {
             matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`);
+          } else if (labelType === "Algorithm") {
+            matchWords.push(
+              `Algorithm ${labelNumber}`,
+              `Algo ${labelNumber}`,
+              `Algo. ${labelNumber}`,
+              `Alg. ${labelNumber}`,
+              `ALGORITHM ${labelNumber}`
+            );
           }
 
           for (let i = 0; i < filteredItems.length; i++) {
@@ -1190,7 +1251,7 @@ export default async function handler(
         
         If the citation is part of a phrase like "such as <citations>" then remove the phrase.
 
-        Keep references to tables and figures.
+        Do not remove citations to tables and figures in the paper.
         
         Please return the provided text as it is with only citations removed. Do not attempt to complete the text.`;
 
@@ -1318,7 +1379,7 @@ export default async function handler(
       console.log("PASS 3-2: optimizing items with high math symbol frequency");
 
       const itemsThatCanIncludeMath = filteredItems.filter(
-        (item) => item.mathSymbolFrequency && item.mathSymbolFrequency > 0
+        (item) => item.mathSymbolFrequency && item.mathSymbolFrequency > 1
       );
 
       if (itemsThatCanIncludeMath.length > 0) {
@@ -1620,7 +1681,7 @@ export default async function handler(
 
       const audioFileUrl = await uploadFile(audioBuffer, audioFilePath);
       const metadataFileUrl = await uploadFile(
-        Buffer.from(JSON.stringify(audioMetadata)),
+        Buffer.from(JSON.stringify(audioMetadata, null, 2)),
         metadataFilePath
       );
 

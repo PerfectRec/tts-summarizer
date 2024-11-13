@@ -17,7 +17,7 @@ const client = new UnstructuredClient({
   },
 });
 
-const filename = "./tests/attention_is_all_you_need.pdf";
+const filename = "./tests/papers/Verus.pdf";
 const data = fs.readFileSync(filename);
 
 client.general
@@ -32,6 +32,7 @@ client.general
       splitPdfAllowFailed: true,
       splitPdfConcurrencyLevel: 15,
       languages: ["eng"],
+      extractImageBlockTypes: ["Image", "Table"],
     },
   })
   .then((res: PartitionResponse) => {
