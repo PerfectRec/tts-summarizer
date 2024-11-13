@@ -814,6 +814,26 @@ export default async function handler(
 
       console.log("filtering unnecessary item types");
 
+      //processing to correct some important headings
+      for (const item of allItems) {
+        if (item.type === "heading") {
+          const normalizedContent = removeBreaks(item.content).toLowerCase();
+          if (
+            normalizedContent.includes("acknowledgment") ||
+            normalizedContent.includes("acknowledgments") ||
+            normalizedContent.includes("acknowledgements") ||
+            normalizedContent.includes("acknowledgement")
+          ) {
+            item.type = "acknowledgements_heading";
+          } else if (
+            normalizedContent.includes("reference") ||
+            normalizedContent.includes("references")
+          ) {
+            item.type = "references_heading";
+          }
+        }
+      }
+
       let conclusionInsertionIndex = -1;
       let conclusionInsertionPage = 0;
 
