@@ -15,6 +15,7 @@ import { synthesizeSpeechInChunks } from "@utils/polly";
 import { getStructuredOpenAICompletionWithRetries } from "@utils/openai";
 import { isTextCutoff } from "@utils/text";
 import { removeBreaks } from "@utils/ssml";
+import { processUnstructuredBuffer } from "@utils/unstructured";
 
 const { db } = getDB();
 
@@ -223,11 +224,23 @@ export default async function handler(
 
   if (summarizationMethod === "ultimate") {
     try {
+      let initialItems = [];
       let parsedItems: Item[] = [];
       let filteredItems: Item[] = [];
       let extractedTitle: string = "NoTitleDetected";
 
-      // Parsing and summrization steps---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      // Get the initial items from Unstructured
+
+      initialItems = await processUnstructuredBuffer(
+        fileBuffer,
+        cleanedFileName
+      );
+
+      const initialItemsPath = path.join(fileNameDir, "initialItems.json");
+      fs.writeFileSync(initialItemsPath, JSON.stringify(initialItems, null, 2));
+      console.log("Saved initial json to", initialItemsPath);
+
+      // Type conversion and summarization steps---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
       const parsedItemsPath = path.join(fileNameDir, "parsedItems.json");
       fs.writeFileSync(parsedItemsPath, JSON.stringify(parsedItems, null, 2));
@@ -246,10 +259,18 @@ export default async function handler(
 
       //return;
 
+      const initialItemsFileName = `${cleanedFileName}-initialItems.json`;
       const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
       const filteredItemsFileName = `${cleanedFileName}-filteredItems.json`;
+
+      const initialItemsFilePath = `${email}/${initialItemsFileName}`;
       const parsedItemsFilePath = `${email}/${parsedItemsFileName}`;
       const filteredItemsFilePath = `${email}/${filteredItemsFileName}`;
+
+      const initialItemsFileUrl = await uploadFile(
+        fs.readFileSync(initialItemsPath),
+        initialItemsFilePath
+      );
 
       const parsedItemsFileUrl = await uploadFile(
         fs.readFileSync(parsedItemsPath),

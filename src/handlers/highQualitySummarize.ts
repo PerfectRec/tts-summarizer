@@ -13,7 +13,7 @@ import { sendErrorEmail, sendSuccessEmail } from "@utils/email";
 import { clearDirectory, getCurrentTimestamp } from "@utils/io";
 import { synthesizeSpeechInChunks } from "@utils/polly";
 import { getStructuredOpenAICompletionWithRetries } from "@utils/openai";
-import { isTextCutoff } from "@utils/text";
+import { isTextCutoff, replaceAbbreviations } from "@utils/text";
 import { removeBreaks } from "@utils/ssml";
 
 const { db } = getDB();
@@ -60,7 +60,7 @@ const modelConfig: ModelConfig = {
     concurrency: 20,
   },
   mathOptimization: {
-    temperature: 0.7,
+    temperature: 0.3,
     model: "gpt-4o-2024-08-06",
     concurrency: 20,
   },
@@ -1199,7 +1199,6 @@ export default async function handler(
 
       const citationDetectionSchema = z.object({
         hasCitations: z.boolean(),
-        citations: z.array(z.string()),
       });
 
       for (
@@ -1229,14 +1228,12 @@ export default async function handler(
               );
 
               item.hasCitations = result?.hasCitations || false;
-              item.citations = result?.citations || [];
             } catch (error) {
               console.error(
                 "Non fatal error while detecting citations:",
                 error
               );
               item.hasCitations = false; // Default to false if there's an error
-              item.citations = [];
             }
           })
         );
@@ -1245,19 +1242,27 @@ export default async function handler(
       console.log("PASS 2-2: optimzing citations");
 
       const itemsWithCitations = filteredItems.filter(
-        (item) => item.hasCitations && !item.isEndCutOff
+        (item) => item.hasCitations
       );
 
       if (itemsWithCitations.length > 0) {
-        const CITATION_REPLACEMENT_PROMPT = `Remove citations from the user text. 
+        const CITATION_REPLACEMENT_PROMPT = `Remove citations elements from the user text like
         
-        If the citation is part of a phrase like "such as <citations>" then remove the phrase.
+        - [X1, X2, ....]
+        - (Author et al., YYYY; Author et al., YYYY;......)
+        - ^number
+        - (Author, year, page number) or Author (year , page number)
+        - (X1, X2,...)
+        - Author (page number)
+
+        Do not remove entire sentences just remove the citation element. If the citation is part of a phrase like "such as <citation element>" then remove the phrase from the sentence.
 
         Do not remove citations to tables and figures in the paper.
         
-        Please return the provided text as it is with only citations removed. Do not attempt to complete the text.`;
+        Return the original text and the text with citations removed.`;
 
         const referenceSchema = z.object({
+          originalText: z.string(),
           textWithCitationsRemoved: z.string(),
         });
 
@@ -1298,7 +1303,14 @@ export default async function handler(
                       0.1
                     );
 
-                  item.content = processedItem?.textWithCitationsRemoved;
+                  item.citationReplacement = {
+                    originalText: processedItem?.originalText || "",
+                    textWithCitationsRemoved:
+                      processedItem?.textWithCitationsRemoved || "",
+                  };
+
+                  item.content =
+                    item.citationReplacement.textWithCitationsRemoved;
                   item.replacedCitations = true;
                 }
               } catch (error) {
@@ -1308,22 +1320,6 @@ export default async function handler(
               }
             })
           );
-        }
-      }
-
-      console.log(
-        "PASS 2-3: processing citations for items that have end cut off"
-      );
-      for (const item of filteredItems) {
-        if (
-          item.hasCitations &&
-          item.citations &&
-          item.citations.length > 0 &&
-          !item.replacedCitations
-        ) {
-          item.citations.forEach((citation) => {
-            item.content = item.content.replaceAll(citation, "");
-          });
         }
       }
 
@@ -1381,7 +1377,7 @@ export default async function handler(
       console.log("PASS 3-2: optimizing items with high math symbol frequency");
 
       const itemsThatCanIncludeMath = filteredItems.filter(
-        (item) => item.mathSymbolFrequency && item.mathSymbolFrequency > 1
+        (item) => item.mathSymbolFrequency && item.mathSymbolFrequency > 0
       );
 
       if (itemsThatCanIncludeMath.length > 0) {
@@ -1389,10 +1385,11 @@ export default async function handler(
         
         Some examples includes changing "+" to "plus" and inserting a "times" when multiplication is implied. Use your best judgment to make the text as pleasant for audio as possible.
         
-        Only convert math notation, do not alter the rest of the text.`;
+        Only convert math notation, do not alter the rest of the text. Return the entire original text and the worded replacement.`;
 
         const mathOptimizationSchema = z.object({
-          optimizedContent: z.string(),
+          originalText: z.string(),
+          wordedReplacement: z.string(),
         });
 
         for (
@@ -1428,7 +1425,13 @@ export default async function handler(
                       0.2
                     );
 
-                  item.content = processedItem?.optimizedContent;
+                  item.mathReplacement = {
+                    originalText: processedItem?.originalText || "",
+                    wordedReplacement: processedItem?.wordedReplacement || "",
+                  };
+
+                  item.content = item.mathReplacement.wordedReplacement;
+
                   item.optimizedMath = true;
                 }
               } catch (error) {
@@ -1441,213 +1444,78 @@ export default async function handler(
 
       //Process abbreviations
       console.log("PASS 4-1: Detecting abbreviations");
-      const ABBREVIATION_DETECTION_PROMPT = `Analyze the provided text and identify all abbreviations. 
-      
-      Accurately determine if an abbreviation is pronounced as a single word,  pronounced with its initials or partially pronounced with its initials. The general rule of thumb is that if a word (excluding "s" at the end for plural) is a mix of uppercase and lowercase then it is partially pronounced with its initials. 
-      
-      Just because something is in () or [] does not mean it is an abbreviation. Be very careful in determining what is an abbreviation.
+      const specialAbbreviations: Abbreviation[] = [
+        {
+          abbreviation: "CI",
+          replacement: "C.I.",
+          type: "initialism",
+          expansion: "confidence interval",
+        },
+      ];
 
-      Be very conservative while detecting abbreviations. Do not detect people's names. If you are unsure about a word being an abbreviation, then do not detect it as such.
-      
-      If you do not know the expansion or are not confident, leave it empty.`;
-
-      const abbreviationDetectionSchema = z.object({
-        abbreviations: z.array(
-          z.object({
-            abbreviation: z.string(),
-            expansion: z.string().optional(),
-            type: z.enum([
-              "pronounced_as_a_single_word",
-              "pronounced_with_initials",
-              "partially_pronounced_with_initials",
-            ]),
-          })
-        ),
+      filteredItems.forEach((item) => {
+        item.content = replaceAbbreviations(item.content, specialAbbreviations);
       });
 
-      const itemsThatNeedAbbreviationOptimization = filteredItems.filter(
-        (item) =>
-          [
-            "text",
-            "abstract_content",
-            "table_rows",
-            "figure_image",
-            "math",
-            "code_or_algorithm",
-          ].includes(item.type)
-      );
+      // console.log("PASS 5-1: Checking audio pleasantness");
 
-      for (
-        let i = 0;
-        i < itemsThatNeedAbbreviationOptimization.length;
-        i += modelConfig.abbreviationExtraction.concurrency
-      ) {
-        const itemBatch = itemsThatNeedAbbreviationOptimization.slice(
-          i,
-          i + modelConfig.abbreviationExtraction.concurrency
-        );
+      // const AUDIO_PLEASANTNESS_PROMPT = `Analyze the following item and detect issues that would make the content suboptimal as audio. For example, a text item could be marked as heading.`;
 
-        await Promise.all(
-          itemBatch.map(async (item) => {
-            try {
-              const result = await getStructuredOpenAICompletionWithRetries(
-                runId,
-                ABBREVIATION_DETECTION_PROMPT,
-                `Text to analyze:\n${removeBreaks(item.content)}`,
-                modelConfig.abbreviationExtraction.model,
-                modelConfig.abbreviationExtraction.temperature,
-                abbreviationDetectionSchema,
-                3,
-                [],
-                16384,
-                0.1
-              );
+      // const audioPleasantnessSchema = z.object({
+      //   audioIssues: z.array(
+      //     z.enum([
+      //       "too_much_math_notation",
+      //       "very_long_list",
+      //       "high_repetition",
+      //       "too_many_citations",
+      //     ])
+      //   ),
+      // });
 
-              item.allAbbreviations = result?.abbreviations || [];
-            } catch (error) {
-              console.error("Error detecting abbreviations:", error);
-              item.allAbbreviations = []; // Default to an empty array if there's an error
-            }
-          })
-        );
-      }
+      // for (
+      //   let i = 0;
+      //   i < filteredItems.length;
+      //   i += modelConfig.audioPleasantnessCheck.concurrency
+      // ) {
+      //   const itemBatch = filteredItems.slice(
+      //     i,
+      //     i + modelConfig.audioPleasantnessCheck.concurrency
+      //   );
 
-      console.log("PASS 4-2: Optimizing abbreviations");
-      const abbreviationMap: {
-        [key: string]: { expansion: string; type: string };
-      } = {};
-      const abbreviationOccurrences: { [key: string]: number } = {};
+      //   await Promise.all(
+      //     itemBatch.map(async (item) => {
+      //       try {
+      //         const result = await getStructuredOpenAICompletionWithRetries(
+      //           runId,
+      //           AUDIO_PLEASANTNESS_PROMPT,
+      //           `Item to analyze:\n${JSON.stringify(
+      //             {
+      //               type: item.type,
+      //               content: removeBreaks(item.content),
+      //             },
+      //             null,
+      //             2
+      //           )}`,
+      //           modelConfig.audioPleasantnessCheck.model,
+      //           modelConfig.audioPleasantnessCheck.temperature,
+      //           audioPleasantnessSchema,
+      //           3,
+      //           [],
+      //           256,
+      //           0.1
+      //         );
 
-      itemsThatNeedAbbreviationOptimization.forEach((item) => {
-        if (item.allAbbreviations) {
-          item.allAbbreviations.forEach((abbr) => {
-            try {
-              // Check if abbreviation has at least two uppercase letters next to each other
-              if (!/[A-Z]{2,}/.test(abbr.abbreviation)) {
-                return;
-              }
-
-              const abbrKey = abbr.abbreviation.toLowerCase().replace(/s$/, "");
-              const expansion = abbr.expansion || "";
-
-              // Track occurrences
-              abbreviationOccurrences[abbrKey] =
-                (abbreviationOccurrences[abbrKey] || 0) + 1;
-
-              // Store the first expansion found
-              if (!abbreviationMap[abbrKey] && expansion) {
-                abbreviationMap[abbrKey] = {
-                  expansion,
-                  type: abbr.type || "",
-                };
-              }
-
-              // Check first two appearances
-              if (
-                abbreviationOccurrences[abbrKey] <= 2 &&
-                !item.content
-                  .toLocaleLowerCase()
-                  .includes(expansion.toLocaleLowerCase())
-              ) {
-                item.content = item.content.replace(
-                  new RegExp(`\\b${abbr.abbreviation}\\b`, "g"),
-                  expansion
-                );
-              }
-
-              //Add periods for "pronounced_with_initials"
-              if (
-                abbr.type === "pronounced_with_initials" &&
-                !abbr.abbreviation.includes(".")
-              ) {
-                const baseAbbr = abbr.abbreviation.replace(/s$/, "");
-                const hasVowel = /[aeiou]/i.test(baseAbbr);
-
-                if (hasVowel) {
-                  const withPeriods = baseAbbr.split("").join(".");
-
-                  // Create a regex to match both singular and plural forms
-                  const regex = new RegExp(`\\b(${baseAbbr})(s?)\\b`, "g");
-
-                  // Replace based on whether the matched item has 's' or not
-                  item.content = item.content.replace(
-                    regex,
-                    (match, p1, p2) => {
-                      return p2 ? `${p1}s` : withPeriods; // Do not add periods if 's' is present
-                    }
-                  );
-                }
-              }
-            } catch (error) {
-              console.log(
-                "Non fatal error while processing abbreviations: ",
-                error
-              );
-            }
-          });
-        }
-      });
-
-      console.log("PASS 5-1: Checking audio pleasantness");
-
-      const AUDIO_PLEASANTNESS_PROMPT = `Analyze the following item and detect issues that would make the content suboptimal as audio. For example, a text item could be marked as heading.`;
-
-      const audioPleasantnessSchema = z.object({
-        audioIssues: z.array(
-          z.enum([
-            "too_much_math_notation",
-            "very_long_list",
-            "high_repetition",
-            "too_many_citations",
-            "mismatched_item_type",
-          ])
-        ),
-      });
-
-      for (
-        let i = 0;
-        i < filteredItems.length;
-        i += modelConfig.audioPleasantnessCheck.concurrency
-      ) {
-        const itemBatch = filteredItems.slice(
-          i,
-          i + modelConfig.audioPleasantnessCheck.concurrency
-        );
-
-        await Promise.all(
-          itemBatch.map(async (item) => {
-            try {
-              const result = await getStructuredOpenAICompletionWithRetries(
-                runId,
-                AUDIO_PLEASANTNESS_PROMPT,
-                `Item to analyze:\n${JSON.stringify(
-                  {
-                    type: item.type,
-                    content: removeBreaks(item.content),
-                  },
-                  null,
-                  2
-                )}`,
-                modelConfig.audioPleasantnessCheck.model,
-                modelConfig.audioPleasantnessCheck.temperature,
-                audioPleasantnessSchema,
-                3,
-                [],
-                256,
-                0.1
-              );
-
-              item.audioIssues = result?.audioIssues || [];
-            } catch (error) {
-              console.error(
-                "Non fatal error checking audio pleasantness:",
-                error
-              ); // Default to false if there's an error
-              item.audioIssues = [];
-            }
-          })
-        );
-      }
+      //         item.audioIssues = result?.audioIssues || [];
+      //       } catch (error) {
+      //         console.error(
+      //           "Non fatal error checking audio pleasantness:",
+      //           error
+      //         ); // Default to false if there's an error
+      //         item.audioIssues = [];
+      //       }
+      //     })
+      //   );
+      // }
 
       const filteredItemsPath = path.join(fileNameDir, "filteredItems.json");
       fs.writeFileSync(
@@ -1676,14 +1544,19 @@ export default async function handler(
       await subscribeEmail(email, process.env.MAILCHIMP_AUDIENCE_ID || "");
       console.log("Subscribed user to mailing list");
 
-      const { audioBuffer, audioMetadata } = await synthesizeSpeechInChunks(
-        filteredItems
-      );
+      const { audioBuffer, audioMetadata, tocAudioMetadata } =
+        await synthesizeSpeechInChunks(filteredItems);
       console.log("Generated audio file");
 
       const audioFileUrl = await uploadFile(audioBuffer, audioFilePath);
       const metadataFileUrl = await uploadFile(
-        Buffer.from(JSON.stringify(audioMetadata, null, 2)),
+        Buffer.from(
+          JSON.stringify(
+            { segments: audioMetadata, tableOfContents: tocAudioMetadata },
+            null,
+            2
+          )
+        ),
         metadataFilePath
       );
 

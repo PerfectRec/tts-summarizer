@@ -10,3 +10,14 @@ export function isTextCutoff(text: string): {
 
   return { isStartCutOff, isEndCutOff };
 }
+
+export function replaceAbbreviations(
+  text: string,
+  specialAbbreviations: Abbreviation[]
+): string {
+  specialAbbreviations.forEach(({ abbreviation, replacement }) => {
+    const regex = new RegExp(`\\b${abbreviation}\\b`, "g");
+    text = text.replace(regex, replacement);
+  });
+  return text;
+}

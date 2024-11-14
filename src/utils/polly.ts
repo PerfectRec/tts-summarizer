@@ -110,5 +110,15 @@ export async function synthesizeSpeechInChunks(
     startTime += itemMetadata.itemDuration;
   }
 
-  return { audioBuffer: audioBuffer, audioMetadata: audioMetadata };
+  const tocAudioMetadata = audioMetadata.filter(
+    (item) =>
+      item.type.includes("heading") ||
+      ["main_title", "end_marker"].includes(item.type)
+  );
+
+  return {
+    audioBuffer: audioBuffer,
+    audioMetadata: audioMetadata,
+    tocAudioMetadata: tocAudioMetadata,
+  };
 }

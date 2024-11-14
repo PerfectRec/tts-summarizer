@@ -27,15 +27,23 @@ interface Author {
   affiliation: string;
 }
 
-type AbbreviationSubTypes =
-  | "pronounced_as_a_single_word"
-  | "pronounced_with_initials"
-  | "partially_pronounced_with_initials";
+type AbbreviationSubTypes = "initialism" | "acronym" | "partial_initialism";
 
 interface Abbreviation {
   abbreviation: string;
   expansion: string;
+  replacement: string;
   type: AbbreviationSubTypes;
+}
+
+interface MathReplacement {
+  originalText: string;
+  wordedReplacement: string;
+}
+
+interface CitationReplacement {
+  originalText: string;
+  textWithCitationsRemoved: string;
 }
 
 interface Item {
@@ -44,13 +52,14 @@ interface Item {
   content: string;
   label?: { labelType: string; labelNumber: string; panelNumber: string };
   summary?: string;
+  mathReplacement?: MathReplacement;
   optimizedMath?: boolean;
   replacedCitations?: Boolean;
   repositioned?: Boolean;
   page: number;
   mathSymbolFrequency?: number;
   hasCitations?: boolean;
-  citations?: string[];
+  citationReplacement?: CitationReplacement;
   isStartCutOff?: boolean;
   isEndCutOff?: boolean;
   allAbbreviations?: Abbreviation[];
@@ -75,4 +84,5 @@ interface ItemAudioResult {
 interface AudioResult {
   audioBuffer: Buffer;
   audioMetadata: ItemAudioMetadata[];
+  tocAudioMetadata: ItemAudioMetadata[];
 }
