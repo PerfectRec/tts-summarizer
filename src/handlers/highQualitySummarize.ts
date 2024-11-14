@@ -668,6 +668,8 @@ export default async function handler(
                 const CODE_SUMMARIZE_PROMPT = `Summarize the given code or algorithm. Explain what the code or algorithm does in simple terms including its input and output. Do not include any code syntax in the summary.
                 
                 Also extract the title of the algorithm or code block. If no title is mentioned, then generate an appropriate one yourself.
+
+                Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct label type and label number. This is very important. Look for cues around the figure and use your best judgement to determine it. Possible label types for code or algorithm can be Figure, Code, CodeBlock, Algorithm etc.
                 
                 If there is no label or label number set the labelType as "Code" and labelNumber as "unlabeled".
                 
@@ -700,7 +702,7 @@ export default async function handler(
                   item.label.panelNumber !== "unlabeled"
                     ? `Panel ${item.label.panelNumber}`
                     : ""
-                } summary:\n${summarizedCode?.summarizedCode.content}`;
+                } code explanation:\n${summarizedCode?.summarizedCode.content}`;
               }
 
               //Some manual latex processing
