@@ -3,26 +3,6 @@ import path from "path"; // Adjust the import path as necessary
 import { uploadFile } from "@aws/s3";
 import { synthesizeSpeechInChunks } from "@utils/polly";
 
-interface Item {
-  type: string;
-  content: string;
-  label?: { labelType: string; labelNumber: string };
-  summary?: string;
-  optimizedMath?: boolean;
-  replacedCitations?: Boolean;
-  repositioned?: Boolean;
-  page: number;
-  mathSymbolFrequency?: number;
-  hasCitations?: boolean;
-  isStartCutOff?: boolean;
-  isEndCutOff?: boolean;
-  allAbbreviations?: {
-    abbreviation: string;
-    expansion: string;
-    type: "pronounced_as_a_single_word" | "pronounced_with_initials";
-  }[];
-}
-
 async function generateAudioFromFilteredItems(
   jsonFilePath: string
 ): Promise<void> {

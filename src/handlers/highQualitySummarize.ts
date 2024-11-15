@@ -40,7 +40,7 @@ const modelConfig: ModelConfig = {
     concurrency: 0,
   },
   codeSummarization: {
-    temperature: 0.2,
+    temperature: 0.3,
     model: "gpt-4o-2024-08-06",
     concurrency: 0,
   },
@@ -495,6 +495,8 @@ export default async function handler(
                 
                 Add the label "Table X" where X is the table number indicated in the page. You need to extract the correct table number. This is very important. Look for cues around the table and use your best judgement to determine it. Add the panel number that is being summarized, if it is mentioned.
                 
+                It is possible that a table can be part of a figure and labeled as a figure, in that case label it as a figure.
+                
                 Do not use markdown. Use plain text.`;
 
                 const summarizedItem =
@@ -669,12 +671,10 @@ export default async function handler(
                 const CODE_SUMMARIZE_PROMPT = `Summarize the given code or algorithm. Explain what the code or algorithm does in simple terms including its input and output. Do not include any code syntax in the summary.
                 
                 Also extract the title of the algorithm or code block. If no title is mentioned, then generate an appropriate one yourself.
+                
+                Usually codeblocks do not have labels. If there is no label or label number set the labelType as "" and labelNumber as "unlabeled". If there is no panel number set the panelNumber as "unlabeled"
 
-                Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct label type and label number. This is very important. Look for cues around the figure and use your best judgement to determine it. Possible label types for code or algorithm can be Figure, Code, CodeBlock, Algorithm etc.
-                
-                If there is no label or label number set the labelType as "Code" and labelNumber as "unlabeled".
-                
-                If there is no panel number set the panelNumber as "unlabeled"`;
+                Sometimes codeblocks can be labeled. If the codeblock is labeled as a "Figure", then try to detect the "Figure X" label where X is the number assigned to the figure. Look around for cuees to help you determine this.`;
 
                 const summarizedCode =
                   await getStructuredOpenAICompletionWithRetries(
@@ -790,8 +790,8 @@ export default async function handler(
         let compiledAuthorInfo = Object.entries(authorGroups)
           .map(([affiliation, authorNames]) => {
             return affiliation && affiliation !== ""
-              ? `[break0.6]${authorNames.join(", ")} from ${affiliation}`
-              : `[break0.6]${authorNames.join(", ")}`;
+              ? `[break0.3]${authorNames.join(", ")} from ${affiliation}`
+              : `[break0.3]${authorNames.join(", ")}`;
           })
           .join(", ");
 
@@ -1456,6 +1456,23 @@ export default async function handler(
 
       filteredItems.forEach((item) => {
         item.content = replaceAbbreviations(item.content, specialAbbreviations);
+      });
+
+      console.log("PASS 5-1: Adding breaks where needed");
+
+      filteredItems.forEach((item) => {
+        if (
+          [
+            "text",
+            "figure_image",
+            "code_or_algorithm",
+            "table_rows",
+            "abstract_content",
+          ].includes(item.type) &&
+          !item.isEndCutOff
+        ) {
+          item.content += "[break0.4]";
+        }
       });
 
       // console.log("PASS 5-1: Checking audio pleasantness");

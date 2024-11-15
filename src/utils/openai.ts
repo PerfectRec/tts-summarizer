@@ -40,6 +40,7 @@ async function getStructuredOpenAICompletion(
       type: "image_url",
       image_url: {
         url: `data:${mediaType};base64,${base64Image}`,
+        detail: "high",
       },
     } as ChatCompletionContentPart;
   });
@@ -57,6 +58,7 @@ async function getStructuredOpenAICompletion(
               type: "image_url",
               image_url: {
                 url: `data:${userMediaType};base64,${base64UserImage}`,
+                detail: "high",
               },
             } as ChatCompletionContentPart,
           ],
