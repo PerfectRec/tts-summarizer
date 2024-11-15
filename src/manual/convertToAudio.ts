@@ -15,8 +15,8 @@ async function generateAudioFromFilteredItems(
       filteredItems
     );
 
-    const email = "babak@extrayear.ai";
-    const fileName = "Ten-Year Effects";
+    const email = "muralirk@gmail.com";
+    const fileName = "Verus";
 
     const audioFileName = `${email}/${fileName}.mp3`;
 
@@ -24,7 +24,7 @@ async function generateAudioFromFilteredItems(
     const audioFileUrl = await uploadFile(audioBuffer, audioFileName);
 
     // Optionally, upload the audio metadata to S3
-    const metadataFileName = `${email}/${fileName}.json`;
+    const metadataFileName = `${email}/${fileName}-metadata.json`;
     const metadataBuffer = Buffer.from(JSON.stringify(audioMetadata));
     const metadataFileUrl = await uploadFile(metadataBuffer, metadataFileName);
   } catch (error) {

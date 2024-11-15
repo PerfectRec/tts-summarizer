@@ -196,7 +196,7 @@
   },
   {
     "type": "text",
-    "content": "Motivation. Some of the largest verified system implementations have relied on semi-automated program verifiers like VCC, Dafny, or F star. Compared to theorem provers, these tools do not require fully verified programs, as opposed to general math theorems. While they sacrifice expressivity compared with theorem provers, they still include general-purpose reasoning techniques that allow them to be adapted for different settings. Most importantly, by providing significant automation \"out of the box\", typically by converting the question of code or proof correctness into a query to an SMT (Satisfiability Modulo Theories) solver (for example, Z3). The SMT solver then attempts to automatically prove the query by combining fast satisfiability solving with specialized solvers for theories like integer arithmetic, and heuristics for handling quantifiers. However, existing program verifiers struggle in the face of modern system complexity, often forcing developers to break their code into unnaturally small units and or to tolerate long code-prover cycles.\n\nOur Approach. Verus's default mode, used in the majority of our proofs, is carefully to utilize its underlying SMT solver as efficiently as possible. To illustrate, Figure 2 shows a simple example of verifiable code written in Verus. The verus macro extends Rust with annotations to guide verification. For example, the requires and ensures annotations introduce pre- and postconditions that specify correctness for executable Rust functions like pop. These specs refer to auxiliary spec functions, like the view function that abstracts a concrete LinkedList implementation as a mathematical Seq. Internally, Verus employs standard Floyd-Hoare logic to convert proof obligations, such as pop's",
+    "content": "Motivation. Some of the largest verified system implementations have relied on semi-automated program verifiers like VCC, Dafny, or F star. Compared to theorem provers, these tools do not require fully verified programs, as opposed to general math theorems. While they sacrifice expressivity compared with theorem provers, they still include general-purpose reasoning techniques that allow them to be adapted for different settings. Most importantly, they provide significant automation out of the box, typically by converting the question of code or proof correctness into a query to an SMT (Satisfiability Modulo Theories) solver (for example, Z3). The SMT solver then attempts to automatically prove the query by combining fast satisfiability solving with specialized solvers for theories like integer arithmetic, and heuristics for handling quantifiers. However, existing program verifiers struggle in the face of modern system complexity, often forcing developers to break their code into unnaturally small units and or to tolerate long code-prover cycles.\n\nOur Approach. Verus's default mode, used in the majority of our proofs, is carefully to utilize its underlying SMT solver as efficiently as possible. To illustrate, Figure 2 shows a simple example of verifiable code written in Verus. The verus macro extends Rust with annotations to guide verification. For example, the requires and ensures annotations introduce pre- and postconditions that specify correctness for executable Rust functions like pop. These specs refer to auxiliary spec functions, like the view function that abstracts a concrete LinkedList implementation as a mathematical Seq. Internally, Verus employs standard Floyd-Hoare logic to convert proof obligations, such as pop's",
     "page": 3,
     "isStartCutOff": false,
     "isEndCutOff": true,
@@ -215,7 +215,7 @@
   },
   {
     "type": "text",
-    "content": "postcondition into verification conditions to send to an SMT solver, which automatically determines whether the formula holds for all possible function inputs.\n\nThe approach of converting proof obligations to verification conditions is standard in many verification frameworks, but the details of language design and implementation have a big effect on the efficiency of the SMT queries. We summarize some of these design choices here.\n\nVerus considers when queries are simpler and smaller by orders of magnitude to the SMT solver, which translates to significantly faster verification, so for a given verification problem, Verus can provide a more efficient code-prove cycle. Or conversely, given the same time budget as an existing tool, Verus can tackle larger verification problems.\n\nUnlike specification functions in Dafny and F star , Verus Spec functions are pure, total mathematical functions with no preconditions or direct access to the heap. Thus they can be directly encoded as SMT functions without the additional baggage of prior tools. As prior work explains, Rust’s type system means that explicit heap-based reasoning is rarely needed, and when it is needed, it can be done through ghost memory permissions.\n\nVerus soundly isolates reasoning about memory bit vectors and nonlinear arithmetic from the main SMT queries, avoiding complex interactions between different kinds of reasoning in the SMT solver and speeding up the SMT queries. We discuss some of these ideas in section 3 point 3 .\n\nWhen verifying each module in a given project, Verus aggressively prunes the context sent to the SMT solver to eliminate implied but unreachable definitions.\n\nTo avoid excess instantiations of quantifiers (for all and there exists) in the SMT solver, Verus treats quantifiers more conservatively than tools like Dafny and F star .\n\nQuantifiers and SMT solving. Typical systems verification projects use for all and there exists quantifiers , for example ,to specify all elements of an array or all members of a table . Unfortunately ,SMT solving with quantifiers is undecidable in general ,so SMT solvers use heuristics to decide how to instantiate for all quantifiers and how to prove there exists quantifiers . Most large verification projects based on SMT solvers use an SMT heuristic based on “triggers,” in which the SMT solver pattern matches on expressions appearing in the formulas to determine how to instantiate quantifiers ,for example ,instantiating (for all x colon u sixty four ...f(x)...) with x equals 3 if the expression f(3) arises during the proof search . Here ,the expression f(x) is called the trigger or pattern for the quantifier .\n\nVerification tools ,including Verus ,automatically select appropriate expressions as triggers . However ,the choice of triggers has a large impact on verification performance . Prior tools ,like Dafny ,default to selecting broad triggers that match many expressions ,leading to many quantifier instantiations ;in principle this creates more opportunities for the solver to automatically complete a proof ,but in practice for large systems projects ,too many instantiations slow down the SMT solver to where it times out and fails to complete proof .\n\nTherefore ,Verus uses a more cautious policy that selects as few triggers as possible . If Verus is uncertain about best trigger ,Verus encourages user override its default selection with user’s choice . The result is more initial effort for users writing small proofs but significantly improved performance on large systems projects .",
+    "content": "postcondition into verification conditions to send to an SMT solver, which automatically determines whether the formula holds for all possible function inputs.\n\nThe approach of converting proof obligations to verification conditions is standard in many verification frameworks, but the details of language design and implementation have a big effect on the efficiency of the SMT queries. We summarize some of these design choices here.\n\nVerus considers when queries are simpler and smaller by orders of magnitude to the SMT solver, which translates to significantly faster verification (Figure 9), so for a given verification problem, Verus can provide a more efficient code-prove cycle. Or conversely, given the same time budget as an existing tool, Verus can tackle larger verification problems.\n\nUnlike specification functions in Dafny and F star , Verus Spec functions are pure, total mathematical functions with no preconditions or direct access to the heap. Thus they can be directly encoded as SMT functions without the additional baggage of prior tools. As prior work explains, Rust’s type system means that explicit heap-based reasoning is rarely needed, and when it is needed, it can be done through ghost memory permissions.\n\nVerus soundly isolates reasoning about memory bit vectors and nonlinear arithmetic from the main SMT queries, avoiding complex interactions between different kinds of reasoning in the SMT solver and speeding up the SMT queries. We discuss some of these ideas in section 3 point 3 .\n\nWhen verifying each module in a given project, Verus aggressively prunes the context sent to the SMT solver to eliminate implied but unreachable definitions.\n\nTo avoid excess instantiations of quantifiers (for all and there exists) in the SMT solver, Verus treats quantifiers more conservatively than tools like Dafny and F star .\n\nQuantifiers and SMT solving. Typical systems verification projects use for all and there exists quantifiers , for example ,to specify all elements of an array or all members of a table . Unfortunately ,SMT solving with quantifiers is undecidable in general ,so SMT solvers use heuristics to decide how to instantiate for all quantifiers and how to prove there exists quantifiers . Most large verification projects based on SMT solvers use an SMT heuristic based on “triggers,” in which the SMT solver pattern matches on expressions appearing in the formulas to determine how to instantiate quantifiers ,for example ,instantiating (for all x colon u sixty four ...f(x)...) with x equals 3 if the expression f(3) arises during the proof search . Here ,the expression f(x) is called the trigger or pattern for the quantifier .\n\nVerification tools ,including Verus ,automatically select appropriate expressions as triggers . However ,the choice of triggers has a large impact on verification performance . Prior tools ,like Dafny ,default to selecting broad triggers that match many expressions ,leading to many quantifier instantiations ;in principle this creates more opportunities for the solver to automatically complete a proof ,but in practice for large systems projects ,too many instantiations slow down the SMT solver to where it times out and fails to complete proof .\n\nTherefore ,Verus uses a more cautious policy that selects as few triggers as possible . If Verus is uncertain about best trigger ,Verus encourages user override its default selection with user’s choice. The result is more initial effort for users writing small projects, but better scalability to large systems projects.",
     "page": 4,
     "isStartCutOff": true,
     "isEndCutOff": false,
@@ -228,13 +228,13 @@
     "mathSymbolFrequency": 3,
     "mathReplacement": {
       "originalText": "postcondition into verification conditions to send to an SMT solver, which automatically determines whether the formula holds for all possible function inputs.\n\nThe approach of converting proof obligations to verification conditions is standard in many verification frameworks, but the details of language design and implementation have a big effect on the efficiency of the SMT queries. We summarize some of these design choices here.\n\nVerus considers when queries are simpler and smaller by orders of magnitude to the SMT solver, which translates to significantly faster verification, so for a given verification problem, Verus can provide a more efficient code-prove cycle. Or conversely, given the same time budget as an existing tool, Verus can tackle larger verification problems.\n\nUnlike specification functions in Dafny and F*, Verus Spec functions are pure, total mathematical functions with no preconditions or (direct) access to the heap. Thus they can be directly encoded as SMT functions without the additional baggage of prior tools. As prior work explains, Rust’s type system means that explicit heap-based reasoning is rarely needed, and when it is needed, it can be done through ghost memory permissions.\n\nVerus soundly isolates reasoning about memory bit vectors, and nonlinear arithmetic from the main SMT queries, avoiding complex interactions between different kinds of reasoning in the SMT solver and speeding up the SMT queries. We discuss some of these ideas in §3.3.\n\nWhen verifying each module in a given project, Verus aggressively prunes the context sent to the SMT solver to eliminate implied but unreachable definitions.\n\nTo avoid excess instantiations of quantifiers (∀ and ∃) in the SMT solver, Verus treats quantifiers more conservatively than tools like Dafny and F*.\n\nQuantifiers and SMT solving. Typical systems verification projects use ∀ and ∃ quantifiers, for example to specify all elements of an array or all members of a table. Unfortunately, SMT solving with quantifiers is undecidable in general, so SMT solvers use heuristics to decide how to instantiate ∀ quantifiers and how to prove ∃ quantifiers. Most large verification projects based on SMT solvers use an SMT heuristic based on “triggers,” in which the SMT solver pattern matches on expressions appearing in the formulas to determine how to instantiate quantifiers, for example, instantiating (∀ |x: u64| ...f(x)...) with x = 3 if the expression f(3) arises during the proof search. Here, the expression f(x) is called the trigger (or pattern) for the quantifier.\n\nVerification tools, including Verus, automatically select appropriate expressions as triggers. However, the choice of triggers has a large impact on verification performance. Prior tools, like Dafny, default to selecting broad triggers that match many expressions, leading to many quantifier instantiations; in principle this creates more opportunities for the solver to automatically complete a proof, but in practice for large systems projects, too many instantiations slow the SMT solver to the point where it times out and fails to complete the proof.\n\nTherefore, Verus uses a more cautious policy that selects as few triggers as possible. If Verus is uncertain about the best trigger, Verus encourages the user to override its default selection with the user’s choice. The result is more initial effort for users writing small proofs but significantly improved performance on large systems projects.",
-      "wordedReplacement": "postcondition into verification conditions to send to an SMT solver, which automatically determines whether the formula holds for all possible function inputs.\n\nThe approach of converting proof obligations to verification conditions is standard in many verification frameworks, but the details of language design and implementation have a big effect on the efficiency of the SMT queries. We summarize some of these design choices here.\n\nVerus considers when queries are simpler and smaller by orders of magnitude to the SMT solver, which translates to significantly faster verification, so for a given verification problem, Verus can provide a more efficient code-prove cycle. Or conversely, given the same time budget as an existing tool, Verus can tackle larger verification problems.\n\nUnlike specification functions in Dafny and F star , Verus Spec functions are pure, total mathematical functions with no preconditions or direct access to the heap. Thus they can be directly encoded as SMT functions without the additional baggage of prior tools. As prior work explains, Rust’s type system means that explicit heap-based reasoning is rarely needed, and when it is needed, it can be done through ghost memory permissions.\n\nVerus soundly isolates reasoning about memory bit vectors and nonlinear arithmetic from the main SMT queries, avoiding complex interactions between different kinds of reasoning in the SMT solver and speeding up the SMT queries. We discuss some of these ideas in section 3 point 3 .\n\nWhen verifying each module in a given project, Verus aggressively prunes the context sent to the SMT solver to eliminate implied but unreachable definitions.\n\nTo avoid excess instantiations of quantifiers (for all and there exists) in the SMT solver, Verus treats quantifiers more conservatively than tools like Dafny and F star .\n\nQuantifiers and SMT solving. Typical systems verification projects use for all and there exists quantifiers , for example ,to specify all elements of an array or all members of a table . Unfortunately ,SMT solving with quantifiers is undecidable in general ,so SMT solvers use heuristics to decide how to instantiate for all quantifiers and how to prove there exists quantifiers . Most large verification projects based on SMT solvers use an SMT heuristic based on “triggers,” in which the SMT solver pattern matches on expressions appearing in the formulas to determine how to instantiate quantifiers ,for example ,instantiating (for all x colon u sixty four ...f(x)...) with x equals 3 if the expression f(3) arises during the proof search . Here ,the expression f(x) is called the trigger or pattern for the quantifier .\n\nVerification tools ,including Verus ,automatically select appropriate expressions as triggers . However ,the choice of triggers has a large impact on verification performance . Prior tools ,like Dafny ,default to selecting broad triggers that match many expressions ,leading to many quantifier instantiations ;in principle this creates more opportunities for the solver to automatically complete a proof ,but in practice for large systems projects ,too many instantiations slow down the SMT solver to where it times out and fails to complete proof .\n\nTherefore ,Verus uses a more cautious policy that selects as few triggers as possible . If Verus is uncertain about best trigger ,Verus encourages user override its default selection with user’s choice . The result is more initial effort for users writing small proofs but significantly improved performance on large systems projects ."
+      "wordedReplacement": "postcondition into verification conditions to send to an SMT solver, which automatically determines whether the formula holds for all possible function inputs.\n\nThe approach of converting proof obligations to verification conditions is standard in many verification frameworks, but the details of language design and implementation have a big effect on the efficiency of the SMT queries. We summarize some of these design choices here.\n\nVerus considers when queries are simpler and smaller by orders of magnitude to the SMT solver, which translates to significantly faster verification, so for a given verification problem, Verus can provide a more efficient code-prove cycle. Or conversely, given the same time budget as an existing tool, Verus can tackle larger verification problems.\n\nUnlike specification functions in Dafny and F star , Verus Spec functions are pure, total mathematical functions with no preconditions or direct access to the heap. Thus they can be directly encoded as SMT functions without the additional baggage of prior tools. As prior work explains, Rust’s type system means that explicit heap-based reasoning is rarely needed, and when it is needed, it can be done through ghost memory permissions.\n\nVerus soundly isolates reasoning about memory bit vectors and nonlinear arithmetic from the main SMT queries, avoiding complex interactions between different kinds of reasoning in the SMT solver and speeding up the SMT queries. We discuss some of these ideas in section 3 point 3 .\n\nWhen verifying each module in a given project, Verus aggressively prunes the context sent to the SMT solver to eliminate implied but unreachable definitions.\n\nTo avoid excess instantiations of quantifiers (for all and there exists) in the SMT solver, Verus treats quantifiers more conservatively than tools like Dafny and F star .\n\nQuantifiers and SMT solving. Typical systems verification projects use for all and there exists quantifiers , for example ,to specify all elements of an array or all members of a table . Unfortunately ,SMT solving with quantifiers is undecidable in general ,so SMT solvers use heuristics to decide how to instantiate for all quantifiers and how to prove there exists quantifiers . Most large verification projects based on SMT solvers use an SMT heuristic based on “triggers,” in which the SMT solver pattern matches on expressions appearing in the formulas to determine how to instantiate quantifiers ,for example ,instantiating (for all x colon u sixty four ...f(x)...) with x equals 3 if the expression f(3) arises during the proof search . Here ,the expression f(x) is called the trigger or pattern for the quantifier .\n\nVerification tools ,including Verus ,automatically select appropriate expressions as triggers . However ,the choice of triggers has a large impact on verification performance . Prior tools ,like Dafny ,default to selecting broad triggers that match many expressions ,leading to many quantifier instantiations ;in principle this creates more opportunities for the solver to automatically complete a proof ,but in practice for large systems projects ,too many instantiations slow down the SMT solver to where it times out and fails to complete proof .\n\nTherefore ,Verus uses a more cautious policy that selects as few triggers as possible . If Verus is uncertain about best trigger ,Verus encourages user override its default selection with user’s choice . The result is more initial effort for users writing small projects, but better scalability to large systems projects."
     },
     "optimizedMath": true
   },
   {
     "type": "code_or_algorithm",
-    "content": "Figure 2  code explanation:\nThis code defines a generic `LinkedList` structure in Rust, which uses a `Node` to store elements. The `LinkedList` has a method `pop` that removes and returns the first element of the list. The `pop` function has a precondition that the list must be non-empty before it is called. It ensures that the returned result is the first element of the list and that this element is removed from the list. The function modifies the list by updating the head to the next node after removing the first element.",
+    "content": "Figure 2 code explanation: This example shows Rust code for a linked list’s pop function to remove and return its first element.  It is augmented with Verus annotations to extend Rust to support formal verification.  These include a requires statement to verify a precondition, that the list is non-empty,  and an ensures statement to verify two postconditions, that the returned result is the list’s first value and that it is removed from the list.",
     "page": 4,
     "label": {
       "labelType": "Figure",
@@ -245,6 +245,19 @@
     "repositioned": true,
     "hasCitations": false,
     "mathSymbolFrequency": 0
+  },
+  {
+    "type": "table_rows",
+    "content": "Figure 9  summary:\nThis table compares verification performance across different systems and verifiers. IronKV verified with Verus shows a proof-to-code ratio of 2.9 and takes 41 seconds to prove, while Dafny has a higher ratio of 4.2 and takes significantly longer at 445 seconds. NR with Verus has a ratio of 7.1 and takes 17 seconds, whereas L.Dafny has a ratio of 10.7 and takes 1089 seconds. The page table has the highest proof-to-code ratio of 13.3, taking 63 seconds to prove. Mimalloc has a ratio of 4.3, with a proving time of 262 seconds. P_log shows a ratio of 3.9, with a proving time of 12 seconds. Overall, Verus totals a proof-to-code ratio of 5.1.",
+    "page": 10,
+    "label": {
+      "labelType": "Table",
+      "labelNumber": "9",
+      "panelNumber": ""
+    },
+    "repositioned": true,
+    "hasCitations": false,
+    "mathSymbolFrequency": 1
   },
   {
     "type": "heading",
@@ -484,7 +497,7 @@
   },
   {
     "type": "text",
-    "content": "First, while nonlinear arithmetic is generally undecidable (meaning no algorithm can solve all such formulas), subclasses are both decidable and fast in practice. Verus supports fully automated proofs of integer ring “congruence relations”—equalities built from plus, minus, times, and exponentiation—via annotation:",
+    "content": "First, while nonlinear arithmetic is generally undecidable (meaning no algorithm can solve all such formulas), subclasses are both decidable and fast in practice. Verus supports fully automated proofs of integer ring “congruence relations”—equalities built from plus, minus, times, modulus and constant exponentiation—via annotation:",
     "page": 6,
     "isStartCutOff": false,
     "isEndCutOff": true,
@@ -500,6 +513,20 @@
       "wordedReplacement": "First, while nonlinear arithmetic is generally undecidable (meaning no algorithm can solve all such formulas), subclasses are both decidable and fast in practice. Verus supports fully automated proofs of integer ring “congruence relations”—equalities built from plus, minus, times, and exponentiation—via annotation:"
     },
     "optimizedMath": true
+  },
+  {
+    "type": "code_or_algorithm",
+    "content": "Code explanation:\nThis is a proof function in Verus that verifies a congruence relation in modular arithmetic. It takes three integers (a, b, and c) and specifies that if a and b are both divisible by c (i.e., a % c == 0 and b % c == 0), then their difference (b - a) will also be divisible by c. This is annotated using integer_ring, which instructs Verus to use integer ring reasoning, a method effective for modular arithmetic proofs. The empty body {} indicates that this function only serves to prove a property rather than perform any actual computation.",
+    "page": 6,
+    "label": {
+      "labelType": "Figure",
+      "labelNumber": "6",
+      "panelNumber": "unlabeled"
+    },
+    "title": "Proof Function for Modulo Equality",
+    "repositioned": true,
+    "hasCitations": false,
+    "mathSymbolFrequency": 1
   },
   {
     "type": "text",
@@ -526,7 +553,7 @@
   },
   {
     "type": "code_or_algorithm",
-    "content": "Code   code explanation:\nThis code defines a function named `f6` that takes two unsigned 64-bit integers, `x` and `a`, as inputs. The function requires that `a` is greater than 2. It asserts a mathematical condition involving nonlinear arithmetic: if `y` is greater than or equal to 2, then the expression `(a + 1) * 2` should be greater than or equal to `(a + a + 1) * 2`. The assertion is verified using nonlinear arithmetic reasoning, which is part of the Verus system's approach to handling such problems.",
+    "content": "Code explanation: Verus uses a nonlinear assertion to handle a complex arithmetic condition in the function f. This function accepts two unsigned 64-bit integers (q and a) and requires that q > 2. It then asserts that if q > 2, the inequality (a * a + 1) * q ge (a * a + 1) * 2 holds. The nonlinear_arith annotation signals Verus to use its nonlinear arithmetic solver for this assertion, as it involves products of terms that can’t be handled by simpler, linear methods. This approach allows Verus to address complex mathematical assertions with more control and predictability, making the function more robust for nonlinear conditions.",
     "page": 6,
     "label": {
       "labelType": "Code",
@@ -537,6 +564,36 @@
     "repositioned": true,
     "hasCitations": false,
     "mathSymbolFrequency": 2
+  },
+  {
+    "type": "text",
+    "content": "Bit vector reasoning.  Low-level bit manipulation is common in systems code, whether to optimize a logarithm estimate via the count-leading-zeroes intrinsic or to manipulate flags or bitmaps. Unfortunately, even tools that employ automated solvers often struggle with such reasoning in the context of complex system definitions. In particular, when the solver is asked to reason simultaneously about integers for specification purposes and bit vectors for optimizations, it often fails or, worse, produces fragile proofs that succeed or fail based on minor code perturbations. Hence, multiple system verification projects have developed elaborate encoding styles and proof libraries to manually guide the theorem prover. This eliminates instability, but it leads to a significant developer burden, e.g.,requiring tens of proof lines for a simple bit mask. Verus instead carefully separates integer and bit-vector reasoning. Like most tools, Verus maps Rust’s integer types (e.g. u64) to SMT integers for interoperation with mathematical specifications; it requires the developer to prove the absence of overflow to ensure this is sound. However, Verus also provides an annotation-invoked mode that automatically interprets Rust’s integers as SMT bit vectors when generating an SMT query, eliminating the manual work required by prior projects. Hence, a Verus developer proves bit-manipulation properties by writing, e.g.,",
+    "page": 6
+  },
+  {
+    "type": "code_or_algorithm",
+    "content": "Code explanation: This code demonstrates how bitwise operations can be proven by treating x as a bit vector within the assertion, while outside of it, x is treated as an integer. This allows Verus to integrate mathematical specifications with efficient SMT-based automation, enabling reliable proofs for bit manipulation properties through a simple annotation (bit_vector).",
+    "page": 6
+  },
+  {
+    "type": "text",
+    "content": "Inside the assertion, x is a bit vector, while outside it is treated as an integer, allowing it to integrate with mathematical specifications and reliable SMT-based automation for linear arithmetic. The result is that for the cost of a small annotation, the Verus developer benefits from stable, automated proofs. Proof by computation. Some proof obligations have obvious, statically computable answers. For example, in a previous project, we tried to verify an efficient implementation of the CRC-32 checksum that used a hard-coded lookup table or precomputed data resulting from complicated polynomial division operations. Proving that the table resulted from this computation required an excruciating number of proof annotations to guide the solver. We eventually gave up and changed our approach to avoid the hard-coded table. In Verus, a developer can ask that a proof be discharged by computation: A built-in symbolic interpreter simplifies the expression and sends any remainder to SMT. Macro-based User-defined Extensibility. Any non-trivial systems project eventually surfaces a repetitive pattern of tedious proof; e.g., proofs that different datatypes can be unambiguously marshalled into byte arrays. Just as Rust developers exploit macros to reduce repetitive code, Verus developers can do the same to reduce repetitive proofs.",
+    "page": 6
+  },
+  {
+    "type": "heading",
+    "content": "Automated Reasoning for Multi-Threading",
+    "page": 6
+  },
+  {
+    "type": "text",
+    "content": "Motivation. No framework for systems verification could be complete without a story for multi-threading. Shared-memory concurrency makes verification significantly more complex, requiring reasoning about all possible thread interactions. Rust’s memory safety guarantees extend to multi-threaded code, as captured by its goal of “fearles concurrency.” However, it remains far from obvious how to cleanly prove full correctness of concurrent systems.",
+    "page": 6
+  },
+  {
+    "type": "text",
+    "content": "Our Approach. Verus combines two big ideas. Idea 1: Resource Algebras. The first idea is something called a resource algebra, a proven concept from concurrent separation logic. A resource algebra is a set of rules for creating ghost resources, which can help maintain invariants between objects owned by different threads.",
+    "page": 6
   },
   {
     "type": "code_or_algorithm",
@@ -676,7 +733,7 @@
   },
   {
     "type": "text",
-    "content": "At the core of our NR case study is a ring buffer that tracks three pieces of state in shared memory:\n\n• a buffer for storing message entries,\n• a tail pointer where the next message goes, and\n• a per-thread head pointer, indicating where each thread should read the next message.\n\nThere is a complex, multi-step protocol for reading and processing messages from the queue. This protocol is implemented by a thread called the executor thread. As the queue operates, no one thread ever simultaneously owns all the pieces of state above, as they are accessed and updated concurrently. Even so, we maintain complex invariants, for example relating an executor thread’s internal state to its head pointers, or relating the head and tail pointers to non-empty buffer entries.\n\nWe model this protocol as a VerusSync protocol with fields representing the pieces of state, and we distribute the resulting shards across the threads. The ring buffer’s fields are shared with different strategies.\n\n• The tail field marks the next empty space. Its value is represented by a single shard that a thread must own to read or modify the field. The ghost shard is associated with a particular physical memory word accessed atomically, here via compare-and-swap.\n• The buffer size field is constant: all threads agree on \"read\" its value at all times.\n• The local versions field contains per-thread head-pointers into the queue. It is represented by a map where each entry is an owned shared, each associated with a different atomically-accessed memory word.\n• The executor field describes the intermediate state of each executor thread within its multi-step protocol.\n\nIn NR, an executor thread pops operations off the queue and processes them. The thread selects a range to read, reads each buffer entry in that range, and finally updates the atomic field corresponding to an entry of last version to point to the end of this range. Figure 5 shows this final step of the protocol, as expressed in VerusSync. Verus then generates appropriate owned ghost shards, which the programmer manipulates in their executable code to prove that the code correctly follows the protocol. Figure 6 shows one way to arrange an executable data structure to maintain the relationship between the concrete data and the corresponding ghost shards. The style is similar to that in IronSync.\n\nThe VerusSync approach lets Verus determine syntactically that the transition only affects two shards. This then allows the developer to perform the operation when they have ownership of those two shards without ownership of any of many other shards in system. Finally because VerusSync allows us to easily interpret this system as transition system we can use traditional state-machine techniques to prove global properties of ring buffer most notably that threads’ accesses to buffer entries are well-formed.",
+    "content": "At the core of our NR case study is a ring buffer that tracks three pieces of state in shared memory:\n\n• a buffer for storing message entries,\n• a tail pointer where the next message goes, and\n• a per-thread head pointer, indicating where each thread should read the next message.\n\nThere is a complex, multi-step protocol for reading and processing messages from the queue. This protocol is implemented by a thread called the executor thread. As the queue operates, no one thread ever simultaneously owns all the pieces of state above, as they are accessed and updated concurrently. Even so, we maintain complex invariants, for example relating an executor thread’s internal state to its head pointers, or relating the head and tail pointers to non-empty buffer entries.\n\nWe model this protocol as a VerusSync protocol with fields representing the pieces of state, and we distribute the resulting shards across the threads. The ring buffer’s fields are shared with different strategies.\n\n• The tail field marks the next empty space. Its value is represented by a single shard that a thread must own to read or modify the field. The ghost shard is associated with a particular physical memory word accessed atomically, here via compare-and-swap.\n• The buffer size field is constant: all threads agree on (can \"read\") its value at all times.\n• The local versions field contains per-thread head-pointers into the queue. It is represented by a map where each entry is an owned shared, each associated with a different atomically-accessed memory word.\n• The executor field describes the intermediate state of each executor thread within its multi-step protocol.\n\nIn NR, an executor thread pops operations off the queue and processes them. The thread selects a range to read, reads each buffer entry in that range, and finally updates the atomic field corresponding to an entry of last version to point to the end of this range. Figure 5 shows this final step of the protocol, as expressed in VerusSync. Verus then generates appropriate owned ghost shards, which the programmer manipulates in their executable code to prove that the code correctly follows the protocol. Figure 6 shows one way to arrange an executable data structure to maintain the relationship between the concrete data and the corresponding ghost shards. The style is similar to that in IronSync, which provides an in-depth example. \n\nThe VerusSync approach lets Verus determine syntactically that the transition only affects two shards. This then allows the developer to perform the operation when they have ownership of those two shards without ownership of any of many other shards in system. Finally because VerusSync allows us to easily interpret this system as transition system we can use traditional state-machine techniques to prove global properties of the ring buffer most notably that threads’ accesses to buffer entries are well-formed.",
     "page": 8,
     "isStartCutOff": false,
     "isEndCutOff": false,
@@ -695,47 +752,6 @@
   },
   {
     "type": "code_or_algorithm",
-    "content": "Figure 6  code explanation:\nThe code defines a structure called `NLog` in Rust. This structure manages an atomic type `AtomicU64`, which is part of Rust's standard library. The `NLog` structure uses a vector to hold instances of `AtomicU64`, with each instance corresponding to a replica. This setup allows for concurrent and safe manipulation of atomic memory cells, which is useful for maintaining consistency across multiple threads or replicas.",
-    "page": 9,
-    "label": {
-      "labelType": "Figure",
-      "labelNumber": "6",
-      "panelNumber": "unlabeled"
-    },
-    "title": "NLog Structure for Atomic Management in Rust",
-    "repositioned": true,
-    "hasCitations": false,
-    "mathSymbolFrequency": 0
-  },
-  {
-    "type": "figure_image",
-    "content": "Figure 5  summary:\nThis figure illustrates a more advanced example of the VerusSync protocol for managing a ring buffer in a multi-threaded environment. It includes code snippets that define states and transitions for managing shared memory components. The `ReaderState` and `ExecutorState` enums represent different operational states, such as Idle and Reading. The fields section outlines shared memory components like the tail pointer and executor states, each with specific sharding strategies. The `reader_finish` function transitions a node's state from Reading to Idle, ensuring the current position matches the end of the range before updating the executor and local versions maps. This transition is only possible if the thread owns two specific shards, allowing it to update the node_id version entry and transition the executor to Idle.",
-    "page": 8,
-    "label": {
-      "labelType": "Figure",
-      "labelNumber": "5",
-      "panelNumber": "unlabeled"
-    },
-    "repositioned": true,
-    "hasCitations": false,
-    "mathSymbolFrequency": 0
-  },
-  {
-    "type": "code_or_algorithm",
-    "content": "Figure 6  code explanation:\nThis code defines a proof function named `snbct_proof_mod_eq_zero` that uses integer ring reasoning to verify a mathematical property. The function takes three integer inputs: `a`, `b`, and `c`. It requires that `a` and `b` are not equal to `c` multiplied by some integer `m`. The function ensures that the product of `(a - b)` and `c` equals zero. This is achieved through custom proof automation, which is part of the Verus system's approach to handling nonlinear arithmetic reasoning efficiently.",
-    "page": 6,
-    "label": {
-      "labelType": "Figure",
-      "labelNumber": "6",
-      "panelNumber": "unlabeled"
-    },
-    "title": "Proof Function for Modulo Equality",
-    "repositioned": true,
-    "hasCitations": false,
-    "mathSymbolFrequency": 1
-  },
-  {
-    "type": "code_or_algorithm",
     "content": "Figure 5  code explanation:\nThis code defines a protocol for managing the state of a ring buffer used in a multi-threaded environment. It uses enums to represent different states of a reader and executor. The `ReaderState` enum includes states for starting and processing a range of log indices. The `ExecutorState` enum includes states like Idle, Reading, and others related to advancing and appending operations. The fields section defines shared memory components such as the tail pointer, buffer size, local versions, and executor states, each with specific sharding strategies. The `reader_finish` function transitions a node's state from Reading to Idle, ensuring that the current position matches the end of the range before updating the executor and local versions maps.",
     "page": 8,
     "label": {
@@ -744,6 +760,20 @@
       "panelNumber": "unlabeled"
     },
     "title": "VerusSync Protocol for Ring Buffer Management",
+    "repositioned": true,
+    "hasCitations": false,
+    "mathSymbolFrequency": 0
+  },
+  {
+    "type": "code_or_algorithm",
+    "content": "Figure 6  code explanation:\nThe code defines a structure called `NrLog` in Rust. This structure manages an atomic type `AtomicU64`, which is part of Rust's standard library. The `NrLog` structure uses a vector to hold instances of `AtomicU64`, with each instance corresponding to a replica. This setup allows for concurrent and safe manipulation of atomic memory cells, which is useful for maintaining consistency across multiple threads or replicas.",
+    "page": 9,
+    "label": {
+      "labelType": "Figure",
+      "labelNumber": "6",
+      "panelNumber": "unlabeled"
+    },
+    "title": "NLog Structure for Atomic Management in Rust",
     "repositioned": true,
     "hasCitations": false,
     "mathSymbolFrequency": 0
@@ -774,35 +804,13 @@
     "mathSymbolFrequency": 0
   },
   {
-    "type": "code_or_algorithm",
-    "content": "Code   code explanation:\nThe code defines an invariant for a collection called `local_versions`. It ensures that for each element in `local_versions`, the key of the `LocalVersionShard` matches its index, and the value is within a specified range. This invariant is used to maintain consistency in the data structure.",
-    "page": 9,
-    "label": {
-      "labelType": "Code",
-      "labelNumber": "unlabeled",
-      "panelNumber": "unlabeled"
-    },
-    "title": "Invariant Definition for Local Versions",
-    "repositioned": true,
-    "hasCitations": false,
-    "mathSymbolFrequency": 0
-  },
-  {
-    "type": "figure_image",
-    "content": "Figure   summary:\nThe image shows a graph with lines representing different verification frameworks: Versus, Creusot, Dafny, Low*, and Prusti. The graph likely compares performance metrics such as verification time or accuracy across these frameworks. Each line represents a framework's performance over a range of conditions or benchmarks. The context suggests that the graph is part of a study evaluating the efficiency and effectiveness of these frameworks in verifying complex system properties. The comparison aims to highlight the strengths and weaknesses of each framework in terms of speed and capability.",
-    "page": 9,
-    "label": {
-      "labelType": "Figure",
-      "labelNumber": "unlabeled",
-      "panelNumber": "unlabeled"
-    },
-    "repositioned": true,
-    "hasCitations": false,
-    "mathSymbolFrequency": 0
+    "type": "text",
+    "content": "but representative system-relevant tasks. Second, macrobenchmarks show that these benefits translate to benefits at scale. In total, we verify over 6.1K source lines of Rust code, entailing over 31K source lines of proof. Except where noted, the experiments below are conducted on an AWS EC2 m5.8xlarge instance (Intel Xeon Platinum 8175M @2.50GHz) with 16 cores (with multithreading disabled) and 128GiB of memory.",
+    "page": 9
   },
   {
     "type": "table_rows",
-    "content": "Table 7 Panel a summary:\nThe table compares verification times (in seconds) for different frameworks on singly and doubly linked list millibenchmarks. For singly linked lists, Versus is the fastest at 0.66 seconds, while Prusti is the slowest at 18.80 seconds. For doubly linked lists, Versus remains the fastest at 1.15 seconds, and Creusot is the slowest at 30.83 seconds. Prusti does not support doubly linked lists.",
+    "content": "Figure 7 summary:\nThe figure contains and image and a table. The table compares verification times (in seconds) for different frameworks on singly and doubly linked list millibenchmarks. For singly linked lists, Versus is the fastest at 0.66 seconds, while Prusti is the slowest at 18.80 seconds. For doubly linked lists, Versus remains the fastest at 1.15 seconds, and Creusot is the slowest at 30.83 seconds. Prusti does not support doubly linked lists. The image shows a graph with lines representing different verification frameworks: Versus, Creusot, Dafny, Low*, and Prusti. The graph compares performance metrics such as verification time or accuracy across these frameworks. Each line represents a framework's performance over a range of conditions or benchmarks. Verification time for Verus is constant when varying the number of pushes to four singly linked lists from 1 to 16, whereas time grows with the number of pushes for other frameworks, which are all slower as in the table.",
     "page": 9,
     "label": {
       "labelType": "Table",
@@ -810,22 +818,6 @@
       "panelNumber": "a"
     },
     "repositioned": true,
-    "hasCitations": false,
-    "mathSymbolFrequency": 0
-  },
-  {
-    "type": "heading",
-    "content": "[break0.7]Figure 6. Linking Executable Code to VerusSync Transitions.[break0.7]",
-    "page": 9,
-    "hasCitations": false,
-    "mathSymbolFrequency": 0
-  },
-  {
-    "type": "text",
-    "content": "Through a combination of verified Verus primitives and verified utility code from Verus’s “standard library,” we can enable multiple, concurrently-running threads to manipulate the LocalVersionShard by associating it with an atomic memory cell that can be accessed in a safe, concurrent manner. To streamline this process, Verus provides the invariant on ... is ... syntax (shown here) to easily write a predicate that connects the ghost shard with the physical value of the atomic cell. When the code atomically updates the physical value, the code also invokes a Verus API to update the corresponding ghost shard (e.g., by invoking the reader_finish method), and maintain the invariant.",
-    "page": 9,
-    "isStartCutOff": false,
-    "isEndCutOff": false,
     "hasCitations": false,
     "mathSymbolFrequency": 0
   },
@@ -889,7 +881,7 @@
   },
   {
     "type": "text",
-    "content": "We start by defining three general-purpose millibenchmarks on data structures: Linked lists, simple examples fall outside the restricted logics of Ivy or Verus, so we add a benchmark that fits in Ivy’s expressivity.",
+    "content": "We start by defining three general-purpose millibenchmarks on data structures. Even these simple examples fall outside the restricted logics of Ivy or Verus, so we add a benchmark that fits in Ivy’s expressivity.",
     "page": 9,
     "isStartCutOff": false,
     "isEndCutOff": false,
@@ -988,20 +980,7 @@
   },
   {
     "type": "figure_image",
-    "content": "Figure 8  summary:\nThis figure presents error results for various verification tools, showing the median of 20 runs using 8 threads. The graph compares the time taken for successful verification and error detection across different tools. The tools include Verus, Dafny, Prusti, Low*, and Creusot. The results indicate that Verus, Dafny, and Prusti are efficient in pinpointing failures as quickly as they report successes. However, Low* and Creusot show a significant increase in time when errors occur, with Creusot's approach degenerating from one second to twenty seconds. This highlights the efficiency of Verus, Dafny, and Prusti in handling verification tasks compared to Low* and Creusot.",
-    "page": 10,
-    "label": {
-      "labelType": "Figure",
-      "labelNumber": "8",
-      "panelNumber": ""
-    },
-    "repositioned": true,
-    "hasCitations": false,
-    "mathSymbolFrequency": 0
-  },
-  {
-    "type": "figure_image",
-    "content": "Figure 8  summary:\nThis figure presents error results for various verification tools, showing the median of 20 runs using 8 threads. The graph compares the time taken for successful verification and error detection across different tools, including Verus, Dafny, Prusti, Low*, and Creusot. Verus, Dafny, and Prusti are efficient in pinpointing failures as quickly as they report successes. However, Low* and Creusot show a significant increase in time when errors occur, with Creusot's approach degenerating from one second to twenty seconds. This highlights the efficiency of Verus, Dafny, and Prusti in handling verification tasks compared to Low* and Creusot.",
+    "content": "Figure 8  summary:\nThis figure presents error results for various verification tools for the pop and index functions, showing the median of 20 runs using 8 threads. The graph compares the time taken for successful verification and error detection across different tools. The tools include Verus, Dafny, Prusti, F*, and Creusot. The results indicate that Verus, Dafny, and Prusti are efficient in pinpointing failures as quickly as they report successes. However, Low* and Creusot show a significant increase in time when errors occur, with Creusot's approach degenerating from one second to twenty seconds. This highlights that Verus is fastest for both functions, for both successes and errors.",
     "page": 10,
     "label": {
       "labelType": "Figure",
@@ -1080,21 +1059,8 @@
     "mathSymbolFrequency": 0
   },
   {
-    "type": "table_rows",
-    "content": "Table 9  summary:\nThe table compares verification performance across different systems and verifiers. IronKV verified with Verus shows a proof-to-code ratio of 2.9 and takes 41 seconds to prove, while Dafny has a higher ratio of 4.2 and takes significantly longer at 445 seconds. NR with Verus has a ratio of 7.1 and takes 17 seconds, whereas L.Dafny has a ratio of 10.7 and takes 1089 seconds. The page table has the highest proof-to-code ratio of 13.3, taking 63 seconds to prove. Mimalloc has a ratio of 4.3, with a proving time of 262 seconds. P_log shows a ratio of 3.9, with a proving time of 12 seconds. Overall, Verus totals a proof-to-code ratio of 5.1.",
-    "page": 10,
-    "label": {
-      "labelType": "Table",
-      "labelNumber": "9",
-      "panelNumber": ""
-    },
-    "repositioned": true,
-    "hasCitations": false,
-    "mathSymbolFrequency": 1
-  },
-  {
     "type": "heading",
-    "content": "[break0.7]4.2.1 Porting IronKV from IronFleet [13] IronFleet [13], originally developed in Dafny, allows developers to prove that a distributed system’s implementation meets its specification.[break0.7]",
+    "content": "[break0.7]4.2.1 Porting IronKV from IronFleet [13] IronFleet [13], originally developed in Dafny, allows developers to prove that a distributed system’s implementation meets is both safe and live.[break0.7]",
     "page": 10,
     "hasCitations": true,
     "mathSymbolFrequency": 0
@@ -1255,7 +1221,7 @@
   },
   {
     "type": "text",
-    "content": "We instead wrote our own marshalling library that eliminates this tedium via user-defined macros and provides a more ergonomic interface using traits. Our Marshallable trait, provides a consistent interface, improving on the original which relies on naming convention. Primitives and repetition implement this trait with hand-written proofs. Arbitrary structs and enums use macros that automatically drive implementation and proofs, eliminating the repetitive manual process from IronFleet.",
+    "content": "We instead wrote our own marshalling library that eliminates this tedium via user-defined macros and provides a more ergonomic interface using traits. Our Marshallable trait, provides a consistent interface, improving on the original which relies on naming convention. Primitives and repetition implement this trait with hand-written proofs. Arbitrary structs and enums use macros that automatically drive implementation and proofs, eliminating the repetitive manual proofs prevalent in the Dafny original.",
     "page": 11,
     "isStartCutOff": false,
     "isEndCutOff": false,
@@ -1487,7 +1453,7 @@
     "isEndCutOff": true,
     "hasCitations": true,
     "citationReplacement": {
-      "originalText": "Page-table entries are bit-packed 64-bit words. To reason about correctness, they rely heavily on custom automation for bit-vector, nonlinear, and proof-by-computation reasoning (§3.3), which we invoke, see 29, and 11 times, respectively. They enable us to automatically discharge conditions like:",
+      "originalText": "Page-table entries are bit-packed 64-bit words. To reason about them efficiently, we rely heavily on Verus’s automation for bit-vector, nonlinear, and proof-by-computation reasoning (§3.3), which we invoke 62, 39, and 11 times, respectively. They enable us to automatically discharge conditions like:",
       "textWithCitationsRemoved": "Page-table entries are bit-packed 64-bit words. To reason about correctness, they rely heavily on custom automation for bit-vector, nonlinear, and proof-by-computation reasoning, which we invoke, see 29, and 11 times, respectively. They enable us to automatically discharge conditions like:"
     },
     "replacedCitations": true,
@@ -1499,8 +1465,8 @@
     "optimizedMath": true
   },
   {
-    "type": "math",
-    "content": "For all i, u sixty-four, i, u sixty-four: (x is less than thirteen and (mask one of thirteen u sixty-four and twenty-nine u sixty-four is equal to zero) implies ((a of i bitst of i:) divided by mask one of thirteen u sixty-four and twenty-nine u sixty-four is equal to zero)",
+    "type": "code_or_algorithm",
+    "content": "This code snippet is a logical expression using universal quantification (forall) to ensure that for all values of a and i within specified conditions, a bitwise operation results in zero. It uses bit manipulation with masks to verify that certain bits in a 64-bit word are not set, facilitating efficient reasoning about page-table entries.",
     "mathSymbolFrequency": 5,
     "page": 12,
     "hasCitations": false,
@@ -1641,7 +1607,7 @@
   },
   {
     "type": "text",
-    "content": "The overall objective of a memory allocator is to bridge the gap between an OS memory API that supports coarse-grained, page-aligned allocations (e.g., the mmap syscall on Linux) and an allocator API supporting arbitrary-sized allocations (free and malloc). This requires careful accounting of the address space.",
+    "content": "The overall objective of a memory allocator is to bridge the gap between an OS memory API that supports coarse-grained, page-aligned allocations (e.g., the mmap syscall on Linux) and an allocator API supporting arbitrary-sized allocations (free and malloc). This requires careful accounting of the address space. To reason about the address space, we use ghost memory permissions. We write a trusted specification for mmap in terms of ghost permissions; these permissions can then be passed up to the client when they call malloc.",
     "page": 12,
     "isStartCutOff": false,
     "isEndCutOff": false,
@@ -1689,7 +1655,7 @@
   },
   {
     "type": "text",
-    "content": "ownership across threads. This complex ownership structure is implicit in the original C codebase; porting to verified Rust requires us to make the ownership structure explicit. With ghost types, this is possible (and necessary) to a degree even beyond what could be done in unverified, unsafe Rust.\n\nEvaluation. We have implemented a subset of the features and optimizations supported by mimalloc’s design. For comparison’s sake, Verus-mimalloc has about 3.1K lines of executable code, while the original is about 10K lines of code. Our allocator supports use as a drop-in replacement for several root allocators, aligned allocations, or allocations greater than 128KiB. It can complete 8 out of 19 benchmarks from mimalloc’s benchmark suite, though it does not yet reach performance parity. We focused our initial development on aspects highlighted in the mimalloc report, particularly those affecting concurrency, so we believe Verus-mimalloc is prepared to support the missing features and optimizations in the future.\n\nFigure 9 shows a favorable proof-to-code ratio of 4:3. Furthermore, the allocator’s user-facing specification is very succinct: between initialize, malloc, and free, it is only 37 lines. The allocator relies on OS interfaces (mmap and thread utilities) with 245 lines of trusted spec, bringing the total to 282. Our allocator also relies heavily on Verus’s bit-vector, nonlinear, and proof-by-computation automation, which we invoke 78, 71, and 187 times, respectively.\n\nSummary. Totaling over 17.2K lines (code and proof), Verus-mimalloc is the largest of our macrobenchmarks and the largest Verus project we know of. Even so, Verus verifies the entire project in just over a minute.",
+    "content": "ownership across threads. This complex ownership structure is implicit in the original C codebase; porting to verified Rust requires us to make the ownership structure explicit. With ghost types, this is possible (and necessary) to a degree even beyond what could be done in unverified, unsafe Rust.\n\nEvaluation. We have implemented a subset of the features and optimizations supported by mimalloc’s design. For comparison’s sake, Verus-mimalloc has about 3.1K lines of executable code, while the original is about 10K lines of code. Our allocator supports use as a drop-in replacement for the system allocator with some limitations: it does not yet support realloc, aligned allocations, or allocations greater than 128KiB.  It can complete 8 out of 19 benchmarks from mimalloc’s benchmark suite, though it does not yet reach performance parity. We focused our initial development on aspects highlighted in the mimalloc report, particularly those affecting concurrency, so we believe Verus-mimalloc is prepared to support the missing features and optimizations in the future.\n\nFigure 9 shows a favorable proof-to-code ratio of 4:3. Furthermore, the allocator’s user-facing specification is very succinct: between initialize, malloc, and free, it is only 37 lines. The allocator relies on OS interfaces (mmap and thread utilities) with 245 lines of trusted spec, bringing the total to 282. Our allocator also relies heavily on Verus’s bit-vector, nonlinear, and proof-by-computation automation, which we invoke 78, 71, and 187 times, respectively.\n\nSummary. Totaling over 17.2K lines (code and proof), Verus-mimalloc is the largest of our macrobenchmarks and the largest Verus project we know of. Even so, Verus verifies the entire project in just over a minute.",
     "page": 13,
     "isStartCutOff": true,
     "isEndCutOff": false,
