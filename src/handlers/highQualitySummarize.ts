@@ -408,6 +408,7 @@ export default async function handler(
                     "keywords",
                     "acknowledgements_heading",
                     "acknowledgements_content",
+                    "references_format_information",
                   ]),
                   content: z.string(),
                 })
