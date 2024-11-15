@@ -46,17 +46,60 @@ interface CitationReplacement {
   textWithCitationsRemoved: string;
 }
 
+/*
+This is in progress - not for use yet.
+*/
+type ItemType =
+  | "main_title"
+  | "author_info"
+  | "improved_author_info"
+  | "text"
+  | "heading"
+  | "figure_image"
+  | "table_rows"
+  | "math"
+  | "abstract_content"
+  | "abstract_heading"
+  | "code_or_algorithm"
+  | "end_marker"
+  | "acknowledgements_heading"
+  | "references_heading"
+  | "references_item"
+  | "stray_references_heading"
+  | "endnotes_item"
+  | "endnotes_heading"
+  | "JEL_classification"
+  | "keywords"
+  | "acknowledgements_content"
+  | "references_format_information"
+  | "footnotes"
+  | "meta_info"
+  | "publisher info"
+  | "non_figure_image"
+  | "figure_heading"
+  | "figure_caption"
+  | "figure_note"
+  | "table_descrption"
+  | "table_heading"
+  | "table_notes"
+  | "author_info"
+  | "page_number"
+  | "table_of_contents_heading"
+  | "table_of_contents_item";
+
 interface Item {
   type: string;
-  title?: string;
+  page: number;
   content: string;
+  order?: number;
+  /*These are all optional metadata*/
+  title?: string;
   label?: { labelType: string; labelNumber: string; panelNumber: string };
   summary?: string;
   mathReplacement?: MathReplacement;
   optimizedMath?: boolean;
   replacedCitations?: Boolean;
   repositioned?: Boolean;
-  page: number;
   mathSymbolFrequency?: number;
   hasCitations?: boolean;
   citationReplacement?: CitationReplacement;
@@ -64,6 +107,39 @@ interface Item {
   isEndCutOff?: boolean;
   allAbbreviations?: Abbreviation[];
   audioIssues?: string[];
+}
+
+type UnstructuredItemType =
+  | "Title"
+  | "NarrativeText"
+  | "UncategorizedText"
+  | "CodeSnippet"
+  | "Image"
+  | "Table"
+  | "PageNumber"
+  | "Formula";
+
+interface UnstructuredItem {
+  type: UnstructuredItemType;
+  element_id: string;
+  text: string;
+  new_type?: string;
+  item_order?: number;
+  metadata: {
+    filetype?: string;
+    languages?: string[];
+    page_number: number;
+    filename?: string;
+    image_base64?: string;
+    image_mime_type?: string;
+    text_as_html?: string;
+    links?: {
+      text: string;
+      url: string;
+      start_index: number;
+    }[];
+    parent_id?: string;
+  };
 }
 
 interface ItemAudioMetadata {

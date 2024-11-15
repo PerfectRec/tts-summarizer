@@ -9,6 +9,7 @@ import checkStatusHandler from "@handlers/checkStatus";
 import mockSummarizeHandler from "@handlers/mockSummarize";
 import syncPapers from "@handlers/syncPapers";
 import getPapers from "@handlers/getPapers";
+import fastSummarizeHandler from "@handlers/fastSummarize";
 
 const envToLogger = {
   development: {
@@ -62,6 +63,7 @@ fastify.register(fastifyStatic, {
 
 // Routes
 fastify.post("/summarize", highQualitySummarizeHandler);
+//fastify.post("/summarize", fastSummarizeHandler);
 fastify.get("/checkStatus", checkStatusHandler);
 fastify.post("/mockSummarize", mockSummarizeHandler);
 fastify.get("/getpapers", getPapers);

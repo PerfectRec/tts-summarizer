@@ -1,6 +1,7 @@
 import { UnstructuredClient } from "unstructured-client";
 import { PartitionResponse } from "unstructured-client/sdk/models/operations";
 import { Strategy } from "unstructured-client/sdk/models/shared";
+import "dotenv/config";
 
 const client = new UnstructuredClient({
   serverURL: process.env.UNSTRUCTURED_API_URL,
@@ -25,7 +26,6 @@ export async function processUnstructuredBuffer(
         splitPdfAllowFailed: true,
         splitPdfConcurrencyLevel: 15,
         languages: ["eng"],
-        extractImageBlockTypes: ["Image", "Table"],
       },
     });
 

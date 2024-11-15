@@ -228,19 +228,153 @@ export default async function handler(
       let parsedItems: Item[] = [];
       let filteredItems: Item[] = [];
       let extractedTitle: string = "NoTitleDetected";
+      const pngPages = pngPagesOriginal;
 
       // Get the initial items from Unstructured
 
+      console.log("PASS 1: Using unstructured to get initial JSON");
       initialItems = await processUnstructuredBuffer(
         fileBuffer,
-        cleanedFileName
+        `${cleanedFileName}.pdf`
       );
+
+      const initialItemsByPage: Record<number, UnstructuredItem[]> =
+        initialItems.reduce(
+          (acc: Record<number, UnstructuredItem[]>, item: UnstructuredItem) => {
+            // Clean up the structure of the items
+            const cleanedItem = {
+              type: item.type,
+              element_id: item.element_id,
+              text: item.text,
+              metadata: {
+                page_number: item.metadata.page_number,
+              },
+            };
+
+            if (!acc[cleanedItem.metadata.page_number]) {
+              acc[cleanedItem.metadata.page_number] = [];
+            }
+            acc[cleanedItem.metadata.page_number].push(cleanedItem);
+            return acc;
+          },
+          {} as Record<number, UnstructuredItem[]>
+        );
 
       const initialItemsPath = path.join(fileNameDir, "initialItems.json");
       fs.writeFileSync(initialItemsPath, JSON.stringify(initialItems, null, 2));
       console.log("Saved initial json to", initialItemsPath);
 
       // Type conversion and summarization steps---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+      console.log("PASS 2: Converting unstructured types to our custom types");
+      const TYPE_CONVERSION_CONCURRENCY = 20;
+      const TYPE_CONVERSION_MODEL: Model = "gpt-4o-2024-08-06";
+      const TYPE_CONVERSION_TEMPERATURE = 0.3;
+      const TYPE_CONVERSION_SYSTEM_PROMPT = `For all the given items, accurately determine the new more specific item type. Look at the surrounding items for context. You must produce the correct element_id. And you must produce a new type for every item.
+      
+      Use the provided image and your best judgement to assign an item order starting from 0 to each item. For papers with multiple columns, please start from the top of the left most column, read down the column, and then move to the next column. 
+
+      Note that in the first page of the paper, the title and author info come first, followed by the abstract (if any) and then the rest of the paper follows.`;
+      const typeConversionSchema = z.object({
+        itemsWithNewTypes: z.array(
+          z.object({
+            element_id: z.string(),
+            old_type: z.string(),
+            item_order: z.number(),
+            new_type: z.enum([
+              "main_title",
+              "author_info",
+              "text",
+              "heading",
+              "figure_image",
+              "table_rows",
+              "math",
+              "abstract_content",
+              "abstract_heading",
+              "code_or_algorithm",
+              "end_marker",
+              "acknowledgements_heading",
+              "references_heading",
+              "references_item",
+              "endnotes_item",
+              "endnotes_heading",
+              "JEL_classification",
+              "keywords",
+              "acknowledgements_content",
+              "references_format_information",
+              "footnotes",
+              "meta_info",
+              "publisher_info",
+              "non_figure_image",
+              "figure_heading",
+              "figure_caption",
+              "figure_note",
+              "table_descrption",
+              "table_heading",
+              "table_notes",
+              "author_info",
+              "page_number",
+              "table_of_contents_heading",
+              "table_of_contents_item",
+            ]),
+          })
+        ),
+      });
+
+      for (let i = 0; i < pngPages.length; i += TYPE_CONVERSION_CONCURRENCY) {
+        const batch = pngPages.slice(i, i + TYPE_CONVERSION_CONCURRENCY);
+        const batchResults = await Promise.all(
+          batch.map(async (pngPage, index) => {
+            console.log("Type conversion for page ", i + index + 1);
+            const initialItemsPage = initialItemsByPage[index + i + 1];
+            const batchResult = await getStructuredOpenAICompletionWithRetries(
+              runId,
+              TYPE_CONVERSION_SYSTEM_PROMPT,
+              `${JSON.stringify(initialItemsPage, null, 2)}`,
+              TYPE_CONVERSION_MODEL,
+              TYPE_CONVERSION_TEMPERATURE,
+              typeConversionSchema,
+              3,
+              [pngPage.path],
+              16384
+            );
+            const itemTypeConversionMap: {
+              element_id: string;
+              old_type: string;
+              new_type: string;
+              item_order: number;
+            }[] = batchResult?.itemsWithNewTypes;
+            itemTypeConversionMap.map((typeMap) => {
+              const oldItem = initialItemsPage.find(
+                (initialItem) => initialItem.element_id === typeMap.element_id
+              );
+              if (oldItem) {
+                oldItem.new_type = typeMap.new_type;
+                oldItem.item_order = typeMap.item_order;
+              }
+            });
+
+            console.log("Processed page ", i + index + 1);
+          })
+        );
+      }
+
+      Object.keys(initialItemsByPage).forEach((pageNumber) => {
+        initialItemsByPage[parseInt(pageNumber)].sort(
+          (a, b) => (a.item_order || 0) - (b.item_order || 0)
+        );
+      });
+
+      const flattenedItems = Object.values(initialItemsByPage).flat();
+
+      for (const item of flattenedItems) {
+        parsedItems.push({
+          type: item.new_type || "",
+          page: item.metadata.page_number,
+          content: item.text,
+          order: item.item_order,
+        });
+      }
 
       const parsedItemsPath = path.join(fileNameDir, "parsedItems.json");
       fs.writeFileSync(parsedItemsPath, JSON.stringify(parsedItems, null, 2));
@@ -257,7 +391,7 @@ export default async function handler(
 
       // S3 upload, Audio Generation and Other stuff---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-      //return;
+      return;
 
       const initialItemsFileName = `${cleanedFileName}-initialItems.json`;
       const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
@@ -312,6 +446,7 @@ export default async function handler(
         await sendSuccessEmail(email, cleanedFileName, s3encodedAudioFilePath);
       }
     } catch (error) {
+      return;
       const errorFileUrl = await uploadFile(
         Buffer.from(JSON.stringify(error, Object.getOwnPropertyNames(error))),
         errorFilePath
