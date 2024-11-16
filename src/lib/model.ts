@@ -117,7 +117,13 @@ type UnstructuredItemType =
   | "Image"
   | "Table"
   | "PageNumber"
-  | "Formula";
+  | "Formula"
+  | "Address"
+  | "EmailAddress"
+  | "Header"
+  | "ListItem"
+  | "PageBreak"
+  | "FigureCaption";
 
 interface UnstructuredItem {
   type: UnstructuredItemType;

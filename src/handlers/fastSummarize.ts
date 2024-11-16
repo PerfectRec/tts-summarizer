@@ -224,7 +224,7 @@ export default async function handler(
 
   if (summarizationMethod === "ultimate") {
     try {
-      let initialItems = [];
+      let initialItems: UnstructuredItem[] = [];
       let parsedItems: Item[] = [];
       let filteredItems: Item[] = [];
       let extractedTitle: string = "NoTitleDetected";
@@ -238,27 +238,35 @@ export default async function handler(
         `${cleanedFileName}.pdf`
       );
 
+      //Grouping items by page
       const initialItemsByPage: Record<number, UnstructuredItem[]> =
-        initialItems.reduce(
-          (acc: Record<number, UnstructuredItem[]>, item: UnstructuredItem) => {
-            // Clean up the structure of the items
-            const cleanedItem = {
-              type: item.type,
-              element_id: item.element_id,
-              text: item.text,
-              metadata: {
-                page_number: item.metadata.page_number,
-              },
-            };
+        initialItems
+          .filter(
+            (item) => !["PageNumber", "Header", "Footer"].includes(item.type)
+          )
+          .reduce(
+            (
+              acc: Record<number, UnstructuredItem[]>,
+              item: UnstructuredItem
+            ) => {
+              // Clean up the structure of the items
+              const cleanedItem = {
+                type: item.type,
+                element_id: item.element_id,
+                text: item.text,
+                metadata: {
+                  page_number: item.metadata.page_number,
+                },
+              };
 
-            if (!acc[cleanedItem.metadata.page_number]) {
-              acc[cleanedItem.metadata.page_number] = [];
-            }
-            acc[cleanedItem.metadata.page_number].push(cleanedItem);
-            return acc;
-          },
-          {} as Record<number, UnstructuredItem[]>
-        );
+              if (!acc[cleanedItem.metadata.page_number]) {
+                acc[cleanedItem.metadata.page_number] = [];
+              }
+              acc[cleanedItem.metadata.page_number].push(cleanedItem);
+              return acc;
+            },
+            {} as Record<number, UnstructuredItem[]>
+          );
 
       const initialItemsPath = path.join(fileNameDir, "initialItems.json");
       fs.writeFileSync(initialItemsPath, JSON.stringify(initialItems, null, 2));
@@ -270,17 +278,12 @@ export default async function handler(
       const TYPE_CONVERSION_CONCURRENCY = 20;
       const TYPE_CONVERSION_MODEL: Model = "gpt-4o-2024-08-06";
       const TYPE_CONVERSION_TEMPERATURE = 0.3;
-      const TYPE_CONVERSION_SYSTEM_PROMPT = `For all the given items, accurately determine the new more specific item type. Look at the surrounding items for context. You must produce the correct element_id. And you must produce a new type for every item.
-      
-      Use the provided image and your best judgement to assign an item order starting from 0 to each item. For papers with multiple columns, please start from the top of the left most column, read down the column, and then move to the next column. 
-
-      Note that in the first page of the paper, the title and author info come first, followed by the abstract (if any) and then the rest of the paper follows.`;
+      const TYPE_CONVERSION_SYSTEM_PROMPT = `For all the given items, accurately determine the new more specific item type. Look at the surrounding items for context. You must produce the correct element_id. And you must produce a new type for every item.`;
       const typeConversionSchema = z.object({
         itemsWithNewTypes: z.array(
           z.object({
             element_id: z.string(),
             old_type: z.string(),
-            item_order: z.number(),
             new_type: z.enum([
               "main_title",
               "author_info",
@@ -288,7 +291,6 @@ export default async function handler(
               "heading",
               "figure_image",
               "table_rows",
-              "math",
               "abstract_content",
               "abstract_heading",
               "code_or_algorithm",
@@ -342,7 +344,6 @@ export default async function handler(
               element_id: string;
               old_type: string;
               new_type: string;
-              item_order: number;
             }[] = batchResult?.itemsWithNewTypes;
             itemTypeConversionMap.map((typeMap) => {
               const oldItem = initialItemsPage.find(
@@ -350,23 +351,80 @@ export default async function handler(
               );
               if (oldItem) {
                 oldItem.new_type = typeMap.new_type;
-                oldItem.item_order = typeMap.item_order;
               }
             });
 
-            console.log("Processed page ", i + index + 1);
+            console.log("Type converted page ", i + index + 1);
           })
         );
       }
 
-      Object.keys(initialItemsByPage).forEach((pageNumber) => {
-        initialItemsByPage[parseInt(pageNumber)].sort(
-          (a, b) => (a.item_order || 0) - (b.item_order || 0)
-        );
-      });
+      // console.log("PASS 3: Fixing the extracted item order");
+      // const ORDER_CORRECTION_CONCURRENCY = 20;
+      // const ORDER_CORRECTION_MODEL: Model = "gpt-4o-2024-08-06";
+      // const ORDER_CORRECTION_TEMPERATURE = 0.4;
+      // const ORDER_CORRECTION_SYSTEM_PROMPT = `Use the provided image and your best judgement to assign an item order starting from 0 to each item.
 
+      // For papers with multiple columns, you must start ordering from the top left and then move down the column and then move to the top of the next column. Please look at all the items before ordering them.
+
+      // Note that a heading does not need to be the first item in a page. It is possible that paragraphs from the previous page can continue into the current page. In that case, you should start from them. Always start from the top left.
+
+      // Note that in the first page of the paper, the title and author info come first, followed by the abstract (if any) and then the rest of the paper follows.`;
+      // const orderCorrectionSchema = z.object({
+      //   itemsWithCorrectedOrder: z.array(
+      //     z.object({
+      //       element_id: z.string(),
+      //       item_order: z.number(),
+      //     })
+      //   ),
+      // });
+
+      // for (let i = 0; i < pngPages.length; i += ORDER_CORRECTION_CONCURRENCY) {
+      //   const batch = pngPages.slice(i, i + ORDER_CORRECTION_CONCURRENCY);
+      //   const batchResults = await Promise.all(
+      //     batch.map(async (pngPage, index) => {
+      //       console.log("Order correction for page ", i + index + 1);
+      //       const initialItemsPage = initialItemsByPage[index + i + 1];
+      //       const batchResult = await getStructuredOpenAICompletionWithRetries(
+      //         runId,
+      //         ORDER_CORRECTION_SYSTEM_PROMPT,
+      //         `${JSON.stringify(initialItemsPage, null, 2)}`,
+      //         ORDER_CORRECTION_MODEL,
+      //         ORDER_CORRECTION_TEMPERATURE,
+      //         orderCorrectionSchema,
+      //         3,
+      //         [pngPage.path],
+      //         16384
+      //       );
+      //       const itemOrderCorrectionMap: {
+      //         element_id: string;
+      //         item_order: number;
+      //       }[] = batchResult?.itemsWithCorrectedOrder;
+      //       itemOrderCorrectionMap.map((orderMap) => {
+      //         const oldItem = initialItemsPage.find(
+      //           (initialItem) => initialItem.element_id === orderMap.element_id
+      //         );
+      //         if (oldItem) {
+      //           oldItem.item_order = orderMap.item_order;
+      //         }
+      //       });
+
+      //       console.log("Order corrected page ", i + index + 1);
+      //     })
+      //   );
+      // }
+
+      // //sorting items by the generated order
+      // Object.keys(initialItemsByPage).forEach((pageNumber) => {
+      //   initialItemsByPage[parseInt(pageNumber)].sort(
+      //     (a, b) => (a.item_order || 0) - (b.item_order || 0)
+      //   );
+      // });
+
+      //flattening the grouped-by-page items
       const flattenedItems = Object.values(initialItemsByPage).flat();
 
+      //creating the new simplfied item array
       for (const item of flattenedItems) {
         parsedItems.push({
           type: item.new_type || "",
@@ -381,6 +439,21 @@ export default async function handler(
       console.log("Saved raw text extract to", parsedItemsPath);
 
       // Filtering and postprocessing steps---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+      console.log("Filtering unnecessary item types");
+      filteredItems = parsedItems.filter((item) =>
+        [
+          "main_title",
+          "author_info",
+          "abstract_heading",
+          "abstract_content",
+          "heading",
+          "text",
+          "figure_image",
+          "code_or_algorithm",
+          "table_rows",
+        ].includes(item.type)
+      );
 
       const filteredItemsPath = path.join(fileNameDir, "filteredItems.json");
       fs.writeFileSync(
