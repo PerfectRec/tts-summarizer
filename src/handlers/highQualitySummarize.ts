@@ -1584,6 +1584,7 @@ export default async function handler(
 
       const completedTime = getCurrentTimestamp();
       uploadStatus(runId, "Completed", {
+        email: email,
         message: "Generated audio output and metadata",
         uploadedFileUrl: s3pdfFilePath,
         audioFileUrl: s3encodedAudioFilePath,
