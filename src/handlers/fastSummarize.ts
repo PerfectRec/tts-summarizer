@@ -13,7 +13,7 @@ import { sendErrorEmail, sendSuccessEmail } from "@utils/email";
 import { clearDirectory, getCurrentTimestamp } from "@utils/io";
 import { synthesizeSpeechInChunks } from "@utils/polly";
 import { getStructuredOpenAICompletionWithRetries } from "@utils/openai";
-import { isTextCutoff } from "@utils/text";
+import { isTextCutoff, replaceAbbreviations } from "@utils/text";
 import { removeBreaks } from "@utils/ssml";
 import { processUnstructuredBuffer } from "@utils/unstructured";
 
@@ -278,7 +278,7 @@ export default async function handler(
       console.log(
         "LLM PASS: Converting unstructured types to our custom types"
       );
-      const TYPE_CONVERSION_CONCURRENCY = 15;
+      const TYPE_CONVERSION_CONCURRENCY = 20;
       const TYPE_CONVERSION_MODEL: Model = "gpt-4o-2024-08-06";
       const TYPE_CONVERSION_TEMPERATURE = 0.3;
       const TYPE_CONVERSION_SYSTEM_PROMPT = `For all the given items, accurately determine the new more specific item type. Look at the surrounding items for context. You must produce the correct element_id. And you must produce a new type for every item.`;
@@ -365,7 +365,7 @@ export default async function handler(
       }
 
       // console.log("LLM PASS: Fixing the extracted item order");
-      // const ORDER_CORRECTION_CONCURRENCY = 15;
+      // const ORDER_CORRECTION_CONCURRENCY = 20;
       // const ORDER_CORRECTION_MODEL: Model = "gpt-4o-2024-08-06";
       // const ORDER_CORRECTION_TEMPERATURE = 0.4;
       // const ORDER_CORRECTION_SYSTEM_PROMPT = `Use the provided image and your best judgement to assign an item order starting from 0 to each item.
@@ -440,9 +440,7 @@ export default async function handler(
       }
 
       //Author Info and Main Title Extraction
-      console.log(
-        "CODE PASS: Collecting author info and extracting main title"
-      );
+      console.log("LLM PASS: Collecting author info and extracting main title");
       const PAGES_TO_ANALYZE = 5;
       const AUTHOR_INFO_AND_MAIN_TITLE_EXTRACTION_MODEL: Model =
         "gpt-4o-2024-08-06";
@@ -594,7 +592,7 @@ export default async function handler(
 
       //Summarizing specialItems
       console.log("LLM PASS: Summarizing special items");
-      const SUMMARIZATION_CONCURRENCY = 15;
+      const SUMMARIZATION_CONCURRENCY = 20;
       const summarizationSchema = z.object({
         summarizedItem: z.object({
           type: z.enum(["table_rows", "figure_image", "code_or_algorithm"]),
@@ -931,7 +929,7 @@ export default async function handler(
       //Tagging items for postpreprocessing
       console.log("LLM PASS: Tagging items for postprocessing");
 
-      const POSTPROCESSING_TAGGING_CONCURRENCY = 15;
+      const POSTPROCESSING_TAGGING_CONCURRENCY = 20;
       const POSTPROCESSING_TAGGING_MODEL: Model = "gpt-4o-2024-08-06";
       const POSTPROCESSING_TAGGING_TEMPERATURE = 0.2;
       const POSTPROCESSING_TAGGING_SYSTEM_PROMPT = `Analyze the following text and
@@ -986,7 +984,7 @@ export default async function handler(
 
       //Removing Citations
       console.log("LLM PASS: optimizing citations");
-      const CITATION_OPTIMIZATION_CONCURRENCY = 15;
+      const CITATION_OPTIMIZATION_CONCURRENCY = 20;
       const CITATION_OPTIMIZATION_MODEL: Model = "gpt-4o-2024-08-06";
       const CITATION_OPTIMIZATION_TEMPERATURE = 0;
       const CITATION_OPTIMIZATION_SYSTEM_PROMPT = `Remove citations elements from the user text like
@@ -1060,7 +1058,7 @@ export default async function handler(
 
       //Rewording math notation
       console.log("LLM PASS: optimizing math");
-      const MATH_OPTIMIZATION_CONCURRENCY = 15;
+      const MATH_OPTIMIZATION_CONCURRENCY = 20;
       const MATH_OPTIMIZATION_MODEL: Model = "gpt-4o-2024-08-06";
       const MATH_OPTIMIZATION_TEMPERATURE = 0;
       const MATH_OPTIMIZATION_SYSTEM_PROMPT = `The following text will be converted to audio for the user to listen to. Replace math notation and all LaTeX formatting with plain english words to make it more suitable for that purpose. Convert accurately. 
@@ -1122,6 +1120,36 @@ export default async function handler(
           })
         );
       }
+
+      console.log("CODE PASS: Optimzing known abbreviations");
+      const specialAbbreviations: Abbreviation[] = [
+        {
+          abbreviation: "CI",
+          replacement: "C.I.",
+          type: "initialism",
+          expansion: "confidence interval",
+        },
+      ];
+
+      filteredItems.forEach((item) => {
+        item.content = replaceAbbreviations(item.content, specialAbbreviations);
+      });
+
+      console.log("CODE PASS: Adding small breaks where necessary");
+      filteredItems.forEach((item) => {
+        if (
+          [
+            "text",
+            "figure_image",
+            "code_or_algorithm",
+            "table_rows",
+            "abstract_content",
+          ].includes(item.type) &&
+          !item.isEndCutOff
+        ) {
+          item.content += "[break0.4]";
+        }
+      });
 
       const filteredItemsPath = path.join(fileNameDir, "filteredItems.json");
       fs.writeFileSync(
