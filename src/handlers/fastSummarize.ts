@@ -216,6 +216,7 @@ export default async function handler(
     uploadedFileUrl: s3pdfFilePath,
     receivedTime: receivedTime,
     startedProcessingTime: startedProcessingTime,
+    completion: 0,
   });
 
   console.log("converted pdf pages to images");
@@ -232,7 +233,7 @@ export default async function handler(
 
       // Get the initial items from Unstructured
 
-      console.log("PASS 1: Using unstructured to get initial JSON");
+      console.log("UNSTRUCTURED PASS: Using unstructured to get initial JSON");
       initialItems = await processUnstructuredBuffer(
         fileBuffer,
         `${cleanedFileName}.pdf`
@@ -272,10 +273,12 @@ export default async function handler(
       fs.writeFileSync(initialItemsPath, JSON.stringify(initialItems, null, 2));
       console.log("Saved initial json to", initialItemsPath);
 
-      // Type conversion and summarization steps---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      // Type conversion and author info and main title extraction steps---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-      console.log("PASS 2: Converting unstructured types to our custom types");
-      const TYPE_CONVERSION_CONCURRENCY = 20;
+      console.log(
+        "LLM PASS: Converting unstructured types to our custom types"
+      );
+      const TYPE_CONVERSION_CONCURRENCY = 15;
       const TYPE_CONVERSION_MODEL: Model = "gpt-4o-2024-08-06";
       const TYPE_CONVERSION_TEMPERATURE = 0.3;
       const TYPE_CONVERSION_SYSTEM_PROMPT = `For all the given items, accurately determine the new more specific item type. Look at the surrounding items for context. You must produce the correct element_id. And you must produce a new type for every item.`;
@@ -293,6 +296,8 @@ export default async function handler(
               "table_rows",
               "abstract_content",
               "abstract_heading",
+              "out_of_text_math",
+              "math_equation_number",
               "code_or_algorithm",
               "end_marker",
               "acknowledgements_heading",
@@ -359,8 +364,8 @@ export default async function handler(
         );
       }
 
-      // console.log("PASS 3: Fixing the extracted item order");
-      // const ORDER_CORRECTION_CONCURRENCY = 20;
+      // console.log("LLM PASS: Fixing the extracted item order");
+      // const ORDER_CORRECTION_CONCURRENCY = 15;
       // const ORDER_CORRECTION_MODEL: Model = "gpt-4o-2024-08-06";
       // const ORDER_CORRECTION_TEMPERATURE = 0.4;
       // const ORDER_CORRECTION_SYSTEM_PROMPT = `Use the provided image and your best judgement to assign an item order starting from 0 to each item.
@@ -434,17 +439,139 @@ export default async function handler(
         });
       }
 
+      //Author Info and Main Title Extraction
+      console.log(
+        "CODE PASS: Collecting author info and extracting main title"
+      );
+      const PAGES_TO_ANALYZE = 5;
+      const AUTHOR_INFO_AND_MAIN_TITLE_EXTRACTION_MODEL: Model =
+        "gpt-4o-2024-08-06";
+      const AUTHOR_INFO_AND_MAIN_TITLE_EXTRACTION_TEMPERATURE = 0.2;
+      const AUTHOR_INFO_AND_MAIN_TITLE_EXTRACTION_PROMPT = `Extract all the author info and the main title of the document.
+
+      For main title: Use your judgement to accurately determine the main title.
+      
+      For author info: Keep only the author names and affiliations. If the affiliation is not available for a user leave it empty. Do not repeat the same author or affiliation multiple times.`;
+
+      const authorInfoAndMainTitleExtractionSchema = z.object({
+        mainTitle: z.string(),
+        authors: z.array(
+          z.object({
+            authorName: z.string(),
+            affiliation: z.string(),
+          })
+        ),
+      });
+
+      const improvedAuthorInfoAndExtractedTitle =
+        await getStructuredOpenAICompletionWithRetries(
+          runId,
+          AUTHOR_INFO_AND_MAIN_TITLE_EXTRACTION_PROMPT,
+          `Here are the first ${PAGES_TO_ANALYZE} pages of the document:`,
+          AUTHOR_INFO_AND_MAIN_TITLE_EXTRACTION_MODEL,
+          AUTHOR_INFO_AND_MAIN_TITLE_EXTRACTION_TEMPERATURE,
+          authorInfoAndMainTitleExtractionSchema,
+          3,
+          pngPages.slice(0, PAGES_TO_ANALYZE).map((page) => page.path)
+        );
+
+      extractedTitle =
+        improvedAuthorInfoAndExtractedTitle?.mainTitle || "NoTitleDetected";
+
+      const firstAuthorInfoIndex = parsedItems.findIndex(
+        (item) => item.type === "author_info"
+      );
+
+      if (firstAuthorInfoIndex !== -1) {
+        const authors = improvedAuthorInfoAndExtractedTitle?.authors || [];
+        const totalAuthors = authors.length;
+        const MAX_AUTHORS = 5;
+        const authorGroups: { [affiliation: string]: string[] } = {};
+
+        // Group authors by affiliation
+        authors
+          .slice(0, MAX_AUTHORS)
+          .forEach(({ authorName, affiliation }: Author) => {
+            if (!authorGroups[affiliation]) {
+              authorGroups[affiliation] = [];
+            }
+            authorGroups[affiliation].push(authorName);
+          });
+
+        // Compile the author info into the desired format
+        let compiledAuthorInfo = Object.entries(authorGroups)
+          .map(([affiliation, authorNames]) => {
+            return affiliation && affiliation !== ""
+              ? `[break0.3]${authorNames.join(", ")} from ${affiliation}`
+              : `[break0.3]${authorNames.join(", ")}`;
+          })
+          .join(", ");
+
+        // Add the total number of authors if more than 5
+        if (totalAuthors > MAX_AUTHORS) {
+          compiledAuthorInfo = `There are ${totalAuthors} authors, including ${compiledAuthorInfo}`;
+        }
+
+        parsedItems[firstAuthorInfoIndex].type = "improved_author_info";
+        parsedItems[firstAuthorInfoIndex].content = compiledAuthorInfo;
+      }
+
+      //Inserting end marker
+      console.log("CODE PASS: inserting end marker");
+
+      // Find the last references_heading index
+      let lastReferencesHeadingIndex = -1;
+      for (let i = parsedItems.length - 1; i >= 0; i--) {
+        if (parsedItems[i].type === "references_heading") {
+          lastReferencesHeadingIndex = i;
+          break;
+        }
+      }
+
+      // Update the type of all but the final references heading
+      for (let i = 0; i < parsedItems.length; i++) {
+        if (
+          parsedItems[i].type === "references_heading" &&
+          i !== lastReferencesHeadingIndex
+        ) {
+          parsedItems[i].type = "stray_references_heading";
+        }
+      }
+
+      // Find the last references_heading or references_item
+      let conclusionInsertionIndex = -1;
+      let conclusionInsertionPage = 0;
+      for (let i = parsedItems.length - 1; i >= 0; i--) {
+        if (
+          parsedItems[i].type === "references_heading" ||
+          parsedItems[i].type === "references_item"
+        ) {
+          conclusionInsertionIndex = i;
+          conclusionInsertionPage = parsedItems[i].page;
+          break;
+        }
+      }
+
+      // Insert the message if a suitable insertion point was found
+      if (conclusionInsertionIndex !== -1) {
+        parsedItems.splice(conclusionInsertionIndex + 1, 0, {
+          type: "end_marker",
+          content: "[break0.4]You have reached the end of the paper.[break0.4]",
+          page: conclusionInsertionPage,
+        });
+      }
+
       const parsedItemsPath = path.join(fileNameDir, "parsedItems.json");
       fs.writeFileSync(parsedItemsPath, JSON.stringify(parsedItems, null, 2));
       console.log("Saved raw text extract to", parsedItemsPath);
 
-      // Filtering and postprocessing steps---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      // Filtering, summarizing and other postprocessing steps---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-      console.log("Filtering unnecessary item types");
+      console.log("CODE PASS: Filtering unnecessary item types");
       filteredItems = parsedItems.filter((item) =>
         [
           "main_title",
-          "author_info",
+          "improved_author_info",
           "abstract_heading",
           "abstract_content",
           "heading",
@@ -452,8 +579,549 @@ export default async function handler(
           "figure_image",
           "code_or_algorithm",
           "table_rows",
+          "out_of_text_math",
         ].includes(item.type)
       );
+
+      //Tagging items with end and start cut off
+      filteredItems.forEach((item) => {
+        if (item.type === "text") {
+          const { isStartCutOff, isEndCutOff } = isTextCutoff(item.content);
+          item.isStartCutOff = isStartCutOff;
+          item.isEndCutOff = isEndCutOff;
+        }
+      });
+
+      //Summarizing specialItems
+      console.log("LLM PASS: Summarizing special items");
+      const SUMMARIZATION_CONCURRENCY = 15;
+      const summarizationSchema = z.object({
+        summarizedItem: z.object({
+          type: z.enum(["table_rows", "figure_image", "code_or_algorithm"]),
+          label: z.object({
+            labelType: z.string(),
+            labelNumber: z.string(),
+            panelNumber: z.string().optional(),
+          }),
+          summary: z.string(),
+        }),
+      });
+
+      const TABLE_SUMMARIZATION_MODEL: Model = "gpt-4o-2024-08-06";
+      const TABLE_SUMMARIZATION_TEMPERATURE = 0.2;
+      const TABLE_SUMMARIZATION_SYSTEM_PROMPT = `Write a concise and effective summary for the table. Replace the raw rows in the content field with the summary. Summarize the size of changes / effects / estimates / results in the tables. Be very accurate while doing this analysis. You must get the patterns correct. To help understand them better, use context from the paper and any note below them. The summary should capture the main point of the table. Try to use as few numbers as possible. Keep in mind that the user cannot see the table as they will be listening to your summary. 
+      
+      Add the label "Table X" where X is the table number indicated in the page. You need to extract the correct table number. This is very important. Look for cues around the table and use your best judgement to determine it. Add the panel number that is being summarized, if it is mentioned.
+
+      It is possible that a table can be part of a figure and labeled as a figure, in that case label it as a figure.
+
+      Do not use markdown. Use plain text.`;
+
+      const FIGURE_SUMMARIZATION_MODEL: Model = "gpt-4o-2024-08-06";
+      const FIGURE_SUMMARIZATION_TEMPERATURE = 0.2;
+      const FIGURE_SUMMARIZATION_SYSTEM_PROMPT = `Write a detailed and effective summary for the figures. Replace the content field with the summary. 
+
+      Every summary must have three subsections:
+      1. Physical description of the image
+      2. Description of the content of the figure
+      3. Accurate inferences and conclusions from the content of the figure. 
+
+      No need to explicitly mention each subsection.
+
+      Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct label type and label number. This is very important. Look for cues around the figure and use your best judgement to determine it. Possible label types can be Figure, Chart, Image etc.
+      
+      If there is no label or label number set the labelType as "Image" and labelNumber as "unlabeled".
+      
+      Do not use markdown. Use plain text.
+      
+      Remember that the user is going to listen to the output and cannot see the figure. Take that into account while producing the summary.`;
+      const FIGURE_SUMMARIZATION_EXAMPLES = [
+        {
+          userImage: "./src/prompt/figures/AIAYN_FIG_1.png",
+          assistantOutput: `{
+                            type: "figure_image",
+                            label: {
+                              labelType: "Figure",
+                              labelNumber: "1",
+                              panelNumber: ""
+                            }
+                            "This figure is a diagram of the transformer model’s architecture, showing the steps take input tokens and produce output probabilities.  It has two components.  The left side is the encoder which begins with inputs, and the right side is the decoder which begins with outputs that are shifted right.  On the encoder side, first the input tokens are transformed into embeddings, which are then added to positional embeddings.  Then, there are 6 identical layers which include first a multi-head attention step, then a feed forward network. On the decoder side, the first steps are the same.  The input tokens are transformed into embeddings with positional embeddings added next.  Then, there are also 6 identical layers which are similar to this part of the encoder, but with an extra step.  The first step is masked multi-head attention, followed by multi-head attention over the output of the encoder stack.  Next comes the feed forward layer, just like in the encoder.  Finally, the last steps are a linear projection layer, and a softmax step which produces output probabilities."
+                          }`,
+        },
+        {
+          userImage: "./src/prompt/figures/ALHGALW_FIG_2.png",
+          assistantOutput: `{
+                            type: "figure_image",
+                            label: {
+                              labelType: "Figure",
+                              labelNumber: "2",
+                              panelNumber: ""
+                            }
+                            content: "This figure plots the fraction of correct next-token predictions for 4 language models during training on a subset of the Pile training set, as a function of the number of training steps.  The four models are: SLM, Baseline, RKD and SALT.  Over the 200K steps shown, accuracy increases from around 55% to 58-60% after 200K steps, with increases slowing down as steps increase.  SALT outperforms baseline slightly for any number of steps, whereas SLM performs worse.  RKD performs better than baseline at first, but after around 75 thousand steps, begins to perform worse."
+                          }`,
+        },
+        {
+          userImage: "./src/prompt/figures/COCD_FIG_1.png",
+          assistantOutput: `{
+                            type: "figure_image",
+                            label: {
+                              labelType: "Figure",
+                              labelNumber: "1",
+                              panelNumber: ""
+                            }
+                            content: "This figure plots settler mortality against GDP per capita adjusted for purchasing power parity, both on a log scale.  Each data point is a country and a downward sloping line represents the strong negative correlation.  Data points are generally close to the line, with a few outliers."
+                          }`,
+        },
+        {
+          userImage: "./src/prompt/figures/TYE_FIG_2.png",
+          assistantOutput: `{
+                            type: "figure_image",
+                            label: {
+                              labelType: "Figure",
+                              labelNumber: "1",
+                              panelNumber: ""
+                            }
+                            content: "This figure shows cognitive outcome scores over 10 years.  It has 3 panels, each showing a different outcome for each of the four arms of the experiment, treatments for memory, reasoning, and speed, along with the control group.  The outcomes are scores for memory, reasoning and speed.  Each panel shows that the treatment associated with the each outcome resulted in larger increases in the score for that outcome, especially so for speed.  Each score for each treatment generally increase within the first year, peaks, and then declines after 3 years, especially between years 5 and 10."
+                          }`,
+        },
+        {
+          userImage: "./src/prompt/figures/TYE_FIG_3.png",
+          assistantOutput: `{
+                            type: "figure_image",
+                            label: {
+                              labelType: "Figure",
+                              labelNumber: "1",
+                              panelNumber: ""
+                            }
+                            content: "This figure plots self-reported IADL scores over 10 years for each of the 4 experimental groups, the 3 treatments, memory, reasoning, speed, as well as the control group. All groups have similar, roughly flat IADL scores for the first 3 years, which decline after.  In years 5 and 10, the control group’s scores are substantially lower than each of the treatments."
+                          }`,
+        },
+      ];
+
+      const CODE_SUMMARIZATION_MODEL: Model = "gpt-4o-2024-08-06";
+      const CODE_SUMMARIZATION_TEMPERATURE = 0.2;
+      const CODE_SUMMARIZATION_SYSTEM_PROMPT = `Summarize the given code or algorithm. Explain what the code or algorithm does in simple terms including its input and output. Do not include any code syntax in the summary.
+                
+      Also extract the title of the algorithm or code block. If no title is mentioned, then generate an appropriate one yourself.
+      
+      Usually codeblocks do not have labels. If there is no label or label number set the labelType as "" and labelNumber as "unlabeled". If there is no panel number set the panelNumber as ""
+
+      Sometimes codeblocks can be labeled. If the codeblock is labeled as a "Figure", then try to detect the "Figure X" label where X is the number assigned to the figure. Look around for cues to help you determine this.`;
+
+      const itemsToBeSummarized = filteredItems.filter((item) =>
+        ["figure_image", "table_rows", "code_or_algorithm"].includes(item.type)
+      );
+
+      const summarizationMap: Record<
+        string,
+        {
+          model: string;
+          temperature: number;
+          systemPrompt: string;
+          examples: any[];
+        }
+      > = {
+        figure_image: {
+          model: FIGURE_SUMMARIZATION_MODEL,
+          temperature: FIGURE_SUMMARIZATION_TEMPERATURE,
+          systemPrompt: FIGURE_SUMMARIZATION_SYSTEM_PROMPT,
+          examples: FIGURE_SUMMARIZATION_EXAMPLES,
+        },
+        table_rows: {
+          model: TABLE_SUMMARIZATION_MODEL,
+          temperature: TABLE_SUMMARIZATION_TEMPERATURE,
+          systemPrompt: TABLE_SUMMARIZATION_SYSTEM_PROMPT,
+          examples: [],
+        },
+        code_or_algorithm: {
+          model: CODE_SUMMARIZATION_MODEL,
+          temperature: CODE_SUMMARIZATION_TEMPERATURE,
+          systemPrompt: CODE_SUMMARIZATION_SYSTEM_PROMPT,
+          examples: [],
+        },
+      };
+
+      for (
+        let i = 0;
+        i < itemsToBeSummarized.length;
+        i += SUMMARIZATION_CONCURRENCY
+      ) {
+        const itemBatch = itemsToBeSummarized.slice(
+          i,
+          i + SUMMARIZATION_CONCURRENCY
+        );
+
+        console.log(
+          `Summarizing items ${i + 1} through ${i + SUMMARIZATION_CONCURRENCY}`
+        );
+
+        await Promise.all(
+          itemBatch.map(async (item) => {
+            try {
+              console.log(`Summarizing ${item.type} on page ${item.page}`);
+              const result = await getStructuredOpenAICompletionWithRetries(
+                runId,
+                summarizationMap[item.type].systemPrompt,
+                `Item to summarize: ${JSON.stringify(item)}`,
+                summarizationMap[item.type].model,
+                summarizationMap[item.type].temperature,
+                summarizationSchema,
+                3,
+                [pngPages[item.page - 1].path],
+                16384,
+                0.1,
+                summarizationMap[item.type].examples
+              );
+
+              item.label = result?.summarizedItem.label;
+
+              if (item.label) {
+                item.labelString = `${item.label.labelType} ${
+                  item.label.labelNumber === "unlabeled"
+                    ? ""
+                    : item.label.labelNumber
+                }${
+                  item.label.panelNumber &&
+                  item.label.panelNumber !== "unlabeled"
+                    ? ` Panel ${item.label.panelNumber}`
+                    : ""
+                }`;
+                item.content = `${item.labelString} summary: ${result?.summarizedItem.summary}`;
+              } else {
+                item.content = result?.summarizedItem.summary;
+              }
+            } catch (error) {
+              console.error("Non fatal error while summarizing special items");
+            }
+          })
+        );
+      }
+
+      //Repositioning Special Items
+      console.log("CODE PASS: Repositioning summarized items");
+      const itemsTobeRepositioned = filteredItems.filter((item) =>
+        ["figure_image", "table_rows", "code_or_algorithm"].includes(item.type)
+      );
+
+      for (const item of itemsTobeRepositioned) {
+        if (item.repositioned || !item.label) {
+          continue;
+        }
+
+        const { labelType, labelNumber } = item.label;
+        console.log("repositioning ", labelType, " ", labelNumber);
+        let mentionIndex = -1;
+        let headingIndex = -1;
+        let textWithoutEndCutoffIndex = -1;
+
+        if (labelNumber !== "unlabeled") {
+          console.log("searching for matches for", labelType, labelNumber);
+          let matchWords = [];
+          if (labelType.toLocaleLowerCase() === "figure") {
+            matchWords.push(
+              `Figure ${labelNumber}`,
+              `Fig. ${labelNumber}`,
+              `Fig ${labelNumber}`,
+              `FIGURE ${labelNumber}`,
+              `FIG ${labelNumber}`,
+              `FIG. ${labelNumber}`
+            );
+          } else if (labelType.toLocaleLowerCase() === "chart") {
+            matchWords.push(
+              `Chart ${labelNumber}`,
+              `chart ${labelNumber}`,
+              `CHART ${labelNumber}`
+            );
+          } else if (labelType.toLocaleLowerCase() === "image") {
+            matchWords.push(
+              `Image ${labelNumber}`,
+              `image ${labelNumber}`,
+              `Img ${labelNumber}`,
+              `Img. ${labelNumber}`,
+              `IMAGE ${labelNumber}`,
+              `IMG ${labelNumber}`,
+              `IMG. ${labelNumber}`
+            );
+          } else if (labelType.toLocaleLowerCase() === "table") {
+            matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`);
+          } else if (labelType.toLocaleLowerCase() === "algorithm") {
+            matchWords.push(
+              `Algorithm ${labelNumber}`,
+              `Algo ${labelNumber}`,
+              `Algo. ${labelNumber}`,
+              `Alg. ${labelNumber}`,
+              `ALGORITHM ${labelNumber}`
+            );
+          }
+
+          for (let i = 0; i < filteredItems.length; i++) {
+            if (
+              i !== filteredItems.indexOf(item) &&
+              matchWords.some((word) => filteredItems[i].content.includes(word))
+            ) {
+              mentionIndex = i;
+              console.log(
+                "found first mention in ",
+                JSON.stringify(filteredItems[i])
+              );
+              break;
+            }
+          }
+        }
+
+        const startIndex =
+          mentionIndex !== -1 ? mentionIndex : filteredItems.indexOf(item) + 1;
+
+        for (let i = startIndex; i < filteredItems.length; i++) {
+          if (filteredItems[i].type.includes("heading")) {
+            headingIndex = i;
+            console.log(
+              "found the first heading below mention in",
+              JSON.stringify(filteredItems[i])
+            );
+            break;
+          }
+          if (
+            filteredItems[i].type === "text" &&
+            !filteredItems[i].isEndCutOff
+          ) {
+            textWithoutEndCutoffIndex = i;
+            console.log(
+              "found the first text without end cutoff below mention in",
+              JSON.stringify(filteredItems[i])
+            );
+            break;
+          }
+        }
+
+        console.log(
+          "moving the item based on end cutoff logic or above the first heading or to the end"
+        );
+        const currentIndex = filteredItems.indexOf(item);
+        let insertIndex;
+
+        if (textWithoutEndCutoffIndex !== -1) {
+          insertIndex =
+            textWithoutEndCutoffIndex +
+            (currentIndex < textWithoutEndCutoffIndex ? 0 : 1);
+        } else if (headingIndex !== -1) {
+          insertIndex = headingIndex + (currentIndex < headingIndex ? -1 : 0);
+        } else {
+          insertIndex = filteredItems.length; // Default to end if no suitable position is found
+        }
+
+        const [movedItem] = filteredItems.splice(currentIndex, 1);
+
+        while (
+          insertIndex < filteredItems.length &&
+          filteredItems[insertIndex].type === movedItem.type
+        ) {
+          insertIndex += 1; // Move below the item
+        }
+
+        if (insertIndex !== -1) {
+          filteredItems.splice(insertIndex, 0, movedItem);
+        } else {
+          filteredItems.push(movedItem);
+        }
+
+        item.repositioned = true;
+      }
+
+      //Tagging items for postpreprocessing
+      console.log("LLM PASS: Tagging items for postprocessing");
+
+      const POSTPROCESSING_TAGGING_CONCURRENCY = 15;
+      const POSTPROCESSING_TAGGING_MODEL: Model = "gpt-4o-2024-08-06";
+      const POSTPROCESSING_TAGGING_TEMPERATURE = 0.2;
+      const POSTPROCESSING_TAGGING_SYSTEM_PROMPT = `Analyze the following text and
+      
+      1. Determine the frequency of complex math symbols. Provide a score between 0 and 5, where 0 means no complex math symbols and 5 means a high frequency of complex math symbols.
+      2. Determine if the text contains citations to other papers. Ignore citations to figures or images in this paper.`;
+
+      const postProcessingTaggingSchema = z.object({
+        mathSymbolFrequency: z.number(),
+        hasCitations: z.boolean(),
+      });
+
+      for (
+        let i = 0;
+        i < filteredItems.length;
+        i += POSTPROCESSING_TAGGING_CONCURRENCY
+      ) {
+        const itemBatch = filteredItems.slice(
+          i,
+          i + POSTPROCESSING_TAGGING_CONCURRENCY
+        );
+
+        console.log(
+          `Tagging items ${i + 1} through ${
+            i + POSTPROCESSING_TAGGING_CONCURRENCY
+          }`
+        );
+
+        await Promise.all(
+          itemBatch.map(async (item) => {
+            try {
+              const result = await getStructuredOpenAICompletionWithRetries(
+                runId,
+                POSTPROCESSING_TAGGING_SYSTEM_PROMPT,
+                `Text:\n${item.content}`,
+                POSTPROCESSING_TAGGING_MODEL,
+                POSTPROCESSING_TAGGING_TEMPERATURE,
+                postProcessingTaggingSchema,
+                3
+              );
+
+              item.mathSymbolFrequency = result?.mathSymbolFrequency;
+              item.hasCitations = result?.hasCitations;
+            } catch (error) {
+              console.error(
+                "Non fatal error while tagging items for postprocessing"
+              );
+            }
+          })
+        );
+      }
+
+      //Removing Citations
+      console.log("LLM PASS: optimizing citations");
+      const CITATION_OPTIMIZATION_CONCURRENCY = 15;
+      const CITATION_OPTIMIZATION_MODEL: Model = "gpt-4o-2024-08-06";
+      const CITATION_OPTIMIZATION_TEMPERATURE = 0;
+      const CITATION_OPTIMIZATION_SYSTEM_PROMPT = `Remove citations elements from the user text like
+      
+      - [10, 38, ....]
+      - (Author et al., YYYY; Author et al., YYYY;......)
+      - ^number
+      - (Author, year, page number) or Author (year , page number)
+      - (10, 28,...)
+      - Author (page number)
+
+      Do not remove entire sentences just remove the citation element. If the citation is part of a phrase like "such as <citation element>" then remove the phrase from the sentence.
+
+      Do not remove citations to tables and figures in the paper.
+      
+      Return the original text and the text with citations removed.`;
+
+      const citationOptimizationSchema = z.object({
+        originalText: z.string(),
+        textWithCitationsRemoved: z.string(),
+      });
+
+      const itemsWithCitations = filteredItems.filter(
+        (item) => item.hasCitations
+      );
+
+      for (
+        let i = 0;
+        i < itemsWithCitations.length;
+        i += CITATION_OPTIMIZATION_CONCURRENCY
+      ) {
+        const itemBatch = itemsWithCitations.slice(
+          i,
+          i + CITATION_OPTIMIZATION_CONCURRENCY
+        );
+
+        console.log(
+          `Optimizing citations for items ${i + 1} through ${
+            i + CITATION_OPTIMIZATION_CONCURRENCY
+          }`
+        );
+
+        await Promise.all(
+          itemBatch.map(async (item) => {
+            try {
+              const result = await getStructuredOpenAICompletionWithRetries(
+                runId,
+                CITATION_OPTIMIZATION_SYSTEM_PROMPT,
+                `Text:\n${item.content}`,
+                CITATION_OPTIMIZATION_MODEL,
+                CITATION_OPTIMIZATION_TEMPERATURE,
+                citationOptimizationSchema,
+                3,
+                [],
+                16384
+              );
+              item.citationReplacement = {
+                originalText: result?.originalText,
+                textWithCitationsRemoved: result?.textWithCitationsRemoved,
+              };
+
+              if (result?.textWithCitationsRemoved) {
+                item.content = result?.textWithCitationsRemoved;
+              }
+            } catch (error) {
+              console.error("Non fatal error while optimizing citations");
+            }
+          })
+        );
+      }
+
+      //Rewording math notation
+      console.log("LLM PASS: optimizing math");
+      const MATH_OPTIMIZATION_CONCURRENCY = 15;
+      const MATH_OPTIMIZATION_MODEL: Model = "gpt-4o-2024-08-06";
+      const MATH_OPTIMIZATION_TEMPERATURE = 0;
+      const MATH_OPTIMIZATION_SYSTEM_PROMPT = `The following text will be converted to audio for the user to listen to. Replace math notation and all LaTeX formatting with plain english words to make it more suitable for that purpose. Convert accurately. 
+      
+      Some examples includes changing "+" to "plus" and inserting a "times" when multiplication is implied. Use your best judgment to make the text as pleasant for audio as possible.
+      
+      Only convert math notation, do not alter the rest of the text. Return the entire original text and the worded replacement.`;
+
+      const mathOptimizationSchema = z.object({
+        originalText: z.string(),
+        wordedReplacement: z.string(),
+      });
+
+      const itemsWithComplexMath = filteredItems.filter(
+        (item) => item.mathSymbolFrequency && item.mathSymbolFrequency > 0
+      );
+
+      for (
+        let i = 0;
+        i < itemsWithComplexMath.length;
+        i += MATH_OPTIMIZATION_CONCURRENCY
+      ) {
+        const itemBatch = itemsWithComplexMath.slice(
+          i,
+          i + MATH_OPTIMIZATION_CONCURRENCY
+        );
+
+        console.log(
+          `Optimzing math for items ${i + 1} through ${
+            i + MATH_OPTIMIZATION_CONCURRENCY
+          }`
+        );
+
+        await Promise.all(
+          itemBatch.map(async (item) => {
+            try {
+              const result = await getStructuredOpenAICompletionWithRetries(
+                runId,
+                MATH_OPTIMIZATION_SYSTEM_PROMPT,
+                `Text:\n${item.content}`,
+                MATH_OPTIMIZATION_MODEL,
+                MATH_OPTIMIZATION_TEMPERATURE,
+                mathOptimizationSchema,
+                3,
+                [],
+                16384
+              );
+              item.mathReplacement = {
+                originalText: result?.originalText,
+                wordedReplacement: result?.wordedReplacement,
+              };
+
+              if (result?.wordedReplacement) {
+                item.content = result?.wordedReplacement;
+              }
+            } catch (error) {
+              console.error("Non fatal error while optimizing math");
+            }
+          })
+        );
+      }
 
       const filteredItemsPath = path.join(fileNameDir, "filteredItems.json");
       fs.writeFileSync(

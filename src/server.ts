@@ -63,7 +63,7 @@ fastify.register(fastifyStatic, {
 
 // Routes
 fastify.post("/summarize", highQualitySummarizeHandler);
-//fastify.post("/summarize", fastSummarizeHandler);
+fastify.post("/v2/summarize", fastSummarizeHandler);
 fastify.get("/checkStatus", checkStatusHandler);
 fastify.post("/mockSummarize", mockSummarizeHandler);
 fastify.get("/getpapers", getPapers);

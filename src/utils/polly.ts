@@ -37,7 +37,7 @@ export async function synthesizeSpeechInChunks(
   items: Item[]
 ): Promise<AudioResult> {
   const itemAudioResults: ItemAudioResult[] = [];
-  const MAX_CONCURRENT_ITEMS = 10;
+  const MAX_CONCURRENT_ITEMS = 15;
 
   const processItem = async (item: Item) => {
     const chunkAudioBuffers: Buffer[] = [];

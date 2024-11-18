@@ -95,6 +95,7 @@ interface Item {
   /*These are all optional metadata*/
   title?: string;
   label?: { labelType: string; labelNumber: string; panelNumber: string };
+  labelString?: string;
   summary?: string;
   mathReplacement?: MathReplacement;
   optimizedMath?: boolean;
