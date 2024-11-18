@@ -91,6 +91,7 @@ interface Item {
   type: string;
   page: number;
   content: string;
+  pageSpan?: number[];
   order?: number;
   /*These are all optional metadata*/
   title?: string;

@@ -6,6 +6,7 @@
     "@mailchimp/mailchimp_marketing": "^3.0.80",
     "@mailchimp/mailchimp_transactional": "^1.0.59",
     "@mendable/firecrawl-js": "0.0.36",
+    "@slack/web-api": "^7.7.0",
     "@types/aws-sdk": "^2.7.0",
     "@types/dotenv": "^8.2.0",
     "@types/fs-extra": "^11.0.4",

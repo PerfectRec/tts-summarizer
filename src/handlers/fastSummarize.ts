@@ -88,6 +88,7 @@ export default async function handler(
     } catch (error) {
       const errorTime = getCurrentTimestamp();
       uploadStatus(runId, "Error", {
+        email: email,
         errorType: "InvalidLink",
         message: "Failed to download PDF from link",
         receivedTime: receivedTime,
@@ -134,6 +135,7 @@ export default async function handler(
   if (fileBuffer.length > 100 * 1024 * 1024) {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
+      email: email,
       errorType: "FileSizeExceeded",
       message: "File size exceeds 100MB which is currently not supported",
       uploadedFileUrl: s3pdfFilePath,
@@ -187,6 +189,7 @@ export default async function handler(
   } catch (error) {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
+      email: email,
       errorType: "InvalidPDFFormat",
       message: "File has invalid format",
       uploadedFileUrl: s3pdfFilePath,
@@ -200,6 +203,7 @@ export default async function handler(
   if (pngPagesOriginal.length > 100) {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
+      email: email,
       errorType: "FileNumberOfPagesExceeded",
       message: "pdf has more than 100 pages which is not currently supported",
       uploadedFileUrl: s3pdfFilePath,
@@ -298,8 +302,7 @@ export default async function handler(
               "abstract_heading",
               "out_of_text_math",
               "math_equation_number",
-              "code_or_algorithm_in_figure",
-              "unlabeled_code_or_algorithm_in_text",
+              "code_or_algorithm",
               "end_marker",
               "acknowledgements_heading",
               "references_heading",
@@ -435,6 +438,7 @@ export default async function handler(
         parsedItems.push({
           type: item.new_type || "",
           page: item.metadata.page_number,
+          pageSpan: [item.metadata.page_number],
           content: item.text,
           order: item.item_order,
         });
@@ -575,7 +579,10 @@ export default async function handler(
           "abstract_content",
           "heading",
           "text",
-          "unlabeled_code_or_algorithm_in_text",
+          "code_or_algorithm",
+          "figure_image",
+          "non_figure_image",
+          "table_rows",
           "out_of_text_math",
           "end_marker",
         ].includes(item.type)
@@ -591,116 +598,74 @@ export default async function handler(
       });
 
       //Detecting special items from the images
-      console.log(
-        "LLM PASS: Detecting the special items from the images and generate the labels"
+      console.log("LLM PASS: Labeling special items.");
+
+      const itemsToBeLabeled = filteredItems.filter((item) =>
+        ["figure_image", "table_rows", "code_or_algorithm"].includes(item.type)
       );
 
-      let specialItems: Item[] = [];
+      const SPECIAL_ITEM_LABELING_CONCURRENCY = 20;
+      const SPECIAL_ITEM_LABELING_MODEL: Model = "gpt-4o-2024-08-06";
+      const SPECIAL_ITEM_LABELING_TEMPERATURE = 0.2;
+      const SPECIAL_ITEM_LABELING_SYSTEM_PROMPT = `Accurately label the given item. Carefully determine the label type and number by looking at the page. You must extract the correct label type and label number. Look for cues around the item and use your best judgement to determine it.
+    
+      If there is no label or label number or panel number set the labelType as "" and labelNumber as "unlabeled" and panelNumber as "unlabeled".`;
 
-      const SPECIAL_ITEM_DETECTION_CONCURRENCY = 20;
-      const SPECIAL_ITEM_DETECTION_MODEL: Model = "gpt-4o-2024-08-06";
-      const SPECIAL_ITEM_DETECTION_TEMPERATURE = 0.3;
-      const SPECIAL_ITEM_DETECTION_SYSTEM_PROMPT = `Detect special out of text items and their labels (if any) from the page like Figures, Tables, or other images.
-      
-      Most such items have caption, note or heading nearby with a label like "Figure 1". Use the labels to guide the type classification.
-
-      You also must accurately extract the label number, for example, in "Figure 3", 3 is the label number. Note that is this is very important. If the label type or number is missing leave it empty.
-
-      You must detect labeled panels or subfigures accurately as well. If a special item is divided into multiple labeled panels then create items for each panel individually and accurately set the panel letter. If there are multiple panels or subfigures but they are not labeled individually then only create one item for the entire figure.`;
-
-      const specialItemDetectionSchema = z.object({
-        specialItemsInThisPage: z.array(
-          z.object({
-            label: z.object({
-              labelType: z.string(),
-              labelNumber: z.string(),
-              panelNumber: z.string(),
-            }),
-            type: z.enum(["figure_image", "table_rows", "non_figure_image"]),
-            // metadata: z.object({
-            //   title: z.string(),
-            //   notes: z.string(),
-            //   caption: z.string(),
-            //   heading: z.string(),
-            //   description: z.string(),
-            // }),
-          })
-        ),
+      const specialItemLabelingSchema = z.object({
+        label: z.object({
+          labelType: z.string(),
+          labelNumber: z.string(),
+          panelNumber: z.string(),
+        }),
       });
 
       for (
         let i = 0;
-        i < pngPages.length;
-        i += SPECIAL_ITEM_DETECTION_CONCURRENCY
+        i < itemsToBeLabeled.length;
+        i += SPECIAL_ITEM_LABELING_CONCURRENCY
       ) {
-        const pageBatch = pngPages.slice(
+        const itemBatch = itemsToBeLabeled.slice(
           i,
-          i + SPECIAL_ITEM_DETECTION_CONCURRENCY
+          i + SPECIAL_ITEM_LABELING_CONCURRENCY
         );
 
         console.log(
-          `Detecting special items in pages ${i + 1} through ${
-            i + SPECIAL_ITEM_DETECTION_CONCURRENCY
+          `Labeling special items in pages ${i + 1} through ${
+            i + SPECIAL_ITEM_LABELING_CONCURRENCY
           }`
         );
 
         await Promise.all(
-          pageBatch.map(async (page, index) => {
+          itemBatch.map(async (item, index) => {
             try {
               const result = await getStructuredOpenAICompletionWithRetries(
                 runId,
-                SPECIAL_ITEM_DETECTION_SYSTEM_PROMPT,
-                `Page to analyze:`,
-                SPECIAL_ITEM_DETECTION_MODEL,
-                SPECIAL_ITEM_DETECTION_TEMPERATURE,
-                specialItemDetectionSchema,
+                SPECIAL_ITEM_LABELING_SYSTEM_PROMPT,
+                `Item to label:${JSON.stringify(item, null, 2)}`,
+                SPECIAL_ITEM_LABELING_MODEL,
+                SPECIAL_ITEM_LABELING_TEMPERATURE,
+                specialItemLabelingSchema,
                 3,
-                [page.path]
+                [pngPages[item.page - 1].path]
               );
 
-              const detectedSpecialItems: {
-                type: string;
-                label: {
-                  labelType: string;
-                  labelNumber: string;
-                  panelNumber: string;
-                };
-                // metadata: {
-                //   title: string;
-                //   notes: string;
-                //   heading: string;
-                //   caption: string;
-                //   description: string;
-                // };
-              }[] = result?.specialItemsInThisPage;
+              const label: {
+                labelType: string;
+                labelNumber: string;
+                panelNumber: string;
+              } = result?.label;
 
-              if (detectedSpecialItems) {
-                detectedSpecialItems.forEach((specialItem) => {
-                  const labelString = `${specialItem.label.labelType} ${
-                    ["unlabeled", ""].includes(
-                      specialItem.label.labelNumber.toLocaleLowerCase()
-                    )
-                      ? ""
-                      : specialItem.label.labelNumber
-                  }${
-                    specialItem.label.panelNumber &&
-                    !["unlabeled", ""].includes(
-                      specialItem.label.panelNumber.toLocaleLowerCase()
-                    )
-                      ? ` Panel ${specialItem.label.panelNumber}`
-                      : ""
-                  }`;
-
-                  const newItem: Item = {
-                    type: specialItem.type,
-                    page: index + i + 1,
-                    content: labelString,
-                    label: specialItem.label,
-                    labelString: labelString,
-                  };
-
-                  specialItems.push(newItem);
-                });
+              if (label) {
+                item.label = label;
+                item.labelString = `${
+                  label.labelType !== "" ? label.labelType : ""
+                }${
+                  !["unlabeled", ""].includes(
+                    label.labelNumber.toLocaleLowerCase()
+                  )
+                    ? ` ${label.labelNumber}`
+                    : ""
+                }`;
               }
             } catch (error) {
               console.error(
@@ -712,7 +677,60 @@ export default async function handler(
         );
       }
 
-      filteredItems.push(...specialItems);
+      // Merging items with the same labelString
+      console.log("CODE PASS: Merging items with the same labelString");
+
+      const mergeableTypes = [
+        "figure_image",
+        "table_rows",
+        "code_or_algorithm",
+      ];
+
+      const mergedItems: Item[] = [];
+      const labelStringMap: Record<string, Item> = {};
+
+      try {
+        filteredItems.forEach((item) => {
+          if (
+            mergeableTypes.includes(item.type) &&
+            item.labelString &&
+            item.labelString.trim() !== ""
+          ) {
+            const labelKey = item.labelString.toLocaleLowerCase();
+            if (labelStringMap[labelKey]) {
+              // Merge content with the existing item
+              console.log("Deduplicating ", item.labelString);
+              labelStringMap[labelKey].content += `\n${item.content}`;
+              // Merge pageSpan
+              if (labelStringMap[labelKey].pageSpan) {
+                labelStringMap[labelKey].pageSpan = Array.from(
+                  new Set([...labelStringMap[labelKey].pageSpan, item.page])
+                );
+              }
+              // Set panelNumber to an empty string
+              labelStringMap[labelKey].label!.panelNumber = "";
+            } else {
+              // Add the item to the map
+              labelStringMap[labelKey] = {
+                ...item,
+                pageSpan: [item.page], // Initialize pageSpan with the current page
+              };
+              mergedItems.push(labelStringMap[labelKey]);
+            }
+          } else {
+            // Add non-mergeable items directly
+            mergedItems.push(item);
+          }
+        });
+
+        // Replace filteredItems with mergedItems
+        filteredItems = mergedItems;
+      } catch (error) {
+        console.error(
+          "Non fatal error while deduplicating special items",
+          error
+        );
+      }
 
       //Summarizing special items
       console.log("LLM PASS: Summarizing special items");
@@ -722,7 +740,7 @@ export default async function handler(
           type: z.enum([
             "figure_image",
             "table_rows",
-            "unlabeled_code_or_algorithm_in_text",
+            "code_or_algorithm",
             "non_figure_image",
           ]),
           summary: z.string(),
@@ -736,11 +754,11 @@ export default async function handler(
       Do not use markdown. Use plain text.`;
 
       const FIGURE_SUMMARIZATION_MODEL: Model = "gpt-4o-2024-08-06";
-      const FIGURE_SUMMARIZATION_TEMPERATURE = 0.2;
+      const FIGURE_SUMMARIZATION_TEMPERATURE = 0.3;
       const FIGURE_SUMMARIZATION_SYSTEM_PROMPT = `Write a detailed and effective summary for the figures. Replace the content field with the summary.
 
       Every summary must have three subsections:
-      1. Physical description of the image
+      1. Physical description of the structure of the image
       2. Description of the content of the figure
       3. Accurate inferences and conclusions from the content of the figure.
 
@@ -748,66 +766,41 @@ export default async function handler(
 
       Do not use markdown. Use plain text.
 
-      Remember that the user is going to listen to the output and cannot see the figure. Take that into account while producing the summary.`;
+      The user cannot see the picture as they will be listening to the summary, so you must describe the image in sufficient detail before drawing inferences.`;
       const FIGURE_SUMMARIZATION_EXAMPLES = [
         {
           userImage: "./src/prompt/figures/AIAYN_FIG_1.png",
           assistantOutput: `{
                             type: "figure_image",
-                            label: {
-                              labelType: "Figure",
-                              labelNumber: "1",
-                              panelNumber: ""
-                            }
-                            "This figure is a diagram of the transformer model’s architecture, showing the steps take input tokens and produce output probabilities.  It has two components.  The left side is the encoder which begins with inputs, and the right side is the decoder which begins with outputs that are shifted right.  On the encoder side, first the input tokens are transformed into embeddings, which are then added to positional embeddings.  Then, there are 6 identical layers which include first a multi-head attention step, then a feed forward network. On the decoder side, the first steps are the same.  The input tokens are transformed into embeddings with positional embeddings added next.  Then, there are also 6 identical layers which are similar to this part of the encoder, but with an extra step.  The first step is masked multi-head attention, followed by multi-head attention over the output of the encoder stack.  Next comes the feed forward layer, just like in the encoder.  Finally, the last steps are a linear projection layer, and a softmax step which produces output probabilities."
+                            summary: "This figure is a diagram of the transformer model’s architecture, showing the steps take input tokens and produce output probabilities.  It has two components.  The left side is the encoder which begins with inputs, and the right side is the decoder which begins with outputs that are shifted right.  On the encoder side, first the input tokens are transformed into embeddings, which are then added to positional embeddings.  Then, there are 6 identical layers which include first a multi-head attention step, then a feed forward network. On the decoder side, the first steps are the same.  The input tokens are transformed into embeddings with positional embeddings added next.  Then, there are also 6 identical layers which are similar to this part of the encoder, but with an extra step.  The first step is masked multi-head attention, followed by multi-head attention over the output of the encoder stack.  Next comes the feed forward layer, just like in the encoder.  Finally, the last steps are a linear projection layer, and a softmax step which produces output probabilities."
                           }`,
         },
         {
           userImage: "./src/prompt/figures/ALHGALW_FIG_2.png",
           assistantOutput: `{
                             type: "figure_image",
-                            label: {
-                              labelType: "Figure",
-                              labelNumber: "2",
-                              panelNumber: ""
-                            }
-                            content: "This figure plots the fraction of correct next-token predictions for 4 language models during training on a subset of the Pile training set, as a function of the number of training steps.  The four models are: SLM, Baseline, RKD and SALT.  Over the 200K steps shown, accuracy increases from around 55% to 58-60% after 200K steps, with increases slowing down as steps increase.  SALT outperforms baseline slightly for any number of steps, whereas SLM performs worse.  RKD performs better than baseline at first, but after around 75 thousand steps, begins to perform worse."
+                            summary: "This figure plots the fraction of correct next-token predictions for 4 language models during training on a subset of the Pile training set, as a function of the number of training steps.  The four models are: SLM, Baseline, RKD and SALT.  Over the 200K steps shown, accuracy increases from around 55% to 58-60% after 200K steps, with increases slowing down as steps increase.  SALT outperforms baseline slightly for any number of steps, whereas SLM performs worse.  RKD performs better than baseline at first, but after around 75 thousand steps, begins to perform worse."
                           }`,
         },
         {
           userImage: "./src/prompt/figures/COCD_FIG_1.png",
           assistantOutput: `{
                             type: "figure_image",
-                            label: {
-                              labelType: "Figure",
-                              labelNumber: "1",
-                              panelNumber: ""
-                            }
-                            content: "This figure plots settler mortality against GDP per capita adjusted for purchasing power parity, both on a log scale.  Each data point is a country and a downward sloping line represents the strong negative correlation.  Data points are generally close to the line, with a few outliers."
+                            summary: "This figure plots settler mortality against GDP per capita adjusted for purchasing power parity, both on a log scale.  Each data point is a country and a downward sloping line represents the strong negative correlation.  Data points are generally close to the line, with a few outliers."
                           }`,
         },
         {
           userImage: "./src/prompt/figures/TYE_FIG_2.png",
           assistantOutput: `{
                             type: "figure_image",
-                            label: {
-                              labelType: "Figure",
-                              labelNumber: "1",
-                              panelNumber: ""
-                            }
-                            content: "This figure shows cognitive outcome scores over 10 years.  It has 3 panels, each showing a different outcome for each of the four arms of the experiment, treatments for memory, reasoning, and speed, along with the control group.  The outcomes are scores for memory, reasoning and speed.  Each panel shows that the treatment associated with the each outcome resulted in larger increases in the score for that outcome, especially so for speed.  Each score for each treatment generally increase within the first year, peaks, and then declines after 3 years, especially between years 5 and 10."
+                            summary: "This figure shows cognitive outcome scores over 10 years.  It has 3 panels, each showing a different outcome for each of the four arms of the experiment, treatments for memory, reasoning, and speed, along with the control group.  The outcomes are scores for memory, reasoning and speed.  Each panel shows that the treatment associated with the each outcome resulted in larger increases in the score for that outcome, especially so for speed.  Each score for each treatment generally increase within the first year, peaks, and then declines after 3 years, especially between years 5 and 10."
                           }`,
         },
         {
           userImage: "./src/prompt/figures/TYE_FIG_3.png",
           assistantOutput: `{
                             type: "figure_image",
-                            label: {
-                              labelType: "Figure",
-                              labelNumber: "1",
-                              panelNumber: ""
-                            }
-                            content: "This figure plots self-reported IADL scores over 10 years for each of the 4 experimental groups, the 3 treatments, memory, reasoning, speed, as well as the control group. All groups have similar, roughly flat IADL scores for the first 3 years, which decline after.  In years 5 and 10, the control group’s scores are substantially lower than each of the treatments."
+                            summary: "This figure plots self-reported IADL scores over 10 years for each of the 4 experimental groups, the 3 treatments, memory, reasoning, speed, as well as the control group. All groups have similar, roughly flat IADL scores for the first 3 years, which decline after.  In years 5 and 10, the control group’s scores are substantially lower than each of the treatments."
                           }`,
         },
       ];
@@ -821,7 +814,7 @@ export default async function handler(
           "figure_image",
           "non_figure_image",
           "table_rows",
-          "unlabeled_code_or_algorithm_in_text",
+          "code_or_algorithm",
         ].includes(item.type)
       );
 
@@ -852,7 +845,7 @@ export default async function handler(
           systemPrompt: TABLE_SUMMARIZATION_SYSTEM_PROMPT,
           examples: [],
         },
-        unlabeled_code_or_algorithm_in_text: {
+        code_or_algorithm: {
           model: CODE_SUMMARIZATION_MODEL,
           temperature: CODE_SUMMARIZATION_TEMPERATURE,
           systemPrompt: CODE_SUMMARIZATION_SYSTEM_PROMPT,
@@ -886,7 +879,9 @@ export default async function handler(
                 summarizationMap[item.type].temperature,
                 summarizationSchema,
                 3,
-                [pngPages[item.page - 1].path],
+                item.pageSpan
+                  ? item.pageSpan.map((page) => pngPages[page - 1].path)
+                  : [pngPages[item.page - 1].path],
                 16384,
                 0.1,
                 summarizationMap[item.type].examples
@@ -910,11 +905,7 @@ export default async function handler(
       //Repositioning Special Items
       console.log("CODE PASS: Repositioning summarized items");
       const itemsTobeRepositioned = filteredItems.filter((item) =>
-        [
-          "figure_image",
-          "table_rows",
-          "unlabeled_code_or_algorithm_in_text",
-        ].includes(item.type)
+        ["figure_image", "table_rows", "code_or_algorithm"].includes(item.type)
       );
 
       for (const item of itemsTobeRepositioned) {
@@ -1135,7 +1126,7 @@ export default async function handler(
       });
 
       const itemsWithCitations = filteredItems.filter(
-        (item) => item.hasCitations
+        (item) => item.hasCitations && item.type === "text"
       );
 
       for (
@@ -1331,6 +1322,7 @@ export default async function handler(
 
       const completedTime = getCurrentTimestamp();
       uploadStatus(runId, "Completed", {
+        email: email,
         message: "Generated audio output and metadata",
         uploadedFileUrl: s3pdfFilePath,
         audioFileUrl: s3encodedAudioFilePath,
@@ -1353,6 +1345,7 @@ export default async function handler(
 
       const errorTime = getCurrentTimestamp();
       uploadStatus(runId, "Error", {
+        email: email,
         errorType: "CoreSystemFailure",
         message: `Error: ${error}`,
         errorFileUrl: s3encodedErrorFilePath,
@@ -1375,6 +1368,7 @@ export default async function handler(
   } else {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
+      email: email,
       errorType: "SummarizationMethodNotSupported",
       message: "This summarization method is not supported",
       uploadedFileUrl: s3pdfFilePath,

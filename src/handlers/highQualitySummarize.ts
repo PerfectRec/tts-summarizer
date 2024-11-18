@@ -152,6 +152,7 @@ export default async function handler(
     } catch (error) {
       const errorTime = getCurrentTimestamp();
       uploadStatus(runId, "Error", {
+        email: email,
         errorType: "InvalidLink",
         message: "Failed to download PDF from link",
         receivedTime: receivedTime,
@@ -198,6 +199,7 @@ export default async function handler(
   if (fileBuffer.length > 100 * 1024 * 1024) {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
+      email: email,
       errorType: "FileSizeExceeded",
       message: "File size exceeds 100MB which is currently not supported",
       uploadedFileUrl: s3pdfFilePath,
@@ -251,6 +253,7 @@ export default async function handler(
   } catch (error) {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
+      email: email,
       errorType: "InvalidPDFFormat",
       message: "File has invalid format",
       uploadedFileUrl: s3pdfFilePath,
@@ -264,6 +267,7 @@ export default async function handler(
   if (pngPagesOriginal.length > 100) {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
+      email: email,
       errorType: "FileNumberOfPagesExceeded",
       message: "pdf has more than 100 pages which is not currently supported",
       uploadedFileUrl: s3pdfFilePath,
@@ -1601,6 +1605,7 @@ export default async function handler(
 
       const errorTime = getCurrentTimestamp();
       uploadStatus(runId, "Error", {
+        email: email,
         errorType: "CoreSystemFailure",
         message: `Error: ${error}`,
         errorFileUrl: s3encodedErrorFilePath,
@@ -1623,6 +1628,7 @@ export default async function handler(
   } else {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
+      email: email,
       errorType: "SummarizationMethodNotSupported",
       message: "This summarization method is not supported",
       uploadedFileUrl: s3pdfFilePath,

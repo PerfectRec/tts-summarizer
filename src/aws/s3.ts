@@ -1,3 +1,4 @@
+import { sendSlackNotification } from "@utils/slack";
 import AWS from "aws-sdk";
 import dotenv from "dotenv";
 
@@ -57,12 +58,33 @@ export const uploadStatus = async (
   status: string,
   additionalData: Record<string, any>
 ): Promise<void> => {
-  const combinedData = { status, ...additionalData };
+  const combinedData: Record<string, any> = { status, ...additionalData };
   const fileName = `runStatus/${runId}.json`;
   const fileContent = Buffer.from(JSON.stringify(combinedData));
 
   try {
     await uploadFile(fileContent, fileName);
+
+    if (status === "Completed") {
+      await sendSlackNotification(
+        `Completed processing "${combinedData.extractedTitle}" from ${
+          combinedData.email
+        }.
+        
+        ${JSON.stringify({ runId: runId, ...combinedData }, null, 2)}`
+      );
+    }
+
+    if (status === "Error") {
+      await sendSlackNotification(
+        `Error processing "${combinedData.extractedTitle}" from ${
+          combinedData.email
+        }.
+        
+        ${JSON.stringify({ runId: runId, ...combinedData }, null, 2)}`
+      );
+    }
+
     console.log(`Status for ${runId} uploaded successfully.`);
   } catch (err) {
     const error = err as Error;
