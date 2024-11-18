@@ -108,6 +108,10 @@ interface Item {
   isEndCutOff?: boolean;
   allAbbreviations?: Abbreviation[];
   audioIssues?: string[];
+  notes?: string;
+  caption?: string;
+  heading?: string;
+  description?: string;
 }
 
 type UnstructuredItemType =

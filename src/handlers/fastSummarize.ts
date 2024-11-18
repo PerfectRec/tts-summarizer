@@ -298,7 +298,8 @@ export default async function handler(
               "abstract_heading",
               "out_of_text_math",
               "math_equation_number",
-              "code_or_algorithm",
+              "code_or_algorithm_in_figure",
+              "unlabeled_code_or_algorithm_in_text",
               "end_marker",
               "acknowledgements_heading",
               "references_heading",
@@ -574,64 +575,179 @@ export default async function handler(
           "abstract_content",
           "heading",
           "text",
-          "figure_image",
-          "code_or_algorithm",
-          "table_rows",
+          "unlabeled_code_or_algorithm_in_text",
           "out_of_text_math",
+          "end_marker",
         ].includes(item.type)
       );
 
       //Tagging items with end and start cut off
       filteredItems.forEach((item) => {
-        if (item.type === "text") {
+        if (["abstract_content", "text"].includes(item.type)) {
           const { isStartCutOff, isEndCutOff } = isTextCutoff(item.content);
           item.isStartCutOff = isStartCutOff;
           item.isEndCutOff = isEndCutOff;
         }
       });
 
-      //Summarizing specialItems
+      //Detecting special items from the images
+      console.log(
+        "LLM PASS: Detecting the special items from the images and generate the labels"
+      );
+
+      let specialItems: Item[] = [];
+
+      const SPECIAL_ITEM_DETECTION_CONCURRENCY = 20;
+      const SPECIAL_ITEM_DETECTION_MODEL: Model = "gpt-4o-2024-08-06";
+      const SPECIAL_ITEM_DETECTION_TEMPERATURE = 0.3;
+      const SPECIAL_ITEM_DETECTION_SYSTEM_PROMPT = `Detect special out of text items and their labels (if any) from the page like Figures, Tables, or other images.
+      
+      Most such items have caption, note or heading nearby with a label like "Figure 1". Use the labels to guide the type classification.
+
+      You also must accurately extract the label number, for example, in "Figure 3", 3 is the label number. Note that is this is very important. If the label type or number is missing leave it empty.
+
+      You must detect labeled panels or subfigures accurately as well. If a special item is divided into multiple labeled panels then create items for each panel individually and accurately set the panel letter. If there are multiple panels or subfigures but they are not labeled individually then only create one item for the entire figure.`;
+
+      const specialItemDetectionSchema = z.object({
+        specialItemsInThisPage: z.array(
+          z.object({
+            label: z.object({
+              labelType: z.string(),
+              labelNumber: z.string(),
+              panelNumber: z.string(),
+            }),
+            type: z.enum(["figure_image", "table_rows", "non_figure_image"]),
+            // metadata: z.object({
+            //   title: z.string(),
+            //   notes: z.string(),
+            //   caption: z.string(),
+            //   heading: z.string(),
+            //   description: z.string(),
+            // }),
+          })
+        ),
+      });
+
+      for (
+        let i = 0;
+        i < pngPages.length;
+        i += SPECIAL_ITEM_DETECTION_CONCURRENCY
+      ) {
+        const pageBatch = pngPages.slice(
+          i,
+          i + SPECIAL_ITEM_DETECTION_CONCURRENCY
+        );
+
+        console.log(
+          `Detecting special items in pages ${i + 1} through ${
+            i + SPECIAL_ITEM_DETECTION_CONCURRENCY
+          }`
+        );
+
+        await Promise.all(
+          pageBatch.map(async (page, index) => {
+            try {
+              const result = await getStructuredOpenAICompletionWithRetries(
+                runId,
+                SPECIAL_ITEM_DETECTION_SYSTEM_PROMPT,
+                `Page to analyze:`,
+                SPECIAL_ITEM_DETECTION_MODEL,
+                SPECIAL_ITEM_DETECTION_TEMPERATURE,
+                specialItemDetectionSchema,
+                3,
+                [page.path]
+              );
+
+              const detectedSpecialItems: {
+                type: string;
+                label: {
+                  labelType: string;
+                  labelNumber: string;
+                  panelNumber: string;
+                };
+                // metadata: {
+                //   title: string;
+                //   notes: string;
+                //   heading: string;
+                //   caption: string;
+                //   description: string;
+                // };
+              }[] = result?.specialItemsInThisPage;
+
+              if (detectedSpecialItems) {
+                detectedSpecialItems.forEach((specialItem) => {
+                  const labelString = `${specialItem.label.labelType} ${
+                    ["unlabeled", ""].includes(
+                      specialItem.label.labelNumber.toLocaleLowerCase()
+                    )
+                      ? ""
+                      : specialItem.label.labelNumber
+                  }${
+                    specialItem.label.panelNumber &&
+                    !["unlabeled", ""].includes(
+                      specialItem.label.panelNumber.toLocaleLowerCase()
+                    )
+                      ? ` Panel ${specialItem.label.panelNumber}`
+                      : ""
+                  }`;
+
+                  const newItem: Item = {
+                    type: specialItem.type,
+                    page: index + i + 1,
+                    content: labelString,
+                    label: specialItem.label,
+                    labelString: labelString,
+                  };
+
+                  specialItems.push(newItem);
+                });
+              }
+            } catch (error) {
+              console.error(
+                "Non fatal error while detecting special items:",
+                error
+              );
+            }
+          })
+        );
+      }
+
+      filteredItems.push(...specialItems);
+
+      //Summarizing special items
       console.log("LLM PASS: Summarizing special items");
       const SUMMARIZATION_CONCURRENCY = 20;
       const summarizationSchema = z.object({
         summarizedItem: z.object({
-          type: z.enum(["table_rows", "figure_image", "code_or_algorithm"]),
-          label: z.object({
-            labelType: z.string(),
-            labelNumber: z.string(),
-            panelNumber: z.string().optional(),
-          }),
+          type: z.enum([
+            "figure_image",
+            "table_rows",
+            "unlabeled_code_or_algorithm_in_text",
+            "non_figure_image",
+          ]),
           summary: z.string(),
         }),
       });
 
       const TABLE_SUMMARIZATION_MODEL: Model = "gpt-4o-2024-08-06";
       const TABLE_SUMMARIZATION_TEMPERATURE = 0.2;
-      const TABLE_SUMMARIZATION_SYSTEM_PROMPT = `Write a concise and effective summary for the table. Replace the raw rows in the content field with the summary. Summarize the size of changes / effects / estimates / results in the tables. Be very accurate while doing this analysis. You must get the patterns correct. To help understand them better, use context from the paper and any note below them. The summary should capture the main point of the table. Try to use as few numbers as possible. Keep in mind that the user cannot see the table as they will be listening to your summary. 
-      
-      Add the label "Table X" where X is the table number indicated in the page. You need to extract the correct table number. This is very important. Look for cues around the table and use your best judgement to determine it. Add the panel number that is being summarized, if it is mentioned.
-
-      It is possible that a table can be part of a figure and labeled as a figure, in that case label it as a figure.
+      const TABLE_SUMMARIZATION_SYSTEM_PROMPT = `Write a concise and effective summary for the table. Replace the raw rows in the content field with the summary. Summarize the size of changes / effects / estimates / results in the tables. Be very accurate while doing this analysis. You must get the patterns correct. To help understand them better, use context from the paper and any note below them. The summary should capture the main point of the table. Try to use as few numbers as possible. Keep in mind that the user cannot see the table as they will be listening to your summary.
 
       Do not use markdown. Use plain text.`;
 
       const FIGURE_SUMMARIZATION_MODEL: Model = "gpt-4o-2024-08-06";
       const FIGURE_SUMMARIZATION_TEMPERATURE = 0.2;
-      const FIGURE_SUMMARIZATION_SYSTEM_PROMPT = `Write a detailed and effective summary for the figures. Replace the content field with the summary. 
+      const FIGURE_SUMMARIZATION_SYSTEM_PROMPT = `Write a detailed and effective summary for the figures. Replace the content field with the summary.
 
       Every summary must have three subsections:
       1. Physical description of the image
       2. Description of the content of the figure
-      3. Accurate inferences and conclusions from the content of the figure. 
+      3. Accurate inferences and conclusions from the content of the figure.
 
       No need to explicitly mention each subsection.
 
-      Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct label type and label number. This is very important. Look for cues around the figure and use your best judgement to determine it. Possible label types can be Figure, Chart, Image etc.
-      
-      If there is no label or label number set the labelType as "Image" and labelNumber as "unlabeled".
-      
       Do not use markdown. Use plain text.
-      
+
       Remember that the user is going to listen to the output and cannot see the figure. Take that into account while producing the summary.`;
       const FIGURE_SUMMARIZATION_EXAMPLES = [
         {
@@ -698,16 +814,15 @@ export default async function handler(
 
       const CODE_SUMMARIZATION_MODEL: Model = "gpt-4o-2024-08-06";
       const CODE_SUMMARIZATION_TEMPERATURE = 0.2;
-      const CODE_SUMMARIZATION_SYSTEM_PROMPT = `Summarize the given code or algorithm. Explain what the code or algorithm does in simple terms including its input and output. Do not include any code syntax in the summary.
-                
-      Also extract the title of the algorithm or code block. If no title is mentioned, then generate an appropriate one yourself.
-      
-      Usually codeblocks do not have labels. If there is no label or label number set the labelType as "" and labelNumber as "unlabeled". If there is no panel number set the panelNumber as ""
-
-      Sometimes codeblocks can be labeled. If the codeblock is labeled as a "Figure", then try to detect the "Figure X" label where X is the number assigned to the figure. Look around for cues to help you determine this.`;
+      const CODE_SUMMARIZATION_SYSTEM_PROMPT = `Summarize the given code or algorithm. Explain what the code or algorithm does in simple terms including its input and output. Do not include any code syntax in the summary.`;
 
       const itemsToBeSummarized = filteredItems.filter((item) =>
-        ["figure_image", "table_rows", "code_or_algorithm"].includes(item.type)
+        [
+          "figure_image",
+          "non_figure_image",
+          "table_rows",
+          "unlabeled_code_or_algorithm_in_text",
+        ].includes(item.type)
       );
 
       const summarizationMap: Record<
@@ -725,13 +840,19 @@ export default async function handler(
           systemPrompt: FIGURE_SUMMARIZATION_SYSTEM_PROMPT,
           examples: FIGURE_SUMMARIZATION_EXAMPLES,
         },
+        non_figure_image: {
+          model: FIGURE_SUMMARIZATION_MODEL,
+          temperature: FIGURE_SUMMARIZATION_TEMPERATURE,
+          systemPrompt: FIGURE_SUMMARIZATION_SYSTEM_PROMPT,
+          examples: FIGURE_SUMMARIZATION_EXAMPLES,
+        },
         table_rows: {
           model: TABLE_SUMMARIZATION_MODEL,
           temperature: TABLE_SUMMARIZATION_TEMPERATURE,
           systemPrompt: TABLE_SUMMARIZATION_SYSTEM_PROMPT,
           examples: [],
         },
-        code_or_algorithm: {
+        unlabeled_code_or_algorithm_in_text: {
           model: CODE_SUMMARIZATION_MODEL,
           temperature: CODE_SUMMARIZATION_TEMPERATURE,
           systemPrompt: CODE_SUMMARIZATION_SYSTEM_PROMPT,
@@ -771,25 +892,16 @@ export default async function handler(
                 summarizationMap[item.type].examples
               );
 
-              item.label = result?.summarizedItem.label;
-
-              if (item.label) {
-                item.labelString = `${item.label.labelType} ${
-                  item.label.labelNumber === "unlabeled"
-                    ? ""
-                    : item.label.labelNumber
-                }${
-                  item.label.panelNumber &&
-                  item.label.panelNumber !== "unlabeled"
-                    ? ` Panel ${item.label.panelNumber}`
-                    : ""
-                }`;
+              if (item.labelString) {
                 item.content = `${item.labelString} summary: ${result?.summarizedItem.summary}`;
               } else {
                 item.content = result?.summarizedItem.summary;
               }
             } catch (error) {
-              console.error("Non fatal error while summarizing special items");
+              console.error(
+                "Non fatal error while summarizing special items:",
+                error
+              );
             }
           })
         );
@@ -798,7 +910,11 @@ export default async function handler(
       //Repositioning Special Items
       console.log("CODE PASS: Repositioning summarized items");
       const itemsTobeRepositioned = filteredItems.filter((item) =>
-        ["figure_image", "table_rows", "code_or_algorithm"].includes(item.type)
+        [
+          "figure_image",
+          "table_rows",
+          "unlabeled_code_or_algorithm_in_text",
+        ].includes(item.type)
       );
 
       for (const item of itemsTobeRepositioned) {
@@ -812,7 +928,7 @@ export default async function handler(
         let headingIndex = -1;
         let textWithoutEndCutoffIndex = -1;
 
-        if (labelNumber !== "unlabeled") {
+        if (labelNumber !== "unlabeled" && labelNumber !== "") {
           console.log("searching for matches for", labelType, labelNumber);
           let matchWords = [];
           if (labelType.toLocaleLowerCase() === "figure") {
@@ -942,12 +1058,22 @@ export default async function handler(
         hasCitations: z.boolean(),
       });
 
+      const itemsThatShouldBeTagged = filteredItems.filter((item) =>
+        [
+          "text",
+          "abstract_content",
+          "out_of_text_math",
+          "figure_image",
+          "table_rows",
+        ].includes(item.type)
+      );
+
       for (
         let i = 0;
-        i < filteredItems.length;
+        i < itemsThatShouldBeTagged.length;
         i += POSTPROCESSING_TAGGING_CONCURRENCY
       ) {
-        const itemBatch = filteredItems.slice(
+        const itemBatch = itemsThatShouldBeTagged.slice(
           i,
           i + POSTPROCESSING_TAGGING_CONCURRENCY
         );
@@ -975,7 +1101,8 @@ export default async function handler(
               item.hasCitations = result?.hasCitations;
             } catch (error) {
               console.error(
-                "Non fatal error while tagging items for postprocessing"
+                "Non fatal error while tagging items for postprocessing:",
+                error
               );
             }
           })
@@ -1050,7 +1177,10 @@ export default async function handler(
                 item.content = result?.textWithCitationsRemoved;
               }
             } catch (error) {
-              console.error("Non fatal error while optimizing citations");
+              console.error(
+                "Non fatal error while optimizing citations:",
+                error
+              );
             }
           })
         );
@@ -1115,7 +1245,7 @@ export default async function handler(
                 item.content = result?.wordedReplacement;
               }
             } catch (error) {
-              console.error("Non fatal error while optimizing math");
+              console.error("Non fatal error while optimizing math:", error);
             }
           })
         );
