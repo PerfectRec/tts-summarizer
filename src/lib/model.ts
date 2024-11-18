@@ -46,6 +46,11 @@ interface CitationReplacement {
   textWithCitationsRemoved: string;
 }
 
+interface HyphenationReplacement {
+  originalText: string;
+  textWithHyphensRemoved: string;
+}
+
 /*
 This is in progress - not for use yet.
 */
@@ -104,7 +109,9 @@ interface Item {
   repositioned?: Boolean;
   mathSymbolFrequency?: number;
   hasCitations?: boolean;
+  hasHyphenatedWords?: boolean;
   citationReplacement?: CitationReplacement;
+  hyphenationReplacement?: HyphenationReplacement;
   isStartCutOff?: boolean;
   isEndCutOff?: boolean;
   allAbbreviations?: Abbreviation[];

@@ -1041,12 +1041,14 @@ export default async function handler(
       const POSTPROCESSING_TAGGING_TEMPERATURE = 0.2;
       const POSTPROCESSING_TAGGING_SYSTEM_PROMPT = `Analyze the following text and
       
-      1. Determine the frequency of complex math symbols. Provide a score between 0 and 5, where 0 means no complex math symbols and 5 means a high frequency of complex math symbols.
-      2. Determine if the text contains citations to other papers. Ignore citations to figures or images in this paper.`;
+      1. Determine the frequency of complex math symbols and numbers. Provide a score between 0 and 5, where 0 means no complex math symbols and numbers and 5 means a high frequency of complex math symbols and numbers.
+      2. Determine if the text contains citations to other papers. Ignore citations to figures or images in this paper.
+      3. Determine if the text contains many hyphenated words.`;
 
       const postProcessingTaggingSchema = z.object({
         mathSymbolFrequency: z.number(),
         hasCitations: z.boolean(),
+        hasHyphenatedWords: z.boolean(),
       });
 
       const itemsThatShouldBeTagged = filteredItems.filter((item) =>
@@ -1090,6 +1092,7 @@ export default async function handler(
 
               item.mathSymbolFrequency = result?.mathSymbolFrequency;
               item.hasCitations = result?.hasCitations;
+              item.hasHyphenatedWords = result?.hasHyphenatedWords;
             } catch (error) {
               console.error(
                 "Non fatal error while tagging items for postprocessing:",
@@ -1104,17 +1107,19 @@ export default async function handler(
       console.log("LLM PASS: optimizing citations");
       const CITATION_OPTIMIZATION_CONCURRENCY = 20;
       const CITATION_OPTIMIZATION_MODEL: Model = "gpt-4o-2024-08-06";
-      const CITATION_OPTIMIZATION_TEMPERATURE = 0;
+      const CITATION_OPTIMIZATION_TEMPERATURE = 0.2;
       const CITATION_OPTIMIZATION_SYSTEM_PROMPT = `Remove citations elements from the user text like
       
       - [10, 38, ....]
       - (Author et al., YYYY; Author et al., YYYY;......)
       - ^number
-      - (Author, year, page number) or Author (year , page number)
+      - (Author, year, page number) or Author (year, page number)
       - (10, 28,...)
       - Author (page number)
 
-      Do not remove entire sentences just remove the citation element. If the citation is part of a phrase like "such as <citation element>" then remove the phrase from the sentence.
+      Do not remove entire sentences just remove the citation element. If the citation is part of a phrase like "such as <citation element>" then remove the phrase from the sentence. 
+      
+      However if the citation is like "Author <citation element> suggests that..." then only remove the citation element do not remove the author name.
 
       Do not remove citations to tables and figures in the paper.
       
@@ -1237,6 +1242,73 @@ export default async function handler(
               }
             } catch (error) {
               console.error("Non fatal error while optimizing math:", error);
+            }
+          })
+        );
+      }
+
+      // Add a new pass for processing hyphenated words
+      console.log("LLM PASS: optimizing hyphenated words");
+      const HYPHENATION_OPTIMIZATION_CONCURRENCY = 20;
+      const HYPHENATION_OPTIMIZATION_MODEL: Model = "gpt-4o-2024-08-06";
+      const HYPHENATION_OPTIMIZATION_TEMPERATURE = 0.2;
+      const HYPHENATION_OPTIMIZATION_SYSTEM_PROMPT = `Remove hyphens from words in the text where appropriate. Join the words if both parts are in the text. If only one part is in the tex, then remove the hyphen and keep the word as it is without completing it. Return the original text and the text with hyphens removed.`;
+
+      const hyphenationReplacementSchema = z.object({
+        originalText: z.string(),
+        textWithHyphensRemoved: z.string(),
+      });
+
+      // Filter items that have hyphenated words
+      const itemsWithHyphenatedWords = filteredItems.filter(
+        (item) =>
+          item.hasHyphenatedWords &&
+          ["abstract_content", "text"].includes(item.type)
+      );
+
+      for (
+        let i = 0;
+        i < itemsWithHyphenatedWords.length;
+        i += HYPHENATION_OPTIMIZATION_CONCURRENCY
+      ) {
+        const itemBatch = itemsWithHyphenatedWords.slice(
+          i,
+          i + HYPHENATION_OPTIMIZATION_CONCURRENCY
+        );
+
+        console.log(
+          `Optimizing hyphenated words for items ${i + 1} through ${
+            i + HYPHENATION_OPTIMIZATION_CONCURRENCY
+          }`
+        );
+
+        await Promise.all(
+          itemBatch.map(async (item) => {
+            try {
+              const result = await getStructuredOpenAICompletionWithRetries(
+                runId,
+                HYPHENATION_OPTIMIZATION_SYSTEM_PROMPT,
+                `Text:\n${item.content}`,
+                HYPHENATION_OPTIMIZATION_MODEL,
+                HYPHENATION_OPTIMIZATION_TEMPERATURE,
+                hyphenationReplacementSchema,
+                3,
+                [],
+                16384
+              );
+              item.hyphenationReplacement = {
+                originalText: result?.originalText,
+                textWithHyphensRemoved: result?.textWithHyphensRemoved,
+              };
+
+              if (result?.textWithHyphensRemoved) {
+                item.content = result?.textWithHyphensRemoved;
+              }
+            } catch (error) {
+              console.error(
+                "Non fatal error while optimizing hyphenated words:",
+                error
+              );
             }
           })
         );
