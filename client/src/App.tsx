@@ -99,8 +99,9 @@ function App() {
           className="p-2 border rounded"
         />
         <div className="text-sm">
-          Audio generation takes a few minutes. We'll email you a link to the
-          file when it is ready.
+          We only support PDFs with 100 pages or less and a maximum file size of
+          100MB. Audio generation takes a few minutes. We'll email you a link to
+          the file when it is ready.
         </div>
         <input
           type="email"
