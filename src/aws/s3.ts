@@ -56,7 +56,8 @@ export const getFileContent = async (fileName: string): Promise<string> => {
 export const uploadStatus = async (
   runId: string,
   status: string,
-  additionalData: Record<string, any>
+  additionalData: Record<string, any>,
+  mock: boolean = false
 ): Promise<void> => {
   const combinedData: Record<string, any> = { status, ...additionalData };
   const fileName = `runStatus/${runId}.json`;
@@ -65,7 +66,7 @@ export const uploadStatus = async (
   try {
     await uploadFile(fileContent, fileName);
 
-    if (status === "Completed") {
+    if (status === "Completed" && !mock) {
       await sendSlackNotification(
         `Completed processing "${combinedData.extractedTitle}" from ${
           combinedData.email
@@ -75,7 +76,7 @@ export const uploadStatus = async (
       );
     }
 
-    if (status === "Error") {
+    if (status === "Error" && !mock) {
       await sendSlackNotification(
         `Error processing "${combinedData.extractedTitle}" from ${
           combinedData.email

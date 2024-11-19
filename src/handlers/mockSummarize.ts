@@ -21,21 +21,32 @@ export default async function mockHandler(
   });
 
   // Simulate status updates
-  uploadStatus(runId, "Received", {
-    message: "Request received",
-    receivedTime: receivedTime,
-  });
+  uploadStatus(
+    runId,
+    "Received",
+    {
+      message: "Request received",
+      receivedTime: receivedTime,
+    },
+    true
+  );
   console.log(`Created runStatus/${runId}.json in S3`);
 
   if (error && error === "1") {
     setTimeout(() => {
       const errorTime = getCurrentTimestamp();
-      uploadStatus(runId, "Error", {
-        errorType: "SimulatedError",
-        message: "Simulated error as requested",
-        receivedTime: receivedTime,
-        errorTime: errorTime,
-      });
+      uploadStatus(
+        runId,
+        "Error",
+        {
+          email: email,
+          errorType: "SimulatedError",
+          message: "Simulated error as requested",
+          receivedTime: receivedTime,
+          errorTime: errorTime,
+        },
+        true
+      );
       console.log("Simulated error status uploaded");
     }, 10000);
     return;
@@ -45,12 +56,17 @@ export default async function mockHandler(
 
   setTimeout(() => {
     startedProcessingTime = getCurrentTimestamp();
-    uploadStatus(runId, "Processing", {
-      message: "Started processing",
-      uploadedFileUrl: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH.pdf`,
-      receivedTime: receivedTime,
-      startedProcessingTime: startedProcessingTime,
-    });
+    uploadStatus(
+      runId,
+      "Processing",
+      {
+        message: "Started processing",
+        uploadedFileUrl: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH.pdf`,
+        receivedTime: receivedTime,
+        startedProcessingTime: startedProcessingTime,
+      },
+      true
+    );
     console.log("Processing status updated");
   }, 5000);
 
@@ -58,16 +74,22 @@ export default async function mockHandler(
 
   setTimeout(() => {
     completedTime = getCurrentTimestamp();
-    uploadStatus(runId, "Completed", {
-      message: "Generated audio output and metadata",
-      uploadedFileUrl: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH.pdf`,
-      audioFileUrl: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH.mp3`,
-      metadataFileUrl: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH-metadata.json`,
-      extractedTitle: "Bloom Work From Home",
-      receivedTime: receivedTime,
-      startedProcessingTime: startedProcessingTime,
-      completedTime: completedTime,
-    });
+    uploadStatus(
+      runId,
+      "Completed",
+      {
+        email: email,
+        message: "Generated audio output and metadata",
+        uploadedFileUrl: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH.pdf`,
+        audioFileUrl: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH.mp3`,
+        metadataFileUrl: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH-metadata.json`,
+        extractedTitle: "Bloom Work From Home",
+        receivedTime: receivedTime,
+        startedProcessingTime: startedProcessingTime,
+        completedTime: completedTime,
+      },
+      true
+    );
     console.log("Completed status updated");
   }, 30000);
 
