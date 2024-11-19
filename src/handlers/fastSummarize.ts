@@ -13,7 +13,11 @@ import { sendErrorEmail, sendSuccessEmail } from "@utils/email";
 import { clearDirectory, getCurrentTimestamp } from "@utils/io";
 import { synthesizeSpeechInChunks } from "@utils/polly";
 import { getStructuredOpenAICompletionWithRetries } from "@utils/openai";
-import { isTextCutoff, replaceAbbreviations } from "@utils/text";
+import {
+  collapseConsecutiveLetters,
+  isTextCutoff,
+  replaceAbbreviations,
+} from "@utils/text";
 import { removeBreaks } from "@utils/ssml";
 import { processUnstructuredBuffer } from "@utils/unstructured";
 
@@ -247,7 +251,10 @@ export default async function handler(
       const initialItemsByPage: Record<number, UnstructuredItem[]> =
         initialItems
           .filter(
-            (item) => !["PageNumber", "Header", "Footer"].includes(item.type)
+            (item) =>
+              !["PageNumber", "Header", "Footer", "UncategorizedText"].includes(
+                item.type
+              )
           )
           .reduce(
             (
@@ -285,7 +292,12 @@ export default async function handler(
       const TYPE_CONVERSION_CONCURRENCY = 20;
       const TYPE_CONVERSION_MODEL: Model = "gpt-4o-2024-08-06";
       const TYPE_CONVERSION_TEMPERATURE = 0.3;
-      const TYPE_CONVERSION_SYSTEM_PROMPT = `For all the given items, accurately determine the new more specific item type. Look at the surrounding items for context. You must produce the correct element_id. And you must produce a new type for every item.`;
+      const TYPE_CONVERSION_SYSTEM_PROMPT = `For all the given items, accurately determine the new more specific item type. Look at the surrounding items for context. You must produce the correct element_id. And you must produce a new type for every item.
+      
+      Some helpful guidance:
+      - Usually, text item starting with a superscript number is an endnote.
+      - Text item in smaller font or seperate from the content of the page are usually footnotes.
+      `;
       const typeConversionSchema = z.object({
         itemsWithNewTypes: z.array(
           z.object({
@@ -607,9 +619,11 @@ export default async function handler(
       const SPECIAL_ITEM_LABELING_CONCURRENCY = 20;
       const SPECIAL_ITEM_LABELING_MODEL: Model = "gpt-4o-2024-08-06";
       const SPECIAL_ITEM_LABELING_TEMPERATURE = 0.2;
-      const SPECIAL_ITEM_LABELING_SYSTEM_PROMPT = `Accurately label the given item. Carefully determine the label type and number by looking at the page. You must extract the correct label type and label number. Look for cues around the item and use your best judgement to determine it.
+      const SPECIAL_ITEM_LABELING_SYSTEM_PROMPT = `Accurately label the given item. First look for the item in the page image. Then carefully determine the label type and number by looking at the page. You must extract the correct label type and label number. Look for cues around the item and use your best judgement to determine it.
     
-      If there is no label or label number or panel number set the labelType as "" and labelNumber as "unlabeled" and panelNumber as "unlabeled".`;
+      If there is no label or label number or panel number set the labelType as "" and labelNumber as "unlabeled" and panelNumber as "unlabeled".
+      
+      For code or algorithm, if the code is in between paragraphs please do not assign any labels to it.`;
 
       const specialItemLabelingSchema = z.object({
         label: z.object({
@@ -641,7 +655,7 @@ export default async function handler(
               const result = await getStructuredOpenAICompletionWithRetries(
                 runId,
                 SPECIAL_ITEM_LABELING_SYSTEM_PROMPT,
-                `Item to label:${JSON.stringify(item, null, 2)}`,
+                `Item to label:${JSON.stringify(item, null, 2)}\n\nPage:`,
                 SPECIAL_ITEM_LABELING_MODEL,
                 SPECIAL_ITEM_LABELING_TEMPERATURE,
                 specialItemLabelingSchema,
@@ -751,6 +765,8 @@ export default async function handler(
       const TABLE_SUMMARIZATION_TEMPERATURE = 0.2;
       const TABLE_SUMMARIZATION_SYSTEM_PROMPT = `Write a concise and effective summary for the table. Replace the raw rows in the content field with the summary. Summarize the size of changes / effects / estimates / results in the tables. Be very accurate while doing this analysis. You must get the patterns correct. To help understand them better, use context from the paper and any note below them. The summary should capture the main point of the table. Try to use as few numbers as possible. Keep in mind that the user cannot see the table as they will be listening to your summary.
 
+      If the table has multiple subitems, use the terminology that the author uses for them like "panel" or "part" if available otherwise use your own terminology to help the listener understand the table's structure. Then describe each subitem contents and draw inferences/conclusiosn from them.
+
       Do not use markdown. Use plain text.`;
 
       const FIGURE_SUMMARIZATION_MODEL: Model = "gpt-4o-2024-08-06";
@@ -765,6 +781,8 @@ export default async function handler(
       No need to explicitly mention each subsection.
 
       Do not use markdown. Use plain text.
+
+      If the figure has multiple subitems, use the terminology that the author uses for them like "panel" or "part" if available otherwise use your own terminology to help the listener understand the figure's structure. Then describe each subitem contents and draw inferences/conclusiosn from them.
 
       The user cannot see the picture as they will be listening to the summary, so you must describe the image in sufficient detail before drawing inferences.`;
       const FIGURE_SUMMARIZATION_EXAMPLES = [
@@ -1199,7 +1217,10 @@ export default async function handler(
       });
 
       const itemsWithComplexMath = filteredItems.filter(
-        (item) => item.mathSymbolFrequency && item.mathSymbolFrequency > 0
+        (item) =>
+          item.mathSymbolFrequency &&
+          item.mathSymbolFrequency > 0 &&
+          ["text", "abstract_content"].includes(item.type)
       );
 
       for (
@@ -1230,7 +1251,8 @@ export default async function handler(
                 mathOptimizationSchema,
                 3,
                 [],
-                16384
+                16384,
+                0.1
               );
               item.mathReplacement = {
                 originalText: result?.originalText,
@@ -1313,6 +1335,11 @@ export default async function handler(
           })
         );
       }
+
+      console.log("CODE PASS: Collapse consecutive letters");
+      filteredItems.forEach((item) => {
+        item.content = collapseConsecutiveLetters(item.content);
+      });
 
       console.log("CODE PASS: Optimzing known abbreviations");
       const specialAbbreviations: Abbreviation[] = [
