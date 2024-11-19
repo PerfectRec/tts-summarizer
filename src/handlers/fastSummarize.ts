@@ -1220,7 +1220,7 @@ export default async function handler(
         (item) =>
           item.mathSymbolFrequency &&
           item.mathSymbolFrequency > 0 &&
-          ["text", "abstract_content"].includes(item.type)
+          ["text", "abstract_content", "out_of_text_math"].includes(item.type)
       );
 
       for (
