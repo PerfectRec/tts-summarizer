@@ -139,6 +139,24 @@ export async function synthesizeOpenAISpeech(
   return Buffer.from(await mp3.arrayBuffer());
 }
 
+export async function synthesizeOpenAISpeechWithRetries(
+  text: string,
+  voice: OpenAIVoice,
+  speed: number,
+  retries: number = 5
+): Promise<Buffer> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await synthesizeOpenAISpeech(text, voice, speed);
+    } catch (error) {
+      console.error(`Attempt ${attempt + 1} failed:`, error);
+      if (attempt === retries - 1) throw error;
+    }
+  }
+  // Add a return statement here to satisfy the function's return type
+  throw new Error("All attempts to synthesize speech failed.");
+}
+
 export async function synthesizeSpeechInChunksOpenAI(
   items: Item[]
 ): Promise<AudioResult> {
@@ -152,7 +170,7 @@ export async function synthesizeSpeechInChunksOpenAI(
     if (
       ["figure_image", "table_rows", "code_or_algorithm"].includes(item.type)
     ) {
-      audioBuffer = await synthesizeOpenAISpeech(
+      audioBuffer = await synthesizeOpenAISpeechWithRetries(
         removeBreaks(item.content + pauseMarker),
         "onyx",
         1.0
@@ -166,13 +184,13 @@ export async function synthesizeSpeechInChunksOpenAI(
         "end_marker",
       ].includes(item.type)
     ) {
-      audioBuffer = await synthesizeOpenAISpeech(
+      audioBuffer = await synthesizeOpenAISpeechWithRetries(
         removeBreaks(item.content + pauseMarker),
         "alloy",
-        0.9
+        1.0
       );
     } else {
-      audioBuffer = await synthesizeOpenAISpeech(
+      audioBuffer = await synthesizeOpenAISpeechWithRetries(
         removeBreaks(
           item.isEndCutOff ? item.content : item.content + pauseMarker
         ),

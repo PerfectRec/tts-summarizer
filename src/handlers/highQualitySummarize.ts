@@ -1313,6 +1313,12 @@ export default async function handler(
           type: "initialism",
           expansion: "confidence interval",
         },
+        {
+          abbreviation: "ROC",
+          replacement: "R.O.C.",
+          type: "initialism",
+          expansion: "receiver operating curve",
+        },
       ];
 
       console.log("PASS 4-2: Replacing known abbreviations");
