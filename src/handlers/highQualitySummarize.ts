@@ -75,7 +75,7 @@ const modelConfig: ModelConfig = {
     concurrency: 20,
   },
   citationOptimization: {
-    temperature: 0,
+    temperature: 0.2,
     model: "gpt-4o-2024-08-06",
     concurrency: 20,
   },
@@ -247,7 +247,7 @@ export default async function handler(
   let pngPagesOriginal: PngPageOutput[] = [];
   try {
     pngPagesOriginal = await pdfToPng(fileBuffer, {
-      viewportScale: 4.0,
+      viewportScale: 5.0,
       outputFolder: tempImageDir,
     });
   } catch (error) {
@@ -709,25 +709,6 @@ export default async function handler(
                     : ""
                 } code explanation:\n${summarizedCode?.summarizedCode.content}`;
               }
-
-              //Some manual latex processing
-              // item.content = item.content
-              //   .replace(/\\geq/g, " greater than or equal to ")
-              //   .replace(/\\leq/g, " less than or equal to ")
-              //   .replace(/\\rightarrow/g, " approaches ")
-              //   .replace(/\\infty/g, " infinity ")
-              //   .replace(/\\mathbb/g, "")
-              //   .replaceAll("\\(", "")
-              //   .replaceAll("\\)", "")
-              //   .replaceAll("\\", "");
-
-              if (item.type === "text") {
-                const { isStartCutOff, isEndCutOff } = isTextCutoff(
-                  item.content
-                );
-                item.isStartCutOff = isStartCutOff;
-                item.isEndCutOff = isEndCutOff;
-              }
             }
 
             return { index: i + index, items };
@@ -1063,144 +1044,12 @@ export default async function handler(
           "[break0.4]You have reached the end of the main paper. Appendix sections follow.[break0.4]";
       }
 
-      const specialItems = filteredItems.filter(
-        (item) =>
-          item.type === "figure_image" ||
-          item.type === "table_rows" ||
-          item.type === "code_or_algorithm"
-      );
-      console.log("repositioning images and figures and code");
-      for (const item of specialItems) {
-        if (item.repositioned || !item.label) {
-          continue;
-        }
-
-        const { labelType, labelNumber } = item.label;
-        console.log("repositioning ", labelType, " ", labelNumber);
-        let mentionIndex = -1;
-        let headingIndex = -1;
-        let textWithoutEndCutoffIndex = -1;
-
-        if (labelNumber !== "unlabeled") {
-          console.log("searching for matches for", labelType, labelNumber);
-          let matchWords = [];
-          if (labelType.toLocaleLowerCase() === "figure") {
-            matchWords.push(
-              `Figure ${labelNumber}`,
-              `Fig. ${labelNumber}`,
-              `Fig ${labelNumber}`,
-              `FIGURE ${labelNumber}`,
-              `FIG ${labelNumber}`,
-              `FIG. ${labelNumber}`
-            );
-          } else if (labelType.toLocaleLowerCase() === "chart") {
-            matchWords.push(
-              `Chart ${labelNumber}`,
-              `chart ${labelNumber}`,
-              `CHART ${labelNumber}`
-            );
-          } else if (labelType === "Image") {
-            matchWords.push(
-              `Image ${labelNumber}`,
-              `image ${labelNumber}`,
-              `Img ${labelNumber}`,
-              `Img. ${labelNumber}`,
-              `IMAGE ${labelNumber}`,
-              `IMG ${labelNumber}`,
-              `IMG. ${labelNumber}`
-            );
-          } else if (labelType === "Table") {
-            matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`);
-          } else if (labelType === "Algorithm") {
-            matchWords.push(
-              `Algorithm ${labelNumber}`,
-              `Algo ${labelNumber}`,
-              `Algo. ${labelNumber}`,
-              `Alg. ${labelNumber}`,
-              `ALGORITHM ${labelNumber}`
-            );
-          }
-
-          for (let i = 0; i < filteredItems.length; i++) {
-            if (
-              i !== filteredItems.indexOf(item) &&
-              matchWords.some((word) => filteredItems[i].content.includes(word))
-            ) {
-              mentionIndex = i;
-              console.log(
-                "found first mention in ",
-                JSON.stringify(filteredItems[i])
-              );
-              break;
-            }
-          }
-        }
-
-        const startIndex =
-          mentionIndex !== -1 ? mentionIndex : filteredItems.indexOf(item) + 1;
-
-        for (let i = startIndex; i < filteredItems.length; i++) {
-          if (filteredItems[i].type.includes("heading")) {
-            headingIndex = i;
-            console.log(
-              "found the first heading below mention in",
-              JSON.stringify(filteredItems[i])
-            );
-            break;
-          }
-          if (
-            filteredItems[i].type === "text" &&
-            !filteredItems[i].isEndCutOff
-          ) {
-            textWithoutEndCutoffIndex = i;
-            console.log(
-              "found the first text without end cutoff below mention in",
-              JSON.stringify(filteredItems[i])
-            );
-            break;
-          }
-        }
-
-        console.log(
-          "moving the item based on end cutoff logic or above the first heading or to the end"
-        );
-        const currentIndex = filteredItems.indexOf(item);
-        let insertIndex;
-
-        if (textWithoutEndCutoffIndex !== -1) {
-          insertIndex =
-            textWithoutEndCutoffIndex +
-            (currentIndex < textWithoutEndCutoffIndex ? 0 : 1);
-        } else if (headingIndex !== -1) {
-          insertIndex = headingIndex + (currentIndex < headingIndex ? -1 : 0);
-        } else {
-          insertIndex = filteredItems.length; // Default to end if no suitable position is found
-        }
-
-        const [movedItem] = filteredItems.splice(currentIndex, 1);
-
-        while (
-          insertIndex < filteredItems.length &&
-          filteredItems[insertIndex].type === movedItem.type
-        ) {
-          insertIndex += 1; // Move below the item
-        }
-
-        if (insertIndex !== -1) {
-          filteredItems.splice(insertIndex, 0, movedItem);
-        } else {
-          filteredItems.push(movedItem);
-        }
-
-        item.repositioned = true;
-      }
-
       const parsedItemsPath = path.join(fileNameDir, "parsedItems.json");
       fs.writeFileSync(parsedItemsPath, JSON.stringify(allItems, null, 2));
       console.log("Saved raw text extract to", parsedItemsPath);
 
       console.log("PASS 2-1: detecting citations");
-      const CITATION_DETECTION_PROMPT = `Analyze the following text and determine if it contains citations. Return true if citations are present, otherwise return false.`;
+      const CITATION_DETECTION_PROMPT = `Analyze the following text and determine if the text contains citations to other papers. Ignore citations to figures or images in this paper`;
 
       const citationDetectionSchema = z.object({
         hasCitations: z.boolean(),
@@ -1251,16 +1100,19 @@ export default async function handler(
       );
 
       if (itemsWithCitations.length > 0) {
-        const CITATION_REPLACEMENT_PROMPT = `Remove citations elements from the user text like
-        
-        - [X1, X2, ....]
+        const CITATION_REPLACEMENT_PROMPT = `Remove citations elements from the user text.
+      
+        Examples of citation elements:
+        - [10, 38, ....]
         - (Author et al., YYYY; Author et al., YYYY;......)
         - ^number
-        - (Author, year, page number) or Author (year , page number)
-        - (X1, X2,...)
+        - (Author, year, page number) or Author (year, page number)
+        - (10, 28,...)
         - Author (page number)
 
-        Do not remove entire sentences just remove the citation element. If the citation is part of a phrase like "such as <citation element>" then remove the phrase from the sentence.
+        Do not remove entire sentences just remove the citation element. If the citation is part of a phrase like "such as <citation element>" then remove the phrase from the sentence. However if the citation is part of a phrase like "such as <Noun> <citation element>" then keep the phrase "such as <Noun>" and only remove the citation element.
+        
+        However if the citation is like "Author <citation element> suggests that..." then only remove the citation element do not remove the author name.
 
         Do not remove citations to tables and figures in the paper.
         
@@ -1331,7 +1183,7 @@ export default async function handler(
       //It is important to replace citations first and then optimize the math - but only in content with math.
       console.log("PASS 3-1: detecting math symbol frequency");
 
-      const MATH_SYMBOL_FREQUENCY_PROMPT = `Analyze the following text and determine the frequency of complex math symbols. Provide a score between 0 and 5, where 0 means no complex math symbols and 5 means a high frequency of complex math symbols.`;
+      const MATH_SYMBOL_FREQUENCY_PROMPT = `Analyze the following text and determine the frequency of complex math symbols and numbers. Provide a score between 0 and 5, where 0 means no complex math symbols and numbers and 5 means a high frequency of complex math symbols and numbers.`;
 
       const mathSymbolFrequencySchema = z.object({
         mathSymbolFrequency: z.number(),
@@ -1458,11 +1310,154 @@ export default async function handler(
         },
       ];
 
+      console.log("PASS 4-2: Replacing known abbreviations");
       filteredItems.forEach((item) => {
         item.content = replaceAbbreviations(item.content, specialAbbreviations);
       });
 
-      console.log("PASS 5-1: Adding breaks where needed");
+      console.log("PASS 4-3: Tagging items with start and end cut off");
+      //Tagging items with end and start cut off
+      filteredItems.forEach((item) => {
+        if (["abstract_content", "text"].includes(item.type)) {
+          const { isStartCutOff, isEndCutOff } = isTextCutoff(item.content);
+          item.isStartCutOff = isStartCutOff;
+          item.isEndCutOff = isEndCutOff;
+        }
+      });
+
+      const specialItems = filteredItems.filter(
+        (item) =>
+          item.type === "figure_image" ||
+          item.type === "table_rows" ||
+          item.type === "code_or_algorithm"
+      );
+      console.log("PASS 4-4: repositioning images and figures and code");
+      for (const item of specialItems) {
+        if (item.repositioned || !item.label) {
+          continue;
+        }
+
+        const { labelType, labelNumber } = item.label;
+        console.log("repositioning ", labelType, " ", labelNumber);
+        let mentionIndex = -1;
+        let headingIndex = -1;
+        let textWithoutEndCutoffIndex = -1;
+
+        if (labelNumber !== "unlabeled") {
+          console.log("searching for matches for", labelType, labelNumber);
+          let matchWords = [];
+          if (labelType.toLocaleLowerCase() === "figure") {
+            matchWords.push(
+              `Figure ${labelNumber}`,
+              `Fig. ${labelNumber}`,
+              `Fig ${labelNumber}`,
+              `FIGURE ${labelNumber}`,
+              `FIG ${labelNumber}`,
+              `FIG. ${labelNumber}`
+            );
+          } else if (labelType.toLocaleLowerCase() === "chart") {
+            matchWords.push(
+              `Chart ${labelNumber}`,
+              `chart ${labelNumber}`,
+              `CHART ${labelNumber}`
+            );
+          } else if (labelType === "Image") {
+            matchWords.push(
+              `Image ${labelNumber}`,
+              `image ${labelNumber}`,
+              `Img ${labelNumber}`,
+              `Img. ${labelNumber}`,
+              `IMAGE ${labelNumber}`,
+              `IMG ${labelNumber}`,
+              `IMG. ${labelNumber}`
+            );
+          } else if (labelType === "Table") {
+            matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`);
+          } else if (labelType === "Algorithm") {
+            matchWords.push(
+              `Algorithm ${labelNumber}`,
+              `Algo ${labelNumber}`,
+              `Algo. ${labelNumber}`,
+              `Alg. ${labelNumber}`,
+              `ALGORITHM ${labelNumber}`
+            );
+          }
+
+          for (let i = 0; i < filteredItems.length; i++) {
+            if (
+              i !== filteredItems.indexOf(item) &&
+              matchWords.some((word) => filteredItems[i].content.includes(word))
+            ) {
+              mentionIndex = i;
+              console.log(
+                "found first mention in ",
+                JSON.stringify(filteredItems[i])
+              );
+              break;
+            }
+          }
+        }
+
+        const startIndex =
+          mentionIndex !== -1 ? mentionIndex : filteredItems.indexOf(item) + 1;
+
+        for (let i = startIndex; i < filteredItems.length; i++) {
+          if (filteredItems[i].type.includes("heading")) {
+            headingIndex = i;
+            console.log(
+              "found the first heading below mention in",
+              JSON.stringify(filteredItems[i])
+            );
+            break;
+          }
+          if (
+            filteredItems[i].type === "text" &&
+            !filteredItems[i].isEndCutOff
+          ) {
+            textWithoutEndCutoffIndex = i;
+            console.log(
+              "found the first text without end cutoff below mention in",
+              JSON.stringify(filteredItems[i])
+            );
+            break;
+          }
+        }
+
+        console.log(
+          "moving the item based on end cutoff logic or above the first heading or to the end"
+        );
+        const currentIndex = filteredItems.indexOf(item);
+        let insertIndex;
+
+        if (textWithoutEndCutoffIndex !== -1) {
+          insertIndex =
+            textWithoutEndCutoffIndex +
+            (currentIndex < textWithoutEndCutoffIndex ? 0 : 1);
+        } else if (headingIndex !== -1) {
+          insertIndex = headingIndex + (currentIndex < headingIndex ? -1 : 0);
+        } else {
+          insertIndex = filteredItems.length; // Default to end if no suitable position is found
+        }
+
+        const [movedItem] = filteredItems.splice(currentIndex, 1);
+
+        while (
+          insertIndex < filteredItems.length &&
+          filteredItems[insertIndex].type === movedItem.type
+        ) {
+          insertIndex += 1; // Move below the item
+        }
+
+        if (insertIndex !== -1) {
+          filteredItems.splice(insertIndex, 0, movedItem);
+        } else {
+          filteredItems.push(movedItem);
+        }
+
+        item.repositioned = true;
+      }
+
+      console.log("PASS 4-5: Adding breaks where needed");
 
       filteredItems.forEach((item) => {
         if (

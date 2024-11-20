@@ -26,7 +26,6 @@ export async function processUnstructuredBuffer(
         splitPdfAllowFailed: true,
         splitPdfConcurrencyLevel: 15,
         languages: ["eng"],
-        similarityThreshold: 0.5,
         uniqueElementIds: true,
       },
     });

@@ -120,6 +120,7 @@ interface Item {
   caption?: string;
   heading?: string;
   description?: string;
+  isIllegible?: string;
 }
 
 type UnstructuredItemType =

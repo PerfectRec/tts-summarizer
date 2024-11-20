@@ -18,7 +18,6 @@ import {
   isTextCutoff,
   replaceAbbreviations,
 } from "@utils/text";
-import { removeBreaks } from "@utils/ssml";
 import { processUnstructuredBuffer } from "@utils/unstructured";
 
 const { db } = getDB();
@@ -291,12 +290,14 @@ export default async function handler(
       );
       const TYPE_CONVERSION_CONCURRENCY = 20;
       const TYPE_CONVERSION_MODEL: Model = "gpt-4o-2024-08-06";
-      const TYPE_CONVERSION_TEMPERATURE = 0.3;
+      const TYPE_CONVERSION_TEMPERATURE = 0.5;
       const TYPE_CONVERSION_SYSTEM_PROMPT = `For all the given items, accurately determine the new more specific item type. Look at the surrounding items for context. You must produce the correct element_id. And you must produce a new type for every item.
       
       Some helpful guidance:
       - Usually, text item starting with a superscript number is an endnote.
       - Text item in smaller font or seperate from the content of the page are usually footnotes.
+      - It is possible that some code parts can be labeled as Title, please convert it to the correct code or algorithm type.
+      - Always map existing Image types to figure_image or non_figure_image or code_or_algorithm. If it is a minor image with meta content, it is a non_figure_image otherwise it is almost always a figure_image. If it contains code it is a code_or_algorithm.
       `;
       const typeConversionSchema = z.object({
         itemsWithNewTypes: z.array(
@@ -322,6 +323,7 @@ export default async function handler(
               "endnotes_item",
               "endnotes_heading",
               "JEL_classification",
+              "CCS_concepts",
               "keywords",
               "acknowledgements_content",
               "references_format_information",
@@ -452,7 +454,6 @@ export default async function handler(
           page: item.metadata.page_number,
           pageSpan: [item.metadata.page_number],
           content: item.text,
-          order: item.item_order,
         });
       }
 
@@ -533,7 +534,6 @@ export default async function handler(
 
       //Inserting end marker
       console.log("CODE PASS: inserting end marker");
-
       // Find the last references_heading index
       let lastReferencesHeadingIndex = -1;
       for (let i = parsedItems.length - 1; i >= 0; i--) {
@@ -593,21 +593,53 @@ export default async function handler(
           "text",
           "code_or_algorithm",
           "figure_image",
-          "non_figure_image",
           "table_rows",
           "out_of_text_math",
           "end_marker",
         ].includes(item.type)
       );
 
-      //Tagging items with end and start cut off
-      filteredItems.forEach((item) => {
-        if (["abstract_content", "text"].includes(item.type)) {
-          const { isStartCutOff, isEndCutOff } = isTextCutoff(item.content);
-          item.isStartCutOff = isStartCutOff;
-          item.isEndCutOff = isEndCutOff;
-        }
-      });
+      const endMarkerIndex = filteredItems.findIndex(
+        (item) => item.type === "end_marker"
+      );
+
+      if (endMarkerIndex !== -1 && endMarkerIndex < filteredItems.length - 1) {
+        filteredItems[endMarkerIndex].content =
+          "[break0.4]You have reached the end of the main paper. Appendix sections follow.[break0.4]";
+      }
+
+      // console.log("CODE PASS: Combining consecutive code_or_algorithm items");
+      // const combinedItems: Item[] = [];
+      // let previousItem: Item | null = null;
+
+      // for (const item of filteredItems) {
+      //   if (
+      //     item.type === "code_or_algorithm" &&
+      //     previousItem?.type === "code_or_algorithm"
+      //   ) {
+      //     // Combine content with the previous item
+      //     previousItem.content += `\n${item.content}`;
+      //     // Merge pageSpan
+      //     if (previousItem.pageSpan && item.pageSpan) {
+      //       previousItem.pageSpan = Array.from(
+      //         new Set([...previousItem.pageSpan, ...item.pageSpan])
+      //       );
+      //     }
+      //   } else {
+      //     // Push the previous item to combinedItems if it's not null
+      //     if (previousItem) {
+      //       combinedItems.push(previousItem);
+      //     }
+      //     // Update previousItem to the current item
+      //     previousItem = item;
+      //   }
+      // }
+      // // Push the last item if it exists
+      // if (previousItem) {
+      //   combinedItems.push(previousItem);
+      // }
+      // // Replace filteredItems with combinedItems
+      // filteredItems = combinedItems;
 
       //Detecting special items from the images
       console.log("LLM PASS: Labeling special items.");
@@ -618,12 +650,12 @@ export default async function handler(
 
       const SPECIAL_ITEM_LABELING_CONCURRENCY = 20;
       const SPECIAL_ITEM_LABELING_MODEL: Model = "gpt-4o-2024-08-06";
-      const SPECIAL_ITEM_LABELING_TEMPERATURE = 0.2;
+      const SPECIAL_ITEM_LABELING_TEMPERATURE = 0.5;
       const SPECIAL_ITEM_LABELING_SYSTEM_PROMPT = `Accurately label the given item. First look for the item in the page image. Then carefully determine the label type and number by looking at the page. You must extract the correct label type and label number. Look for cues around the item and use your best judgement to determine it.
     
       If there is no label or label number or panel number set the labelType as "" and labelNumber as "unlabeled" and panelNumber as "unlabeled".
       
-      For code or algorithm, if the code is in between paragraphs please do not assign any labels to it.`;
+      It is very important that you do not label an item that does not have a label in the document.`;
 
       const specialItemLabelingSchema = z.object({
         label: z.object({
@@ -751,12 +783,7 @@ export default async function handler(
       const SUMMARIZATION_CONCURRENCY = 20;
       const summarizationSchema = z.object({
         summarizedItem: z.object({
-          type: z.enum([
-            "figure_image",
-            "table_rows",
-            "code_or_algorithm",
-            "non_figure_image",
-          ]),
+          type: z.enum(["figure_image", "table_rows", "code_or_algorithm"]),
           summary: z.string(),
         }),
       });
@@ -828,12 +855,7 @@ export default async function handler(
       const CODE_SUMMARIZATION_SYSTEM_PROMPT = `Summarize the given code or algorithm. Explain what the code or algorithm does in simple terms including its input and output. Do not include any code syntax in the summary.`;
 
       const itemsToBeSummarized = filteredItems.filter((item) =>
-        [
-          "figure_image",
-          "non_figure_image",
-          "table_rows",
-          "code_or_algorithm",
-        ].includes(item.type)
+        ["figure_image", "table_rows", "code_or_algorithm"].includes(item.type)
       );
 
       const summarizationMap: Record<
@@ -846,12 +868,6 @@ export default async function handler(
         }
       > = {
         figure_image: {
-          model: FIGURE_SUMMARIZATION_MODEL,
-          temperature: FIGURE_SUMMARIZATION_TEMPERATURE,
-          systemPrompt: FIGURE_SUMMARIZATION_SYSTEM_PROMPT,
-          examples: FIGURE_SUMMARIZATION_EXAMPLES,
-        },
-        non_figure_image: {
           model: FIGURE_SUMMARIZATION_MODEL,
           temperature: FIGURE_SUMMARIZATION_TEMPERATURE,
           systemPrompt: FIGURE_SUMMARIZATION_SYSTEM_PROMPT,
@@ -919,137 +935,71 @@ export default async function handler(
           })
         );
       }
+      // console.log("LLM PASS: Detecting illegible items");
 
-      //Repositioning Special Items
-      console.log("CODE PASS: Repositioning summarized items");
-      const itemsTobeRepositioned = filteredItems.filter((item) =>
-        ["figure_image", "table_rows", "code_or_algorithm"].includes(item.type)
-      );
+      // const ILLEGIBILITY_DETECTION_CONCURRENCY = 20;
+      // const ILLEGIBILITY_DETECTION_MODEL: Model = "gpt-4o-2024-08-06";
+      // const ILLEGIBILITY_DETECTION_TEMPERATURE = 0.3;
+      // const ILLEGIBILITY_DETECTION_SYSTEM_PROMPT = `Analyze the following item and determine if it is illegible. An item is illegible if it the text content does not make any sense in the context.
 
-      for (const item of itemsTobeRepositioned) {
-        if (item.repositioned || !item.label) {
-          continue;
-        }
+      // Be very conservative while classifying an item as illegible. Only do so if you are sure the item makes no sense in the context.
 
-        const { labelType, labelNumber } = item.label;
-        console.log("repositioning ", labelType, " ", labelNumber);
-        let mentionIndex = -1;
-        let headingIndex = -1;
-        let textWithoutEndCutoffIndex = -1;
+      // It is okay if an item has start or end cut off. Do not use that as a reason to classify an item as illegible.`;
 
-        if (labelNumber !== "unlabeled" && labelNumber !== "") {
-          console.log("searching for matches for", labelType, labelNumber);
-          let matchWords = [];
-          if (labelType.toLocaleLowerCase() === "figure") {
-            matchWords.push(
-              `Figure ${labelNumber}`,
-              `Fig. ${labelNumber}`,
-              `Fig ${labelNumber}`,
-              `FIGURE ${labelNumber}`,
-              `FIG ${labelNumber}`,
-              `FIG. ${labelNumber}`
-            );
-          } else if (labelType.toLocaleLowerCase() === "chart") {
-            matchWords.push(
-              `Chart ${labelNumber}`,
-              `chart ${labelNumber}`,
-              `CHART ${labelNumber}`
-            );
-          } else if (labelType.toLocaleLowerCase() === "image") {
-            matchWords.push(
-              `Image ${labelNumber}`,
-              `image ${labelNumber}`,
-              `Img ${labelNumber}`,
-              `Img. ${labelNumber}`,
-              `IMAGE ${labelNumber}`,
-              `IMG ${labelNumber}`,
-              `IMG. ${labelNumber}`
-            );
-          } else if (labelType.toLocaleLowerCase() === "table") {
-            matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`);
-          } else if (labelType.toLocaleLowerCase() === "algorithm") {
-            matchWords.push(
-              `Algorithm ${labelNumber}`,
-              `Algo ${labelNumber}`,
-              `Algo. ${labelNumber}`,
-              `Alg. ${labelNumber}`,
-              `ALGORITHM ${labelNumber}`
-            );
-          }
+      // const illegibilityDetectionSchema = z.object({
+      //   isIllegible: z.boolean(),
+      // });
 
-          for (let i = 0; i < filteredItems.length; i++) {
-            if (
-              i !== filteredItems.indexOf(item) &&
-              matchWords.some((word) => filteredItems[i].content.includes(word))
-            ) {
-              mentionIndex = i;
-              console.log(
-                "found first mention in ",
-                JSON.stringify(filteredItems[i])
-              );
-              break;
-            }
-          }
-        }
+      // const itemsToBeCheckedForIllegibility = filteredItems.filter((item) =>
+      //   ["text", "abstract_content", "heading"].includes(item.type)
+      // );
 
-        const startIndex =
-          mentionIndex !== -1 ? mentionIndex : filteredItems.indexOf(item) + 1;
+      // for (
+      //   let i = 0;
+      //   i < itemsToBeCheckedForIllegibility.length;
+      //   i += ILLEGIBILITY_DETECTION_CONCURRENCY
+      // ) {
+      //   const itemBatch = itemsToBeCheckedForIllegibility.slice(
+      //     i,
+      //     i + ILLEGIBILITY_DETECTION_CONCURRENCY
+      //   );
 
-        for (let i = startIndex; i < filteredItems.length; i++) {
-          if (filteredItems[i].type.includes("heading")) {
-            headingIndex = i;
-            console.log(
-              "found the first heading below mention in",
-              JSON.stringify(filteredItems[i])
-            );
-            break;
-          }
-          if (
-            filteredItems[i].type === "text" &&
-            !filteredItems[i].isEndCutOff
-          ) {
-            textWithoutEndCutoffIndex = i;
-            console.log(
-              "found the first text without end cutoff below mention in",
-              JSON.stringify(filteredItems[i])
-            );
-            break;
-          }
-        }
+      //   console.log(
+      //     `Checking illegibility for items ${i + 1} through ${
+      //       i + ILLEGIBILITY_DETECTION_CONCURRENCY
+      //     }`
+      //   );
 
-        console.log(
-          "moving the item based on end cutoff logic or above the first heading or to the end"
-        );
-        const currentIndex = filteredItems.indexOf(item);
-        let insertIndex;
+      //   await Promise.all(
+      //     itemBatch.map(async (item) => {
+      //       try {
+      //         const currentIndex = filteredItems.indexOf(item);
+      //         const contextItems = filteredItems.slice(
+      //           Math.max(0, currentIndex - 5),
+      //           Math.min(filteredItems.length, currentIndex + 6)
+      //         );
+      //         const result = await getStructuredOpenAICompletionWithRetries(
+      //           runId,
+      //           ILLEGIBILITY_DETECTION_SYSTEM_PROMPT,
+      //           `Item:\n${JSON.stringify(item)}\n\nContext:\n${JSON.stringify(
+      //             contextItems
+      //           )}`,
+      //           ILLEGIBILITY_DETECTION_MODEL,
+      //           ILLEGIBILITY_DETECTION_TEMPERATURE,
+      //           illegibilityDetectionSchema,
+      //           3
+      //         );
 
-        if (textWithoutEndCutoffIndex !== -1) {
-          insertIndex =
-            textWithoutEndCutoffIndex +
-            (currentIndex < textWithoutEndCutoffIndex ? 0 : 1);
-        } else if (headingIndex !== -1) {
-          insertIndex = headingIndex + (currentIndex < headingIndex ? -1 : 0);
-        } else {
-          insertIndex = filteredItems.length; // Default to end if no suitable position is found
-        }
-
-        const [movedItem] = filteredItems.splice(currentIndex, 1);
-
-        while (
-          insertIndex < filteredItems.length &&
-          filteredItems[insertIndex].type === movedItem.type
-        ) {
-          insertIndex += 1; // Move below the item
-        }
-
-        if (insertIndex !== -1) {
-          filteredItems.splice(insertIndex, 0, movedItem);
-        } else {
-          filteredItems.push(movedItem);
-        }
-
-        item.repositioned = true;
-      }
+      //         item.isIllegible = result?.isIllegible;
+      //       } catch (error) {
+      //         console.error(
+      //           "Non fatal error while detecting illegible items:",
+      //           error
+      //         );
+      //       }
+      //     })
+      //   );
+      // }
 
       //Tagging items for postpreprocessing
       console.log("LLM PASS: Tagging items for postprocessing");
@@ -1126,8 +1076,9 @@ export default async function handler(
       const CITATION_OPTIMIZATION_CONCURRENCY = 20;
       const CITATION_OPTIMIZATION_MODEL: Model = "gpt-4o-2024-08-06";
       const CITATION_OPTIMIZATION_TEMPERATURE = 0.2;
-      const CITATION_OPTIMIZATION_SYSTEM_PROMPT = `Remove citations elements from the user text like
+      const CITATION_OPTIMIZATION_SYSTEM_PROMPT = `Remove citations elements from the user text.
       
+      Examples of citation elements:
       - [10, 38, ....]
       - (Author et al., YYYY; Author et al., YYYY;......)
       - ^number
@@ -1135,7 +1086,7 @@ export default async function handler(
       - (10, 28,...)
       - Author (page number)
 
-      Do not remove entire sentences just remove the citation element. If the citation is part of a phrase like "such as <citation element>" then remove the phrase from the sentence. 
+      Do not remove entire sentences just remove the citation element. If the citation is part of a phrase like "such as <citation element>" then remove the phrase from the sentence. However if the citation is part of a phrase like "such as <Noun> <citation element>" then keep the phrase "such as <Noun>" and only remove the citation element.
       
       However if the citation is like "Author <citation element> suggests that..." then only remove the citation element do not remove the author name.
 
@@ -1354,6 +1305,147 @@ export default async function handler(
       filteredItems.forEach((item) => {
         item.content = replaceAbbreviations(item.content, specialAbbreviations);
       });
+
+      console.log("CODE PASS: Tagging items with start and end cut off");
+      //Tagging items with end and start cut off
+      filteredItems.forEach((item) => {
+        if (["abstract_content", "text"].includes(item.type)) {
+          const { isStartCutOff, isEndCutOff } = isTextCutoff(item.content);
+          item.isStartCutOff = isStartCutOff;
+          item.isEndCutOff = isEndCutOff;
+        }
+      });
+
+      //Repositioning Special Items
+      console.log("CODE PASS: Repositioning summarized items");
+      const itemsTobeRepositioned = filteredItems.filter((item) =>
+        ["figure_image", "table_rows", "code_or_algorithm"].includes(item.type)
+      );
+
+      for (const item of itemsTobeRepositioned) {
+        if (item.repositioned || !item.label) {
+          continue;
+        }
+
+        const { labelType, labelNumber } = item.label;
+        console.log("repositioning ", labelType, " ", labelNumber);
+        let mentionIndex = -1;
+        let headingIndex = -1;
+        let textWithoutEndCutoffIndex = -1;
+
+        if (labelNumber !== "unlabeled" && labelNumber !== "") {
+          console.log("searching for matches for", labelType, labelNumber);
+          let matchWords = [];
+          if (labelType.toLocaleLowerCase() === "figure") {
+            matchWords.push(
+              `Figure ${labelNumber}`,
+              `Fig. ${labelNumber}`,
+              `Fig ${labelNumber}`,
+              `FIGURE ${labelNumber}`,
+              `FIG ${labelNumber}`,
+              `FIG. ${labelNumber}`
+            );
+          } else if (labelType.toLocaleLowerCase() === "chart") {
+            matchWords.push(
+              `Chart ${labelNumber}`,
+              `chart ${labelNumber}`,
+              `CHART ${labelNumber}`
+            );
+          } else if (labelType.toLocaleLowerCase() === "image") {
+            matchWords.push(
+              `Image ${labelNumber}`,
+              `image ${labelNumber}`,
+              `Img ${labelNumber}`,
+              `Img. ${labelNumber}`,
+              `IMAGE ${labelNumber}`,
+              `IMG ${labelNumber}`,
+              `IMG. ${labelNumber}`
+            );
+          } else if (labelType.toLocaleLowerCase() === "table") {
+            matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`);
+          } else if (labelType.toLocaleLowerCase() === "algorithm") {
+            matchWords.push(
+              `Algorithm ${labelNumber}`,
+              `Algo ${labelNumber}`,
+              `Algo. ${labelNumber}`,
+              `Alg. ${labelNumber}`,
+              `ALGORITHM ${labelNumber}`
+            );
+          }
+
+          for (let i = 0; i < filteredItems.length; i++) {
+            if (
+              i !== filteredItems.indexOf(item) &&
+              matchWords.some((word) => filteredItems[i].content.includes(word))
+            ) {
+              mentionIndex = i;
+              // console.log(
+              //   "found first mention in ",
+              //   JSON.stringify(filteredItems[i])
+              // );
+              break;
+            }
+          }
+        }
+
+        const startIndex =
+          mentionIndex !== -1 ? mentionIndex : filteredItems.indexOf(item) + 1;
+
+        for (let i = startIndex; i < filteredItems.length; i++) {
+          if (filteredItems[i].type.includes("heading")) {
+            headingIndex = i;
+            // console.log(
+            //   "found the first heading below mention in",
+            //   JSON.stringify(filteredItems[i])
+            // );
+            break;
+          }
+          if (
+            filteredItems[i].type === "text" &&
+            !filteredItems[i].isEndCutOff
+          ) {
+            textWithoutEndCutoffIndex = i;
+            // console.log(
+            //   "found the first text without end cutoff below mention in",
+            //   JSON.stringify(filteredItems[i])
+            // );
+            break;
+          }
+        }
+
+        console.log(
+          "moving the item based on end cutoff logic or above the first heading or to the end"
+        );
+        const currentIndex = filteredItems.indexOf(item);
+        let insertIndex;
+
+        if (textWithoutEndCutoffIndex !== -1) {
+          insertIndex =
+            textWithoutEndCutoffIndex +
+            (currentIndex < textWithoutEndCutoffIndex ? 0 : 1);
+        } else if (headingIndex !== -1) {
+          insertIndex = headingIndex + (currentIndex < headingIndex ? -1 : 0);
+        } else {
+          insertIndex = filteredItems.length; // Default to end if no suitable position is found
+        }
+
+        const [movedItem] = filteredItems.splice(currentIndex, 1);
+
+        while (
+          insertIndex < filteredItems.length &&
+          filteredItems[insertIndex].type === movedItem.type
+        ) {
+          insertIndex += 1; // Move below the item
+        }
+
+        if (insertIndex !== -1) {
+          filteredItems.splice(insertIndex, 0, movedItem);
+        } else {
+          filteredItems.push(movedItem);
+        }
+
+        item.repositioned = true;
+      }
 
       console.log("CODE PASS: Adding small breaks where necessary");
       filteredItems.forEach((item) => {
