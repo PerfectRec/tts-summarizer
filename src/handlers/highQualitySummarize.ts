@@ -12,7 +12,10 @@ import { getDB } from "db/db";
 import { sendErrorEmail, sendSuccessEmail } from "@utils/email";
 import { clearDirectory, getCurrentTimestamp } from "@utils/io";
 import { synthesizeSpeechInChunks } from "@utils/polly";
-import { getStructuredOpenAICompletionWithRetries } from "@utils/openai";
+import {
+  getStructuredOpenAICompletionWithRetries,
+  synthesizeSpeechInChunksOpenAI,
+} from "@utils/openai";
 import { isTextCutoff, replaceAbbreviations } from "@utils/text";
 import { removeBreaks } from "@utils/ssml";
 
@@ -30,7 +33,7 @@ const modelConfig: ModelConfig = {
     concurrency: 20,
   },
   figureSummarization: {
-    temperature: 0.2,
+    temperature: 0.4,
     model: "gpt-4o-2024-08-06",
     concurrency: 0,
   },
@@ -103,6 +106,11 @@ export default async function handler(
   const runId = uuidv4();
   const receivedTime = getCurrentTimestamp();
 
+  await uploadStatus(runId, "Received", {
+    message: "Request received",
+    receivedTime: receivedTime,
+  });
+
   reply.status(200).send({
     runId: runId,
     receivedTime: receivedTime,
@@ -120,11 +128,6 @@ export default async function handler(
     - MissingFile
     - CoreSystemFailure
   */
-
-  uploadStatus(runId, "Received", {
-    message: "Request received",
-    receivedTime: receivedTime,
-  });
 
   console.log(`Created runStatus/${runId}.json in S3`);
 
@@ -409,6 +412,8 @@ export default async function handler(
                     "endnotes_item",
                     "endnotes_heading",
                     "JEL_classification",
+                    "JSTOR_meta_information",
+                    "CCS_concepts",
                     "keywords",
                     "acknowledgements_heading",
                     "acknowledgements_content",
@@ -616,7 +621,7 @@ export default async function handler(
 
                 No need to explicitly mention each subsection.
 
-                Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct label type and label number. This is very important. Look for cues around the figure and use your best judgement to determine it. Possible label types can be Figure, Chart, Image etc.
+                Add the label "Figure X" where X is the figure number indicated in the page. You need to extract the correct label type and label number. This is VERY IMPORTANT. Look for cues around the figure and use your best judgement to determine it. Possible label types can be Figure, Chart, Image etc.
                 
                 If there is no label or label number set the labelType as "Image" and labelNumber as "unlabeled".
                 
@@ -1361,7 +1366,7 @@ export default async function handler(
               `chart ${labelNumber}`,
               `CHART ${labelNumber}`
             );
-          } else if (labelType === "Image") {
+          } else if (labelType.toLocaleLowerCase() === "image") {
             matchWords.push(
               `Image ${labelNumber}`,
               `image ${labelNumber}`,
@@ -1371,9 +1376,9 @@ export default async function handler(
               `IMG ${labelNumber}`,
               `IMG. ${labelNumber}`
             );
-          } else if (labelType === "Table") {
+          } else if (labelType.toLocaleLowerCase() === "table") {
             matchWords.push(`Table ${labelNumber}`, `Table. ${labelNumber}`);
-          } else if (labelType === "Algorithm") {
+          } else if (labelType.toLocaleLowerCase() === "algorithm") {
             matchWords.push(
               `Algorithm ${labelNumber}`,
               `Algo ${labelNumber}`,
@@ -1381,6 +1386,8 @@ export default async function handler(
               `Alg. ${labelNumber}`,
               `ALGORITHM ${labelNumber}`
             );
+          } else {
+            matchWords.push(`${labelType} ${labelNumber}`);
           }
 
           for (let i = 0; i < filteredItems.length; i++) {
@@ -1389,10 +1396,10 @@ export default async function handler(
               matchWords.some((word) => filteredItems[i].content.includes(word))
             ) {
               mentionIndex = i;
-              console.log(
-                "found first mention in ",
-                JSON.stringify(filteredItems[i])
-              );
+              // console.log(
+              //   "found first mention in ",
+              //   JSON.stringify(filteredItems[i])
+              // );
               break;
             }
           }
@@ -1404,10 +1411,10 @@ export default async function handler(
         for (let i = startIndex; i < filteredItems.length; i++) {
           if (filteredItems[i].type.includes("heading")) {
             headingIndex = i;
-            console.log(
-              "found the first heading below mention in",
-              JSON.stringify(filteredItems[i])
-            );
+            // console.log(
+            //   "found the first heading below mention in",
+            //   JSON.stringify(filteredItems[i])
+            // );
             break;
           }
           if (
@@ -1415,10 +1422,10 @@ export default async function handler(
             !filteredItems[i].isEndCutOff
           ) {
             textWithoutEndCutoffIndex = i;
-            console.log(
-              "found the first text without end cutoff below mention in",
-              JSON.stringify(filteredItems[i])
-            );
+            // console.log(
+            //   "found the first text without end cutoff below mention in",
+            //   JSON.stringify(filteredItems[i])
+            // );
             break;
           }
         }
@@ -1562,7 +1569,7 @@ export default async function handler(
       console.log("Subscribed user to mailing list");
 
       const { audioBuffer, audioMetadata, tocAudioMetadata } =
-        await synthesizeSpeechInChunks(filteredItems);
+        await synthesizeSpeechInChunksOpenAI(filteredItems);
       console.log("Generated audio file");
 
       const audioFileUrl = await uploadFile(audioBuffer, audioFilePath);

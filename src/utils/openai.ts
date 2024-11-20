@@ -7,8 +7,9 @@ import {
   ChatCompletionContentPart,
   ChatCompletionMessageParam,
 } from "openai/resources";
-import { convertBreaks } from "./ssml";
+import { convertBreaks, removeBreaks } from "./ssml";
 import { zodResponseFormat } from "openai/helpers/zod";
+import { parseBuffer } from "music-metadata";
 
 type OpenAIVoice = "alloy" | "onyx" | "echo" | "fable" | "shimmer" | "nova";
 
@@ -126,21 +127,24 @@ async function getStructuredOpenAICompletion(
 
 export async function synthesizeOpenAISpeech(
   text: string,
-  voice: OpenAIVoice
+  voice: OpenAIVoice,
+  speed: number
 ): Promise<Buffer> {
   const mp3 = await openai.audio.speech.create({
     model: "tts-1-hd",
     voice: voice,
     input: text,
+    speed: speed,
   });
   return Buffer.from(await mp3.arrayBuffer());
 }
 
 export async function synthesizeSpeechInChunksOpenAI(
   items: Item[]
-): Promise<Buffer> {
-  const audioBuffers: Buffer[] = [];
+): Promise<AudioResult> {
+  const itemAudioResults: ItemAudioResult[] = [];
   const MAX_CONCURRENT_ITEMS = 20;
+  const pauseMarker = " ------------------";
 
   const processItem = async (item: Item) => {
     let audioBuffer: Buffer;
@@ -149,17 +153,49 @@ export async function synthesizeSpeechInChunksOpenAI(
       ["figure_image", "table_rows", "code_or_algorithm"].includes(item.type)
     ) {
       audioBuffer = await synthesizeOpenAISpeech(
-        convertBreaks(item.content),
-        "onyx"
+        removeBreaks(item.content + pauseMarker),
+        "onyx",
+        1.0
+      );
+    } else if (
+      [
+        "main_title",
+        "abstract_heading",
+        "heading",
+        "math",
+        "end_marker",
+      ].includes(item.type)
+    ) {
+      audioBuffer = await synthesizeOpenAISpeech(
+        removeBreaks(item.content + pauseMarker),
+        "alloy",
+        0.9
       );
     } else {
       audioBuffer = await synthesizeOpenAISpeech(
-        convertBreaks(item.content),
-        "alloy"
+        removeBreaks(
+          item.isEndCutOff ? item.content : item.content + pauseMarker
+        ),
+        "alloy",
+        1.0
       );
     }
 
-    return audioBuffer;
+    const itemMetadata = await parseBuffer(audioBuffer);
+    const itemAudioMetadata: ItemAudioMetadata = {
+      type: item.type,
+      startTime: 0,
+      itemDuration: itemMetadata.format.duration || 0,
+      transcript: removeBreaks(item.content),
+      page: item.page,
+      index: 0,
+      audioIssues: item.audioIssues || [],
+    };
+
+    return {
+      itemAudioMetadata: itemAudioMetadata,
+      itemAudioBuffer: audioBuffer,
+    };
   };
 
   for (let i = 0; i < items.length; i += MAX_CONCURRENT_ITEMS) {
@@ -168,10 +204,38 @@ export async function synthesizeSpeechInChunksOpenAI(
       `converting items ${i} through ${i + MAX_CONCURRENT_ITEMS} to audio`
     );
     const batchResults = await Promise.all(itemBatch.map(processItem));
-    audioBuffers.push(...batchResults);
+    itemAudioResults.push(...batchResults);
   }
 
-  return Buffer.concat(audioBuffers);
+  const audioBuffer = Buffer.concat(
+    itemAudioResults.map((itemAudioResult) => itemAudioResult.itemAudioBuffer)
+  );
+
+  const audioMetadata = itemAudioResults.map(
+    (itemAudioResult) => itemAudioResult.itemAudioMetadata
+  );
+
+  //We need to adjust the start times here
+  let startTime = 0;
+  let index = 0;
+  for (const itemMetadata of audioMetadata) {
+    itemMetadata.startTime = startTime;
+    itemMetadata.index = index;
+    index += 1;
+    startTime += itemMetadata.itemDuration;
+  }
+
+  const tocAudioMetadata = audioMetadata.filter(
+    (item) =>
+      item.type.includes("heading") ||
+      ["main_title", "end_marker"].includes(item.type)
+  );
+
+  return {
+    audioBuffer: audioBuffer,
+    audioMetadata: audioMetadata,
+    tocAudioMetadata: tocAudioMetadata,
+  };
 }
 
 async function getOpenAICompletion(
