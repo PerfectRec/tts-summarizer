@@ -10,7 +10,10 @@ export default async function mockHandler(
   }>,
   reply: FastifyReply
 ) {
-  const { email, error } = request.query;
+  const { email, error, id } = request.query;
+
+  const receivedEmail = email && email !== "" ? email : "";
+
   const runId = uuidv4();
 
   const receivedTime = getCurrentTimestamp();
@@ -40,6 +43,7 @@ export default async function mockHandler(
         "Error",
         {
           email: email,
+          id: id,
           errorType: "SimulatedError",
           message: "Simulated error as requested",
           receivedTime: receivedTime,
@@ -60,10 +64,12 @@ export default async function mockHandler(
       runId,
       "Processing",
       {
+        email: email,
         message: "Started processing",
         uploadedFileUrl: `https://${process.env.AWS_BUCKET_NAME}/chandradeep@perfectrec.com/Bloom%20WFH.pdf`,
         receivedTime: receivedTime,
         startedProcessingTime: startedProcessingTime,
+        id: id,
       },
       true
     );
@@ -87,6 +93,7 @@ export default async function mockHandler(
         receivedTime: receivedTime,
         startedProcessingTime: startedProcessingTime,
         completedTime: completedTime,
+        id: id,
       },
       true
     );

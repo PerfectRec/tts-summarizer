@@ -68,21 +68,37 @@ export const uploadStatus = async (
 
     if (status === "Completed" && !mock) {
       await sendSlackNotification(
-        `Completed processing "${combinedData.extractedTitle}" from ${
-          combinedData.email
-        }.
-        
-        ${JSON.stringify({ runId: runId, ...combinedData }, null, 2)}`
+        `Completed processing "${
+          combinedData.extractedTitle ?? combinedData.cleanedFileName
+        }" from Email: ${
+          combinedData.email && combinedData.email !== ""
+            ? combinedData.email
+            : "NoEmailProvided"
+        } and ID: ${
+          combinedData.id && combinedData.id !== ""
+            ? combinedData.id
+            : "NoIdProvided"
+        }. Check ${encodeURI(
+          `https://files.paper2audio.com/runStatus/${runId}.json`
+        )} for more details.`
       );
     }
 
     if (status === "Error" && !mock) {
       await sendSlackNotification(
-        `Error processing "${combinedData.extractedTitle}" from ${
-          combinedData.email
-        }.
-        
-        ${JSON.stringify({ runId: runId, ...combinedData }, null, 2)}`
+        `Error (${combinedData.errorType}) processing "${
+          combinedData.extractedTitle ?? combinedData.cleanedFileName
+        }" from Email: ${
+          combinedData.email && combinedData.email !== ""
+            ? combinedData.email
+            : "NoEmailProvided"
+        } and ID: ${
+          combinedData.id && combinedData.id !== ""
+            ? combinedData.id
+            : "NoIdProvided"
+        }. Check ${encodeURI(
+          `https://files.paper2audio.com/runStatus/${runId}.json`
+        )} for more details.`
       );
     }
 

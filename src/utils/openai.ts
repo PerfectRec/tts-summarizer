@@ -125,18 +125,54 @@ async function getStructuredOpenAICompletion(
   }
 }
 
+function splitTextIntoChunks(text: string, maxLength: number): string[] {
+  if (text.length <= maxLength) {
+    return [text];
+  }
+
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+  const chunks: string[] = [];
+  let currentChunk = "";
+
+  for (const sentence of sentences) {
+    if ((currentChunk + sentence).length > maxLength) {
+      chunks.push(currentChunk.trim());
+      currentChunk = sentence;
+    } else {
+      currentChunk += sentence;
+    }
+  }
+
+  if (currentChunk) {
+    chunks.push(currentChunk.trim());
+  }
+
+  return chunks;
+}
+
 export async function synthesizeOpenAISpeech(
   text: string,
   voice: OpenAIVoice,
   speed: number
 ): Promise<Buffer> {
-  const mp3 = await openai.audio.speech.create({
-    model: "tts-1-hd",
-    voice: voice,
-    input: text,
-    speed: speed,
-  });
-  return Buffer.from(await mp3.arrayBuffer());
+  const chunkAudioBuffers: Buffer[] = [];
+  const chunks = splitTextIntoChunks(text, 4000);
+
+  if (chunks.length > 1) {
+    console.log(`More than one chunk, n chunks: ${chunks.length}`);
+  }
+
+  for (const chunk of chunks) {
+    const mp3 = await openai.audio.speech.create({
+      model: "tts-1-hd",
+      voice: voice,
+      input: chunk,
+      speed: speed,
+    });
+    chunkAudioBuffers.push(Buffer.from(await mp3.arrayBuffer()));
+  }
+
+  return Buffer.concat(chunkAudioBuffers);
 }
 
 export async function synthesizeOpenAISpeechWithRetries(

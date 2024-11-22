@@ -12,7 +12,10 @@ import { getDB } from "db/db";
 import { sendErrorEmail, sendSuccessEmail } from "@utils/email";
 import { clearDirectory, getCurrentTimestamp } from "@utils/io";
 import { synthesizeSpeechInChunks } from "@utils/polly";
-import { getStructuredOpenAICompletionWithRetries } from "@utils/openai";
+import {
+  getStructuredOpenAICompletionWithRetries,
+  synthesizeSpeechInChunksOpenAI,
+} from "@utils/openai";
 import {
   collapseConsecutiveLetters,
   isTextCutoff,
@@ -29,16 +32,29 @@ export default async function handler(
   reply: FastifyReply
 ) {
   //API RECEPTION----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  const { summarizationMethod, email, fileName, sendEmailToUser, link } =
+  const { summarizationMethod, email, fileName, sendEmailToUser, link, id } =
     request.query;
 
-  const shouldSendEmailToUser = sendEmailToUser === "true";
+  const receivedEmail = email && email !== "" ? email : "";
+
+  const shouldSendEmailToUser =
+    sendEmailToUser === "true" && email && email !== "";
+
+  const userBucketName =
+    id && id !== "" ? id : email && email !== "" ? email : "NoEmailOrId";
 
   let fileBuffer: Buffer;
   let cleanedFileName: string;
 
   const runId = uuidv4();
   const receivedTime = getCurrentTimestamp();
+
+  await uploadStatus(runId, "Received", {
+    message: "Request received",
+    receivedTime: receivedTime,
+    email: receivedEmail,
+    id: id,
+  });
 
   reply.status(200).send({
     runId: runId,
@@ -57,13 +73,6 @@ export default async function handler(
     - MissingFile
     - CoreSystemFailure
   */
-
-  uploadStatus(runId, "Received", {
-    message: "Request received",
-    receivedTime: receivedTime,
-  });
-
-  //PREPROCESSING-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
   console.log(`Created runStatus/${runId}.json in S3`);
 
@@ -91,13 +100,16 @@ export default async function handler(
     } catch (error) {
       const errorTime = getCurrentTimestamp();
       uploadStatus(runId, "Error", {
-        email: email,
+        email: receivedEmail,
+        id: id,
         errorType: "InvalidLink",
         message: "Failed to download PDF from link",
         receivedTime: receivedTime,
         errorTime: errorTime,
       });
-      sendErrorEmail(email, link, runId);
+      if (shouldSendEmailToUser) {
+        sendErrorEmail(receivedEmail, link, runId);
+      }
       return;
     }
   } else {
@@ -108,27 +120,27 @@ export default async function handler(
   //Setting file names
   //PDF
   const pdfFileName = `${cleanedFileName}.pdf`;
-  const pdfFilePath = `${email}/${pdfFileName}`;
+  const pdfFilePath = `${userBucketName}/${pdfFileName}`;
   const s3pdfFilePath = `https://${process.env.AWS_BUCKET_NAME}/${pdfFilePath}`;
   const pdfFileUrl = await uploadFile(fileBuffer, pdfFilePath);
 
   //MP3
   const audioFileName = `${cleanedFileName}.mp3`;
-  const audioFilePath = `${email}/${audioFileName}`;
+  const audioFilePath = `${userBucketName}/${audioFileName}`;
   const encodedAudioFilePath = `${encodeURIComponent(
-    email
+    userBucketName
   )}/${encodeURIComponent(audioFileName)}`;
   const s3encodedAudioFilePath = `https://${process.env.AWS_BUCKET_NAME}/${encodedAudioFilePath}`;
 
   //METADATA
   const metadataFileName = `${cleanedFileName}-metadata.json`;
-  const metadataFilePath = `${email}/${metadataFileName}`;
+  const metadataFilePath = `${userBucketName}/${metadataFileName}`;
   const s3metadataFilePath = `https://${process.env.AWS_BUCKET_NAME}/${metadataFilePath}`;
 
   //ERROR
-  const errorFilePath = `${email}/${cleanedFileName}-error.json`;
+  const errorFilePath = `${userBucketName}/${cleanedFileName}-error.json`;
   const encodedErrorFilePath = `${encodeURIComponent(
-    email
+    userBucketName
   )}/${encodeURIComponent(cleanedFileName)}-error.json`;
   const s3encodedErrorFilePath = `https://${process.env.AWS_BUCKET_NAME}/${encodedErrorFilePath}`;
 
@@ -138,14 +150,18 @@ export default async function handler(
   if (fileBuffer.length > 100 * 1024 * 1024) {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
-      email: email,
+      email: receivedEmail,
+      id: id,
       errorType: "FileSizeExceeded",
       message: "File size exceeds 100MB which is currently not supported",
       uploadedFileUrl: s3pdfFilePath,
       receivedTime: receivedTime,
       errorTime: errorTime,
+      cleanedFileName,
     });
-    sendErrorEmail(email, cleanedFileName, runId);
+    if (shouldSendEmailToUser) {
+      sendErrorEmail(receivedEmail, cleanedFileName, runId);
+    }
     return;
   }
 
@@ -186,44 +202,54 @@ export default async function handler(
   let pngPagesOriginal: PngPageOutput[] = [];
   try {
     pngPagesOriginal = await pdfToPng(fileBuffer, {
-      viewportScale: 4.0,
+      viewportScale: 5.0,
       outputFolder: tempImageDir,
     });
   } catch (error) {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
-      email: email,
+      email: receivedEmail,
+      id: id,
       errorType: "InvalidPDFFormat",
       message: "File has invalid format",
       uploadedFileUrl: s3pdfFilePath,
       receivedTime: receivedTime,
       errorTime: errorTime,
+      cleanedFileName,
     });
-    sendErrorEmail(email, cleanedFileName, runId);
+    if (shouldSendEmailToUser) {
+      sendErrorEmail(receivedEmail, cleanedFileName, runId);
+    }
     return;
   }
 
   if (pngPagesOriginal.length > 100) {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
-      email: email,
+      email: receivedEmail,
+      id: id,
       errorType: "FileNumberOfPagesExceeded",
       message: "pdf has more than 100 pages which is not currently supported",
       uploadedFileUrl: s3pdfFilePath,
       receivedTime: receivedTime,
       errorTime: errorTime,
+      cleanedFileName,
     });
-    sendErrorEmail(email, cleanedFileName, runId);
+    if (shouldSendEmailToUser) {
+      sendErrorEmail(receivedEmail, cleanedFileName, runId);
+    }
     return;
   }
 
   const startedProcessingTime = getCurrentTimestamp();
   uploadStatus(runId, "Processing", {
+    email: receivedEmail,
+    id: id,
     message: "Started processing",
     uploadedFileUrl: s3pdfFilePath,
     receivedTime: receivedTime,
     startedProcessingTime: startedProcessingTime,
-    completion: 0,
+    cleanedFileName: cleanedFileName,
   });
 
   console.log("converted pdf pages to images");
@@ -1478,9 +1504,9 @@ export default async function handler(
       const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
       const filteredItemsFileName = `${cleanedFileName}-filteredItems.json`;
 
-      const initialItemsFilePath = `${email}/${initialItemsFileName}`;
-      const parsedItemsFilePath = `${email}/${parsedItemsFileName}`;
-      const filteredItemsFilePath = `${email}/${filteredItemsFileName}`;
+      const initialItemsFilePath = `${userBucketName}/${initialItemsFileName}`;
+      const parsedItemsFilePath = `${userBucketName}/${parsedItemsFileName}`;
+      const filteredItemsFilePath = `${userBucketName}/${filteredItemsFileName}`;
 
       const initialItemsFileUrl = await uploadFile(
         fs.readFileSync(initialItemsPath),
@@ -1497,23 +1523,32 @@ export default async function handler(
         filteredItemsFilePath
       );
 
-      await subscribeEmail(email, process.env.MAILCHIMP_AUDIENCE_ID || "");
+      await subscribeEmail(
+        receivedEmail,
+        process.env.MAILCHIMP_AUDIENCE_ID || ""
+      );
       console.log("Subscribed user to mailing list");
 
-      const { audioBuffer, audioMetadata } = await synthesizeSpeechInChunks(
-        filteredItems
-      );
+      const { audioBuffer, audioMetadata, tocAudioMetadata } =
+        await synthesizeSpeechInChunksOpenAI(filteredItems);
       console.log("Generated audio file");
 
       const audioFileUrl = await uploadFile(audioBuffer, audioFilePath);
       const metadataFileUrl = await uploadFile(
-        Buffer.from(JSON.stringify(audioMetadata, null, 2)),
+        Buffer.from(
+          JSON.stringify(
+            { segments: audioMetadata, tableOfContents: tocAudioMetadata },
+            null,
+            2
+          )
+        ),
         metadataFilePath
       );
 
       const completedTime = getCurrentTimestamp();
       uploadStatus(runId, "Completed", {
-        email: email,
+        email: receivedEmail,
+        id: id,
         message: "Generated audio output and metadata",
         uploadedFileUrl: s3pdfFilePath,
         audioFileUrl: s3encodedAudioFilePath,
@@ -1522,13 +1557,17 @@ export default async function handler(
         receivedTime: receivedTime,
         startedProcessingTime: startedProcessingTime,
         completedTime: completedTime,
+        cleanedFileName,
       });
 
       if (shouldSendEmailToUser) {
-        await sendSuccessEmail(email, cleanedFileName, s3encodedAudioFilePath);
+        await sendSuccessEmail(
+          receivedEmail,
+          cleanedFileName,
+          s3encodedAudioFilePath
+        );
       }
     } catch (error) {
-      return;
       const errorFileUrl = await uploadFile(
         Buffer.from(JSON.stringify(error, Object.getOwnPropertyNames(error))),
         errorFilePath
@@ -1536,18 +1575,20 @@ export default async function handler(
 
       const errorTime = getCurrentTimestamp();
       uploadStatus(runId, "Error", {
-        email: email,
+        email: receivedEmail,
+        id: id,
         errorType: "CoreSystemFailure",
         message: `Error: ${error}`,
         errorFileUrl: s3encodedErrorFilePath,
         uploadedFileUrl: s3pdfFilePath,
         receivedTime: receivedTime,
         errorTime: errorTime,
+        cleanedFileName,
       });
 
       if (shouldSendEmailToUser) {
         await sendErrorEmail(
-          email,
+          receivedEmail,
           cleanedFileName,
           runId,
           s3encodedErrorFilePath
@@ -1559,17 +1600,19 @@ export default async function handler(
   } else {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
-      email: email,
+      email: receivedEmail,
+      id: id,
       errorType: "SummarizationMethodNotSupported",
       message: "This summarization method is not supported",
       uploadedFileUrl: s3pdfFilePath,
       receivedTime: receivedTime,
       errorTime: errorTime,
+      cleanedFileName,
     });
 
     if (shouldSendEmailToUser) {
       await sendErrorEmail(
-        email,
+        receivedEmail,
         cleanedFileName,
         runId,
         s3encodedErrorFilePath

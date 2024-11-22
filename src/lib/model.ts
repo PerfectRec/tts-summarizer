@@ -5,11 +5,12 @@ interface SummarizeRequestParams {
     | "chaptered"
     | "tablesAndFiguresOnly"
     | "ultimate";
-  email: string;
+  email?: string;
   fileName: string;
   sendEmailToUser: string;
   link: string;
   error?: string;
+  id?: string;
 }
 
 type Model =
