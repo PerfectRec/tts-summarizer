@@ -117,6 +117,7 @@ export default async function handler(
     receivedTime: receivedTime,
     email: receivedEmail,
     id: id,
+    progress: 0,
   });
 
   reply.status(200).send({
@@ -207,6 +208,11 @@ export default async function handler(
   )}/${encodeURIComponent(cleanedFileName)}-error.json`;
   const s3encodedErrorFilePath = `https://${process.env.AWS_BUCKET_NAME}/${encodedErrorFilePath}`;
 
+  //FIRSTPAGE
+  const firstPageFileName = `${cleanedFileName}-page1.png`;
+  const firstPageFilePath = `${userBucketName}/${firstPageFileName}`;
+  const s3firstPageFilePath = `https://${process.env.AWS_BUCKET_NAME}/${firstPageFilePath}`;
+
   // console.log(cleanedFileName);
   // return;
 
@@ -286,6 +292,22 @@ export default async function handler(
     return;
   }
 
+  if (pngPagesOriginal.length > 0) {
+    const firstPagePath = pngPagesOriginal[0].path;
+    const firstPageBuffer = await fs.readFile(firstPagePath);
+    const firstPageUrl = await uploadFile(firstPageBuffer, firstPageFilePath);
+
+    // Include the first page URL in the uploadStatus
+    await uploadStatus(runId, "Received", {
+      message: "Request received",
+      receivedTime: receivedTime,
+      email: receivedEmail,
+      id: id,
+      firstPageUrl: s3firstPageFilePath, // Add this line
+      progress: 0.1,
+    });
+  }
+
   if (pngPagesOriginal.length > 100) {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
@@ -297,6 +319,7 @@ export default async function handler(
       receivedTime: receivedTime,
       errorTime: errorTime,
       cleanedFileName,
+      firstPageUrl: s3firstPageFilePath,
     });
     if (shouldSendEmailToUser) {
       sendErrorEmail(receivedEmail, cleanedFileName, runId);
@@ -313,6 +336,8 @@ export default async function handler(
     receivedTime: receivedTime,
     startedProcessingTime: startedProcessingTime,
     cleanedFileName: cleanedFileName,
+    firstPageUrl: s3firstPageFilePath,
+    progress: 0.2,
   });
 
   console.log("converted pdf pages to images");
@@ -755,6 +780,18 @@ export default async function handler(
         }
       }
 
+      uploadStatus(runId, "Processing", {
+        email: receivedEmail,
+        id: id,
+        message: "Finished first extraction",
+        uploadedFileUrl: s3pdfFilePath,
+        receivedTime: receivedTime,
+        startedProcessingTime: startedProcessingTime,
+        cleanedFileName: cleanedFileName,
+        firstPageUrl: s3firstPageFilePath,
+        progress: 0.3,
+      });
+
       console.log(
         "PASS 1-3: Improving author section and detecting main title."
       );
@@ -785,6 +822,8 @@ export default async function handler(
       const firstAuthorInfoIndex = allItems.findIndex(
         (item) => item.type === "author_info"
       );
+
+      let minifiedAuthorInfo;
 
       if (firstAuthorInfoIndex !== -1) {
         const authors = improvedAuthorInfo?.authors || [];
@@ -818,12 +857,18 @@ export default async function handler(
 
         allItems[firstAuthorInfoIndex].type = "improved_author_info";
         allItems[firstAuthorInfoIndex].content = compiledAuthorInfo;
+
+        const firstAuthor = authors[0]?.authorName || "Unknown Author";
+        minifiedAuthorInfo =
+          authors.length > 1 ? `${firstAuthor} et al.` : firstAuthor;
       }
 
-      const MAIN_TITLE_EXTRACTION_PROMPT = `Extract the main title of the document from the following text. Use your judgement to accurately determine the main title.`;
+      const MAIN_TITLE_EXTRACTION_PROMPT = `Extract the main title and publication month and year of the document from the following text. Use your judgement to accurately determine the main title. Detect the month and year in MM and YYYY format. If the month or year is missing leave it empty.`;
 
       const mainTitleSchema = z.object({
         mainTitle: z.string(),
+        monthMM: z.string(),
+        yearYYYY: z.string(),
       });
 
       const extractedMainTitle = await getStructuredOpenAICompletionWithRetries(
@@ -838,8 +883,22 @@ export default async function handler(
       );
 
       const extractedTitle = extractedMainTitle?.mainTitle || "NoTitleDetected";
+      const extractedYear = extractedMainTitle?.yearYYYY || "";
+      const extractedMonth = extractedMainTitle?.monthMM || "";
 
-      console.log("\nThe main title is:\n\n", extractedTitle);
+      let formattedDate = "";
+      if (extractedMonth && extractedYear) {
+        formattedDate = `${extractedMonth}/${extractedYear}`;
+      } else if (extractedYear) {
+        formattedDate = extractedYear;
+      }
+
+      console.log(
+        "\nThe extracted info is:\n\n",
+        extractedTitle,
+        formattedDate,
+        minifiedAuthorInfo
+      );
 
       const abstractExists = allItems.some(
         (item) =>
@@ -1079,6 +1138,21 @@ export default async function handler(
       fs.writeFileSync(parsedItemsPath, JSON.stringify(allItems, null, 2));
       console.log("Saved raw text extract to", parsedItemsPath);
 
+      uploadStatus(runId, "Processing", {
+        email: receivedEmail,
+        id: id,
+        message: "Finishedc main title and author extraction",
+        uploadedFileUrl: s3pdfFilePath,
+        receivedTime: receivedTime,
+        startedProcessingTime: startedProcessingTime,
+        cleanedFileName: cleanedFileName,
+        firstPageUrl: s3firstPageFilePath,
+        progress: 0.4,
+        extractedTitle,
+        formattedDate,
+        minifiedAuthorInfo,
+      });
+
       console.log("PASS 2-1: detecting citations");
       const CITATION_DETECTION_PROMPT = `Analyze the following text and determine if the text contains citations to other papers. Ignore citations to figures or images in this paper`;
 
@@ -1262,6 +1336,21 @@ export default async function handler(
         );
       }
 
+      uploadStatus(runId, "Processing", {
+        email: receivedEmail,
+        id: id,
+        message: "Finished citation processing",
+        uploadedFileUrl: s3pdfFilePath,
+        receivedTime: receivedTime,
+        startedProcessingTime: startedProcessingTime,
+        cleanedFileName: cleanedFileName,
+        firstPageUrl: s3firstPageFilePath,
+        progress: 0.5,
+        extractedTitle,
+        formattedDate,
+        minifiedAuthorInfo,
+      });
+
       console.log("PASS 3-2: optimizing items with high math symbol frequency");
 
       const itemsThatCanIncludeMath = filteredItems.filter(
@@ -1329,6 +1418,21 @@ export default async function handler(
           );
         }
       }
+
+      uploadStatus(runId, "Processing", {
+        email: receivedEmail,
+        id: id,
+        message: "Finished processing math",
+        uploadedFileUrl: s3pdfFilePath,
+        receivedTime: receivedTime,
+        startedProcessingTime: startedProcessingTime,
+        cleanedFileName: cleanedFileName,
+        firstPageUrl: s3firstPageFilePath,
+        progress: 0.6,
+        extractedTitle,
+        formattedDate,
+        minifiedAuthorInfo,
+      });
 
       //Process abbreviations
       console.log("PASS 4-1: Detecting abbreviations");
@@ -1513,6 +1617,21 @@ export default async function handler(
         }
       });
 
+      uploadStatus(runId, "Processing", {
+        email: receivedEmail,
+        id: id,
+        message: "Finished abbreviations and repositioning",
+        uploadedFileUrl: s3pdfFilePath,
+        receivedTime: receivedTime,
+        startedProcessingTime: startedProcessingTime,
+        cleanedFileName: cleanedFileName,
+        firstPageUrl: s3firstPageFilePath,
+        progress: 0.65,
+        extractedTitle,
+        formattedDate,
+        minifiedAuthorInfo,
+      });
+
       // console.log("PASS 5-1: Checking audio pleasantness");
 
       // const AUDIO_PLEASANTNESS_PROMPT = `Analyze the following item and detect issues that would make the content suboptimal as audio. For example, a text item could be marked as heading.`;
@@ -1611,7 +1730,13 @@ export default async function handler(
       const metadataFileUrl = await uploadFile(
         Buffer.from(
           JSON.stringify(
-            { segments: audioMetadata, tableOfContents: tocAudioMetadata },
+            {
+              extractedTitle: extractedTitle,
+              extractedDate: formattedDate,
+              extractedAuthorInfo: minifiedAuthorInfo,
+              tableOfContents: tocAudioMetadata,
+              segments: audioMetadata,
+            },
             null,
             2
           )
@@ -1632,6 +1757,10 @@ export default async function handler(
         startedProcessingTime: startedProcessingTime,
         completedTime: completedTime,
         cleanedFileName,
+        firstPageUrl: s3firstPageFilePath,
+        progress: 1.0,
+        formattedDate,
+        minifiedAuthorInfo,
       });
 
       if (shouldSendEmailToUser) {
@@ -1658,6 +1787,7 @@ export default async function handler(
         receivedTime: receivedTime,
         errorTime: errorTime,
         cleanedFileName,
+        firstPageUrl: s3firstPageFilePath,
       });
 
       if (shouldSendEmailToUser) {
@@ -1682,6 +1812,7 @@ export default async function handler(
       receivedTime: receivedTime,
       errorTime: errorTime,
       cleanedFileName,
+      firstPageUrl: s3firstPageFilePath,
     });
 
     if (shouldSendEmailToUser) {

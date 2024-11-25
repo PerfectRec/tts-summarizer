@@ -2,6 +2,7 @@ import fs from "fs-extra";
 import path from "path"; // Adjust the import path as necessary
 import { uploadFile } from "@aws/s3";
 import { synthesizeSpeechInChunks } from "@utils/polly";
+import { synthesizeSpeechInChunksOpenAI } from "@utils/openai";
 
 async function generateAudioFromFilteredItems(
   jsonFilePath: string
@@ -11,21 +12,29 @@ async function generateAudioFromFilteredItems(
     const filteredItems: Item[] = await fs.readJson(jsonFilePath);
 
     // Generate audio using synthesizeSpeechInChunks
-    const { audioBuffer, audioMetadata } = await synthesizeSpeechInChunks(
-      filteredItems
-    );
+    const { audioBuffer, audioMetadata, tocAudioMetadata } =
+      await synthesizeSpeechInChunksOpenAI(filteredItems);
 
-    const email = "muralirk@gmail.com";
+    const userBucketName = "muralirk@gmail.com";
     const fileName = "Verus";
 
-    const audioFileName = `${email}/${fileName}.mp3`;
+    const audioFileName = `${userBucketName}/${fileName}.mp3`;
 
     // Upload the audio buffer directly to S3
     const audioFileUrl = await uploadFile(audioBuffer, audioFileName);
 
     // Optionally, upload the audio metadata to S3
-    const metadataFileName = `${email}/${fileName}-metadata.json`;
-    const metadataBuffer = Buffer.from(JSON.stringify(audioMetadata));
+    const metadataFileName = `${userBucketName}/${fileName}-metadata.json`;
+    const metadataBuffer = Buffer.from(
+      JSON.stringify(
+        {
+          segments: audioMetadata,
+          tableOfContents: tocAudioMetadata,
+        },
+        null,
+        2
+      )
+    );
     const metadataFileUrl = await uploadFile(metadataBuffer, metadataFileName);
   } catch (error) {
     console.error("Error generating audio from filtered items:", error);
