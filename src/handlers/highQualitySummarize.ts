@@ -795,7 +795,42 @@ export default async function handler(
       console.log(
         "PASS 1-3: Improving author section and detecting main title."
       );
-      const IMPROVE_AUTHOR_INFO_PROMPT = `Extract all the author info to make. Keep only the author names and affiliations.
+
+      const MAIN_TITLE_EXTRACTION_PROMPT = `Extract the main title and publication month and year of the document from the following text. Use your judgement to accurately determine the main title. Detect the month and year in MM and YYYY format. If the month or year is missing leave it empty.`;
+
+      const mainTitleSchema = z.object({
+        mainTitle: z.string(),
+        monthMM: z.string(),
+        yearYYYY: z.string(),
+      });
+
+      const extractedMainTitle = await getStructuredOpenAICompletionWithRetries(
+        runId,
+        MAIN_TITLE_EXTRACTION_PROMPT,
+        `Here is the text from the first 5 pages: ${mainTitleContents}`,
+        modelConfig.mainTitleExtractor.model,
+        modelConfig.mainTitleExtractor.temperature,
+        mainTitleSchema,
+        3,
+        pngPages.slice(0, 5).map((page) => page.path)
+      );
+
+      const extractedTitle = extractedMainTitle?.mainTitle || "NoTitleDetected";
+      const extractedYear = extractedMainTitle?.yearYYYY || "";
+      const extractedMonth = extractedMainTitle?.monthMM || "";
+
+      let formattedDate = "";
+      if (extractedMonth && extractedYear) {
+        formattedDate = `${extractedMonth}/${extractedYear}`;
+      } else if (extractedYear) {
+        formattedDate = extractedYear;
+      }
+
+      const IMPROVE_AUTHOR_INFO_PROMPT = `Extract all the author info for ${
+        extractedTitle && extractedTitle !== "NoTitleDetected"
+          ? extractedTitle
+          : ""
+      }. Keep only the author names and affiliations.
       
       If the affiliation is not available for a user leave it empty. Do not repeat the same author or affiliation multiple times.`;
 
@@ -861,36 +896,6 @@ export default async function handler(
         const firstAuthor = authors[0]?.authorName || "Unknown Author";
         minifiedAuthorInfo =
           authors.length > 1 ? `${firstAuthor} et al.` : firstAuthor;
-      }
-
-      const MAIN_TITLE_EXTRACTION_PROMPT = `Extract the main title and publication month and year of the document from the following text. Use your judgement to accurately determine the main title. Detect the month and year in MM and YYYY format. If the month or year is missing leave it empty.`;
-
-      const mainTitleSchema = z.object({
-        mainTitle: z.string(),
-        monthMM: z.string(),
-        yearYYYY: z.string(),
-      });
-
-      const extractedMainTitle = await getStructuredOpenAICompletionWithRetries(
-        runId,
-        MAIN_TITLE_EXTRACTION_PROMPT,
-        `Here is the text from the first 5 pages: ${mainTitleContents}`,
-        modelConfig.mainTitleExtractor.model,
-        modelConfig.mainTitleExtractor.temperature,
-        mainTitleSchema,
-        3,
-        pngPages.slice(0, 5).map((page) => page.path)
-      );
-
-      const extractedTitle = extractedMainTitle?.mainTitle || "NoTitleDetected";
-      const extractedYear = extractedMainTitle?.yearYYYY || "";
-      const extractedMonth = extractedMainTitle?.monthMM || "";
-
-      let formattedDate = "";
-      if (extractedMonth && extractedYear) {
-        formattedDate = `${extractedMonth}/${extractedYear}`;
-      } else if (extractedYear) {
-        formattedDate = extractedYear;
       }
 
       console.log(
@@ -1149,7 +1154,7 @@ export default async function handler(
         firstPageUrl: s3firstPageFilePath,
         progress: "0.4",
         extractedTitle,
-        formattedDate,
+        publishedMonth: formattedDate,
         minifiedAuthorInfo,
       });
 
@@ -1347,7 +1352,7 @@ export default async function handler(
         firstPageUrl: s3firstPageFilePath,
         progress: "0.5",
         extractedTitle,
-        formattedDate,
+        publishedMonth: formattedDate,
         minifiedAuthorInfo,
       });
 
@@ -1430,7 +1435,7 @@ export default async function handler(
         firstPageUrl: s3firstPageFilePath,
         progress: "0.6",
         extractedTitle,
-        formattedDate,
+        publishedMonth: formattedDate,
         minifiedAuthorInfo,
       });
 
@@ -1628,7 +1633,7 @@ export default async function handler(
         firstPageUrl: s3firstPageFilePath,
         progress: "0.65",
         extractedTitle,
-        formattedDate,
+        publishedMonth: formattedDate,
         minifiedAuthorInfo,
       });
 
@@ -1722,7 +1727,7 @@ export default async function handler(
       );
       console.log("Subscribed user to mailing list");
 
-      const { audioBuffer, audioMetadata, tocAudioMetadata } =
+      const { audioBuffer, audioMetadata, audioDuration, tocAudioMetadata } =
         await synthesizeSpeechInChunksOpenAI(filteredItems);
       console.log("Generated audio file");
 
@@ -1732,10 +1737,11 @@ export default async function handler(
           JSON.stringify(
             {
               extractedTitle: extractedTitle,
-              extractedDate: formattedDate,
-              extractedAuthorInfo: minifiedAuthorInfo,
+              extractedPublishedMonth: formattedDate,
+              extractedMinifiedAuthorInfo: minifiedAuthorInfo,
               tableOfContents: tocAudioMetadata,
               segments: audioMetadata,
+              audioDuration: audioDuration,
             },
             null,
             2
@@ -1759,8 +1765,9 @@ export default async function handler(
         cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
         progress: "1.0",
-        formattedDate,
+        publishedMonth: formattedDate,
         minifiedAuthorInfo,
+        audioDuration: `${audioDuration}`,
       });
 
       if (shouldSendEmailToUser) {

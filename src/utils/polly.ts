@@ -103,11 +103,13 @@ export async function synthesizeSpeechInChunks(
   //We need to adjust the start times here
   let startTime = 0;
   let index = 0;
+  let audioDuration = 0;
   for (const itemMetadata of audioMetadata) {
     itemMetadata.startTime = startTime;
     itemMetadata.index = index;
     index += 1;
     startTime += itemMetadata.itemDuration;
+    audioDuration += itemMetadata.itemDuration;
   }
 
   const tocAudioMetadata = audioMetadata.filter(
@@ -119,6 +121,7 @@ export async function synthesizeSpeechInChunks(
   return {
     audioBuffer: audioBuffer,
     audioMetadata: audioMetadata,
+    audioDuration: audioDuration,
     tocAudioMetadata: tocAudioMetadata,
   };
 }

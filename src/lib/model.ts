@@ -181,5 +181,6 @@ interface ItemAudioResult {
 interface AudioResult {
   audioBuffer: Buffer;
   audioMetadata: ItemAudioMetadata[];
+  audioDuration: number;
   tocAudioMetadata: ItemAudioMetadata[];
 }
