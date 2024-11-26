@@ -117,7 +117,7 @@ export default async function handler(
     receivedTime: receivedTime,
     email: receivedEmail,
     id: id,
-    progress: 0,
+    progress: "0",
   });
 
   reply.status(200).send({
@@ -304,7 +304,7 @@ export default async function handler(
       email: receivedEmail,
       id: id,
       firstPageUrl: s3firstPageFilePath, // Add this line
-      progress: 0.1,
+      progress: "0.1",
     });
   }
 
@@ -337,7 +337,7 @@ export default async function handler(
     startedProcessingTime: startedProcessingTime,
     cleanedFileName: cleanedFileName,
     firstPageUrl: s3firstPageFilePath,
-    progress: 0.2,
+    progress: "0.2",
   });
 
   console.log("converted pdf pages to images");
@@ -789,7 +789,7 @@ export default async function handler(
         startedProcessingTime: startedProcessingTime,
         cleanedFileName: cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
-        progress: 0.3,
+        progress: "0.3",
       });
 
       console.log(
@@ -1147,7 +1147,7 @@ export default async function handler(
         startedProcessingTime: startedProcessingTime,
         cleanedFileName: cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
-        progress: 0.4,
+        progress: "0.4",
         extractedTitle,
         formattedDate,
         minifiedAuthorInfo,
@@ -1345,7 +1345,7 @@ export default async function handler(
         startedProcessingTime: startedProcessingTime,
         cleanedFileName: cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
-        progress: 0.5,
+        progress: "0.5",
         extractedTitle,
         formattedDate,
         minifiedAuthorInfo,
@@ -1428,7 +1428,7 @@ export default async function handler(
         startedProcessingTime: startedProcessingTime,
         cleanedFileName: cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
-        progress: 0.6,
+        progress: "0.6",
         extractedTitle,
         formattedDate,
         minifiedAuthorInfo,
@@ -1626,7 +1626,7 @@ export default async function handler(
         startedProcessingTime: startedProcessingTime,
         cleanedFileName: cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
-        progress: 0.65,
+        progress: "0.65",
         extractedTitle,
         formattedDate,
         minifiedAuthorInfo,
@@ -1758,7 +1758,7 @@ export default async function handler(
         completedTime: completedTime,
         cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
-        progress: 1.0,
+        progress: "1.0",
         formattedDate,
         minifiedAuthorInfo,
       });
