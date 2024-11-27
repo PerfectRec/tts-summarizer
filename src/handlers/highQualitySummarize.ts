@@ -108,6 +108,8 @@ export default async function handler(
 
   let fileBuffer: Buffer;
   let cleanedFileName: string;
+  let addMethod: "link" | "file" = "file";
+  let fullSourceName: String = "";
 
   const runId = uuidv4();
   const receivedTime = getCurrentTimestamp();
@@ -117,7 +119,7 @@ export default async function handler(
     receivedTime: receivedTime,
     email: receivedEmail,
     id: id,
-    progress: "0",
+    progress: "0.1",
   });
 
   reply.status(200).send({
@@ -142,6 +144,8 @@ export default async function handler(
 
   if (link && link !== "") {
     try {
+      addMethod = "link";
+      fullSourceName = link;
       const url = new URL(link);
 
       // Special processing for arXiv links
@@ -170,6 +174,8 @@ export default async function handler(
         message: "Failed to download PDF from link",
         receivedTime: receivedTime,
         errorTime: errorTime,
+        addMethod,
+        fullSourceName,
       });
       if (shouldSendEmailToUser) {
         sendErrorEmail(receivedEmail, link, runId);
@@ -177,6 +183,8 @@ export default async function handler(
       return;
     }
   } else {
+    addMethod = "file";
+    fullSourceName = fileName;
     fileBuffer = request.body as Buffer;
     cleanedFileName = path.parse(fileName).name;
   }
@@ -227,6 +235,8 @@ export default async function handler(
       receivedTime: receivedTime,
       errorTime: errorTime,
       cleanedFileName,
+      addMethod,
+      fullSourceName,
     });
     if (shouldSendEmailToUser) {
       sendErrorEmail(receivedEmail, cleanedFileName, runId);
@@ -285,6 +295,8 @@ export default async function handler(
       receivedTime: receivedTime,
       errorTime: errorTime,
       cleanedFileName,
+      addMethod,
+      fullSourceName,
     });
     if (shouldSendEmailToUser) {
       sendErrorEmail(receivedEmail, cleanedFileName, runId);
@@ -297,14 +309,15 @@ export default async function handler(
     const firstPageBuffer = await fs.readFile(firstPagePath);
     const firstPageUrl = await uploadFile(firstPageBuffer, firstPageFilePath);
 
-    // Include the first page URL in the uploadStatus
     await uploadStatus(runId, "Received", {
       message: "Request received",
       receivedTime: receivedTime,
       email: receivedEmail,
       id: id,
       firstPageUrl: s3firstPageFilePath, // Add this line
-      progress: "0.1",
+      progress: "0.2",
+      addMethod,
+      fullSourceName,
     });
   }
 
@@ -320,6 +333,8 @@ export default async function handler(
       errorTime: errorTime,
       cleanedFileName,
       firstPageUrl: s3firstPageFilePath,
+      addMethod,
+      fullSourceName,
     });
     if (shouldSendEmailToUser) {
       sendErrorEmail(receivedEmail, cleanedFileName, runId);
@@ -337,7 +352,9 @@ export default async function handler(
     startedProcessingTime: startedProcessingTime,
     cleanedFileName: cleanedFileName,
     firstPageUrl: s3firstPageFilePath,
-    progress: "0.2",
+    progress: "0.3",
+    addMethod,
+    fullSourceName,
   });
 
   console.log("converted pdf pages to images");
@@ -789,7 +806,9 @@ export default async function handler(
         startedProcessingTime: startedProcessingTime,
         cleanedFileName: cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
-        progress: "0.3",
+        progress: "0.4",
+        addMethod,
+        fullSourceName,
       });
 
       console.log(
@@ -1152,10 +1171,12 @@ export default async function handler(
         startedProcessingTime: startedProcessingTime,
         cleanedFileName: cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
-        progress: "0.4",
+        progress: "0.5",
         extractedTitle,
         publishedMonth: formattedDate,
         minifiedAuthorInfo,
+        addMethod,
+        fullSourceName,
       });
 
       console.log("PASS 2-1: detecting citations");
@@ -1350,10 +1371,12 @@ export default async function handler(
         startedProcessingTime: startedProcessingTime,
         cleanedFileName: cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
-        progress: "0.5",
+        progress: "0.6",
         extractedTitle,
         publishedMonth: formattedDate,
         minifiedAuthorInfo,
+        addMethod,
+        fullSourceName,
       });
 
       console.log("PASS 3-2: optimizing items with high math symbol frequency");
@@ -1433,10 +1456,12 @@ export default async function handler(
         startedProcessingTime: startedProcessingTime,
         cleanedFileName: cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
-        progress: "0.6",
+        progress: "0.7",
         extractedTitle,
         publishedMonth: formattedDate,
         minifiedAuthorInfo,
+        addMethod,
+        fullSourceName,
       });
 
       //Process abbreviations
@@ -1631,10 +1656,12 @@ export default async function handler(
         startedProcessingTime: startedProcessingTime,
         cleanedFileName: cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
-        progress: "0.65",
+        progress: "0.8",
         extractedTitle,
         publishedMonth: formattedDate,
         minifiedAuthorInfo,
+        addMethod,
+        fullSourceName,
       });
 
       // console.log("PASS 5-1: Checking audio pleasantness");
@@ -1768,6 +1795,8 @@ export default async function handler(
         publishedMonth: formattedDate,
         minifiedAuthorInfo,
         audioDuration: `${audioDuration}`,
+        addMethod,
+        fullSourceName,
       });
 
       if (shouldSendEmailToUser) {
@@ -1795,6 +1824,8 @@ export default async function handler(
         errorTime: errorTime,
         cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
+        addMethod,
+        fullSourceName,
       });
 
       if (shouldSendEmailToUser) {
@@ -1820,6 +1851,8 @@ export default async function handler(
       errorTime: errorTime,
       cleanedFileName,
       firstPageUrl: s3firstPageFilePath,
+      addMethod,
+      fullSourceName,
     });
 
     if (shouldSendEmailToUser) {
