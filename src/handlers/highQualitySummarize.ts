@@ -14,6 +14,7 @@ import { clearDirectory, getCurrentTimestamp } from "@utils/io";
 import { synthesizeSpeechInChunks } from "@utils/polly";
 import {
   getStructuredOpenAICompletionWithRetries,
+  synthesizeOpenAISpeechWithRetries,
   synthesizeSpeechInChunksOpenAI,
 } from "@utils/openai";
 import { isTextCutoff, replaceAbbreviations } from "@utils/text";
@@ -22,6 +23,11 @@ import { removeBreaks } from "@utils/ssml";
 const { db } = getDB();
 
 const modelConfig: ModelConfig = {
+  summarizer: {
+    temperature: 0.2,
+    model: "gpt-4o-2024-08-06",
+    concurrency: 1,
+  },
   pageClassifier: {
     temperature: 0.2,
     model: "gpt-4o-2024-08-06",
@@ -220,6 +226,16 @@ export default async function handler(
   const firstPageFileName = `${cleanedFileName}-page1.png`;
   const firstPageFilePath = `${userBucketName}/${firstPageFileName}`;
   const s3firstPageFilePath = `https://${process.env.AWS_BUCKET_NAME}/${firstPageFilePath}`;
+
+  // SUMMARY-JSON
+  const summaryJsonFileName = `${cleanedFileName}-summary.json`;
+  const summaryJsonFilePath = `${userBucketName}/${summaryJsonFileName}`;
+  const s3summaryJsonFilePath = `https://${process.env.AWS_BUCKET_NAME}/${summaryJsonFilePath}`;
+
+  // SUMMARY-AUDIO
+  const summaryAudioFileName = `${cleanedFileName}-summary.mp3`;
+  const summaryAudioFilePath = `${userBucketName}/${summaryAudioFileName}`;
+  const s3summaryAudioFilePath = `https://${process.env.AWS_BUCKET_NAME}/${summaryAudioFilePath}`;
 
   // console.log(cleanedFileName);
   // return;
@@ -1724,6 +1740,44 @@ export default async function handler(
       //   );
       // }
 
+      console.log("PASS 6: Summarizing the entire paper");
+
+      let combinedContent = filteredItems
+        .map((item) => item.content)
+        .join("\n\n");
+      let tokenCount = Math.ceil(combinedContent.length / 4);
+      if (tokenCount > 120000) {
+        combinedContent = combinedContent.slice(0, 120000 * 4);
+      }
+
+      const summaryJson = { summary: "" };
+
+      const SUMMARY_PROMPT = `Please provide an effective summary of the following paper. Make sure to capture the main idea of the paper.`;
+
+      const summarySchema = z.object({
+        summary: z.string(),
+      });
+
+      try {
+        const summaryResult = await getStructuredOpenAICompletionWithRetries(
+          runId,
+          SUMMARY_PROMPT,
+          combinedContent,
+          modelConfig.summarizer.model,
+          modelConfig.summarizer.temperature,
+          summarySchema,
+          3,
+          [],
+          1024
+        );
+
+        summaryJson.summary =
+          summaryResult?.summary || "Summary could not be generated.";
+        console.log("Generated summary");
+      } catch (error) {
+        console.error("Error generating summary:", error);
+      }
+
       const filteredItemsPath = path.join(fileNameDir, "filteredItems.json");
       fs.writeFileSync(
         filteredItemsPath,
@@ -1748,6 +1802,29 @@ export default async function handler(
         filteredItemsFilePath
       );
 
+      const summaryJsonFileUrl = await uploadFile(
+        Buffer.from(JSON.stringify(summaryJson, null, 2)),
+        summaryJsonFilePath
+      );
+
+      uploadStatus(runId, "Processing", {
+        email: receivedEmail,
+        id: id,
+        message: "Finished generating summary",
+        uploadedFileUrl: s3pdfFilePath,
+        receivedTime: receivedTime,
+        startedProcessingTime: startedProcessingTime,
+        cleanedFileName: cleanedFileName,
+        firstPageUrl: s3firstPageFilePath,
+        summaryJsonUrl: s3summaryJsonFilePath,
+        progress: "0.85",
+        extractedTitle,
+        publishedMonth: formattedDate,
+        minifiedAuthorInfo,
+        addMethod,
+        fullSourceName,
+      });
+
       await subscribeEmail(
         receivedEmail,
         process.env.MAILCHIMP_AUDIENCE_ID || ""
@@ -1758,7 +1835,19 @@ export default async function handler(
         await synthesizeSpeechInChunksOpenAI(filteredItems);
       console.log("Generated audio file");
 
+      const summaryAudioBuffer = await synthesizeOpenAISpeechWithRetries(
+        summaryJson.summary,
+        "onyx",
+        1.0
+      );
+
       const audioFileUrl = await uploadFile(audioBuffer, audioFilePath);
+
+      const summaryAudioFileUrl = await uploadFile(
+        summaryAudioBuffer,
+        summaryAudioFilePath
+      );
+
       const metadataFileUrl = await uploadFile(
         Buffer.from(
           JSON.stringify(
@@ -1781,7 +1870,7 @@ export default async function handler(
       uploadStatus(runId, "Completed", {
         email: receivedEmail,
         id: id,
-        message: "Generated audio output and metadata",
+        message: "Generated audio output for paper and summary",
         uploadedFileUrl: s3pdfFilePath,
         audioFileUrl: s3encodedAudioFilePath,
         metadataFileUrl: s3metadataFilePath,
@@ -1791,7 +1880,9 @@ export default async function handler(
         completedTime: completedTime,
         cleanedFileName,
         firstPageUrl: s3firstPageFilePath,
-        progress: "1.0",
+        summaryJsonFileUrl: s3summaryJsonFilePath,
+        summaryAudioFileUrl: s3summaryAudioFilePath,
+        progress: "0.95",
         publishedMonth: formattedDate,
         minifiedAuthorInfo,
         audioDuration: `${audioDuration}`,
