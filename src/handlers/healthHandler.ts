@@ -26,6 +26,12 @@ export default async function healthHandler(
   reply: FastifyReply
 ) {
     // incoming URL is of the form /health?id=<ID>&email=<email>&ts=<Timestamp)
+    /* Testing using
+    curl -X POST "http://localhost:4242/health?id=123&ts=2023-11-26" \
+     -H "Content-Type: text/plain" \
+     --data "This is the sample diagnostics to save in S3."
+
+     */
   const { id, email, ts } = request.query;
   const diagnosticsLog = request.body as string
   var timestampString : string = ""

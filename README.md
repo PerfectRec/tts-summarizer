@@ -28,6 +28,12 @@ arch -arm64 brew install pkg-config cairo pango libpng librsvg
 - Go to `http://localhost:4242`
 - Upload a `pdf` or `epub` file.
 
+### Additional set up
+
+- Set up Cursor with OpenAI. Use Org credentials for use with Cursor
+- Set up "AWS Toolkit" in cursor and used IAM credentials for AWS access
+- Set up Render account to access logs
+
 ## Dependencies
 
 We are using
@@ -38,3 +44,7 @@ We are using
 - `Anthropic` or `OpenAI` models to generate the summries.
 - `Mailchimp` to send transactional and marketing emails.
 - `Helicone` for logging and monitoring Claude API calls.
+
+## Server Tracking
+
+Use [Render]https://dashboard.render.com/web/srv-cs8172btq21c73a2hh30/logs) to look at the logs for this project
