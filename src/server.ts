@@ -10,6 +10,7 @@ import mockSummarizeHandler from "@handlers/mockSummarize";
 import syncPapers from "@handlers/syncPapers";
 import getPapers from "@handlers/getPapers";
 import fastSummarizeHandler from "@handlers/fastSummarize";
+import healthHandler from "@handlers/healthHandler";
 
 const envToLogger = {
   development: {
@@ -68,6 +69,8 @@ fastify.get("/checkStatus", checkStatusHandler);
 fastify.post("/mockSummarize", mockSummarizeHandler);
 fastify.get("/getpapers", getPapers);
 fastify.post("/syncPapers", syncPapers);
+
+fastify.post("/health", healthHandler);
 
 const port = Number(process.env.PORT) || 4242;
 const host = "RENDER" in process.env ? `0.0.0.0` : `localhost`;
