@@ -162,7 +162,11 @@ export async function synthesizeOpenAISpeech(
     console.log(`More than one chunk, n chunks: ${chunks.length}`);
   }
 
-  for (const chunk of chunks) {
+  for (let chunk of chunks) {
+    if (chunk.trim().length === 0) {
+      chunk = " ";
+    }
+
     const mp3 = await openai.audio.speech.create({
       model: "tts-1-hd",
       voice: voice,
