@@ -17,7 +17,11 @@ import {
   synthesizeOpenAISpeechWithRetries,
   synthesizeSpeechInChunksOpenAI,
 } from "@utils/openai";
-import { isTextCutoff, replaceAbbreviations } from "@utils/text";
+import {
+  countSentences,
+  isTextCutoff,
+  replaceAbbreviations,
+} from "@utils/text";
 import { removeBreaks } from "@utils/ssml";
 
 const { db } = getDB();
@@ -1307,15 +1311,36 @@ export default async function handler(
                       0.1
                     );
 
-                  item.citationReplacement = {
-                    originalText: processedItem?.originalText || "",
-                    textWithCitationsRemoved:
-                      processedItem?.textWithCitationsRemoved || "",
-                  };
+                  const originalCharCount = item.content.length;
+                  const optimizedCharCount =
+                    processedItem?.textWithCitationsRemoved.length || 0;
 
-                  item.content =
-                    item.citationReplacement.textWithCitationsRemoved;
-                  item.replacedCitations = true;
+                  const allowedCharCountUpper = originalCharCount * 1.1;
+                  const allowedCharCountLower = originalCharCount * 0.7;
+
+                  if (
+                    optimizedCharCount <= allowedCharCountUpper &&
+                    optimizedCharCount >= allowedCharCountLower
+                  ) {
+                    item.citationReplacement = {
+                      originalText: processedItem?.originalText || "",
+                      textWithCitationsRemoved:
+                        processedItem?.textWithCitationsRemoved || "",
+                    };
+                    item.content =
+                      item.citationReplacement.textWithCitationsRemoved;
+                    item.replacedCitations = true;
+                  } else {
+                    item.citationReplacement = {
+                      originalText: processedItem?.originalText || "",
+                      textWithCitationsRemoved:
+                        processedItem?.textWithCitationsRemoved || "",
+                    };
+                    item.replacedCitations = false;
+                    console.log(
+                      `Reverting to original text for item due to character count difference: ${optimizedCharCount} not in range [${allowedCharCountLower}, ${allowedCharCountUpper}]`
+                    );
+                  }
                 }
               } catch (error) {
                 console.log(
@@ -1446,14 +1471,44 @@ export default async function handler(
                       0.2
                     );
 
-                  item.mathReplacement = {
-                    originalText: processedItem?.originalText || "",
-                    wordedReplacement: processedItem?.wordedReplacement || "",
-                  };
+                  const originalCharCount = item.content.length;
+                  const optimizedCharCount =
+                    processedItem?.wordedReplacement.length || 0;
 
-                  item.content = item.mathReplacement.wordedReplacement;
+                  // Determine the allowed character count based on math symbol frequency
+                  const frequencyMultiplier =
+                    {
+                      5: 10,
+                      4: 4,
+                      3: 3,
+                      2: 2,
+                      1: 1.4,
+                    }[item.mathSymbolFrequency || 1] || 1.4;
 
-                  item.optimizedMath = true;
+                  const allowedCharCountUpper =
+                    originalCharCount * frequencyMultiplier;
+                  const allowedCharCountLower = originalCharCount * 0.9;
+
+                  if (
+                    optimizedCharCount <= allowedCharCountUpper &&
+                    optimizedCharCount >= allowedCharCountLower
+                  ) {
+                    item.mathReplacement = {
+                      originalText: processedItem?.originalText || "",
+                      wordedReplacement: processedItem?.wordedReplacement || "",
+                    };
+                    item.content = item.mathReplacement.wordedReplacement;
+                    item.optimizedMath = true;
+                  } else {
+                    item.mathReplacement = {
+                      originalText: processedItem?.originalText || "",
+                      wordedReplacement: processedItem?.wordedReplacement || "",
+                    };
+                    item.optimizedMath = false;
+                    console.log(
+                      `Reverting to original text for item due to character count difference: ${optimizedCharCount} not in range [${allowedCharCountLower}, ${allowedCharCountUpper}]`
+                    );
+                  }
                 }
               } catch (error) {
                 console.log(`Non fatal error while processing math: ${error}`);
@@ -1785,6 +1840,10 @@ export default async function handler(
       );
       console.log("Saved filtered items to", filteredItemsPath);
 
+      const summaryPath = path.join(fileNameDir, "summary.json");
+      fs.writeFileSync(summaryPath, JSON.stringify(summaryJson, null, 2));
+      console.log("Saved summary to", summaryPath);
+
       //return;
 
       const parsedItemsFileName = `${cleanedFileName}-parsedItems.json`;
@@ -1803,7 +1862,7 @@ export default async function handler(
       );
 
       const summaryJsonFileUrl = await uploadFile(
-        Buffer.from(JSON.stringify(summaryJson, null, 2)),
+        fs.readFileSync(summaryPath),
         summaryJsonFilePath
       );
 

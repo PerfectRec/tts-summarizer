@@ -25,3 +25,7 @@ export function replaceAbbreviations(
 export function collapseConsecutiveLetters(text: string): string {
   return text.replace(/(\w)\1{21}/g, "$1");
 }
+
+export function countSentences(text: string): number {
+  return text.split(/[.!?]+/).filter(Boolean).length;
+}
