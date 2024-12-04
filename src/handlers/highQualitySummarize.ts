@@ -313,6 +313,8 @@ export default async function handler(
     });
   } catch (error) {
     const errorTime = getCurrentTimestamp();
+    console.log(error);
+    logBuffer.push(`${error}`);
     uploadStatus(runId, "Error", {
       email: receivedEmail,
       id: id,
