@@ -108,6 +108,8 @@ export default async function handler(
   const { summarizationMethod, email, fileName, sendEmailToUser, link, id } =
     request.query;
 
+  const logBuffer: string[] = [];
+
   const receivedEmail = email && email !== "" ? email : "";
 
   const shouldSendEmailToUser =
@@ -130,6 +132,7 @@ export default async function handler(
     email: receivedEmail,
     id: id,
     progress: "0.1",
+    logBuffer: logBuffer.join("________________"),
   });
 
   reply.status(200).send({
@@ -151,6 +154,7 @@ export default async function handler(
   */
 
   console.log(`Created runStatus/${runId}.json in S3`);
+  logBuffer.push(`Created runStatus/${runId}.json in S3`);
 
   if (link && link !== "") {
     try {
@@ -186,6 +190,7 @@ export default async function handler(
         errorTime: errorTime,
         addMethod,
         fullSourceName,
+        logBuffer: logBuffer.join("________________"),
       });
       if (shouldSendEmailToUser) {
         sendErrorEmail(receivedEmail, link, runId);
@@ -257,6 +262,7 @@ export default async function handler(
       cleanedFileName,
       addMethod,
       fullSourceName,
+      logBuffer: logBuffer.join("________________"),
     });
     if (shouldSendEmailToUser) {
       sendErrorEmail(receivedEmail, cleanedFileName, runId);
@@ -297,6 +303,7 @@ export default async function handler(
   }
 
   console.log("attempting to convert pdf pages to images");
+  logBuffer.push("attempting to convert pdf pages to images");
 
   let pngPagesOriginal: PngPageOutput[] = [];
   try {
@@ -317,6 +324,7 @@ export default async function handler(
       cleanedFileName,
       addMethod,
       fullSourceName,
+      logBuffer: logBuffer.join("________________"),
     });
     if (shouldSendEmailToUser) {
       sendErrorEmail(receivedEmail, cleanedFileName, runId);
@@ -338,6 +346,7 @@ export default async function handler(
       progress: "0.2",
       addMethod,
       fullSourceName,
+      logBuffer: logBuffer.join("________________"),
     });
   }
 
@@ -355,6 +364,7 @@ export default async function handler(
       firstPageUrl: s3firstPageFilePath,
       addMethod,
       fullSourceName,
+      logBuffer: logBuffer.join("________________"),
     });
     if (shouldSendEmailToUser) {
       sendErrorEmail(receivedEmail, cleanedFileName, runId);
@@ -375,9 +385,11 @@ export default async function handler(
     progress: "0.3",
     addMethod,
     fullSourceName,
+    logBuffer: logBuffer.join("________________"),
   });
 
   console.log("converted pdf pages to images");
+  logBuffer.push("converted pdf pages to images");
 
   if (summarizationMethod === "ultimate") {
     try {
@@ -388,7 +400,7 @@ export default async function handler(
       let allBatchResults: { index: number; relevant: boolean }[] = [];
 
       console.log(`PASS 0: Determining which pages are relevant`);
-
+      logBuffer.push(`PASS 0: Determining which pages are relevant`);
       // for (let i = 0; i < pngPagesOriginal.length; i += batchSize) {
       //   const batch = pngPagesOriginal.slice(i, i + batchSize);
 
@@ -436,12 +448,18 @@ export default async function handler(
           pngPagesOriginal.length - pngPages.length
         } irrelevant pages`
       );
+      logBuffer.push(
+        `Filtered out ${
+          pngPagesOriginal.length - pngPages.length
+        } irrelevant pages`
+      );
 
       //return;
 
-      console.log(
-        `PASS 1-1: Extracting text from the images\nPASS 1-2: Summarizing special items`
-      );
+      console.log(`PASS 1-1: Extracting text from the images`);
+      console.log(`PASS 1-2: Summarizing special items`);
+      logBuffer.push(`PASS 1-1: Extracting text from the images`);
+      logBuffer.push(`PASS 1-2: Summarizing special items`);
       for (
         let i = 0;
         i < pngPages.length;
@@ -452,7 +470,7 @@ export default async function handler(
         const batchResults = await Promise.all(
           batch.map(async (pngPage, index) => {
             console.log("processing page ", i + index + 1);
-
+            logBuffer.push(`processing page ${i + index + 1}`);
             const EXTRACT_PROMPT = `Please extract all the items in the page in the correct order. Do not exclude any text.
 
             The text of one paragraph should always be one single text item.
@@ -529,7 +547,7 @@ export default async function handler(
             let items = pageItems?.items;
 
             console.log("processed page ", i + index + 1);
-
+            logBuffer.push(`processed page ${i + index + 1}`);
             //combining contiguous math items
             let combinedItems: any[] = [];
             for (let i = 0; i < items.length; i++) {
@@ -576,6 +594,7 @@ export default async function handler(
 
               if (item.type === "table_rows") {
                 console.log("summarizing table on page ", i + index + 1);
+                logBuffer.push(`summarizing table on page ${i + index + 1}`);
                 const summarizationSchema = z.object({
                   summarizedItem: z.object({
                     type: z.enum(["table_rows"]),
@@ -625,6 +644,7 @@ export default async function handler(
 
               if (item.type === "figure_image") {
                 console.log("summarizing figure on page ", i + index + 1);
+                logBuffer.push(`summarizing figure on page ${i + index + 1}`);
                 const summarizationSchema = z.object({
                   summarizedItem: z.object({
                     type: z.enum(["figure_image"]),
@@ -752,6 +772,9 @@ export default async function handler(
                   "summarizing code or algorithm on page ",
                   i + index + 1
                 );
+                logBuffer.push(
+                  `summarizing code or algorithm on page ${i + index + 1}`
+                );
                 const codeSummarizationSchema = z.object({
                   summarizedCode: z.object({
                     type: z.string(z.enum(["code_or_algorithm"])),
@@ -829,9 +852,13 @@ export default async function handler(
         progress: "0.4",
         addMethod,
         fullSourceName,
+        logBuffer: logBuffer.join("________________"),
       });
 
       console.log(
+        "PASS 1-3: Improving author section and detecting main title."
+      );
+      logBuffer.push(
         "PASS 1-3: Improving author section and detecting main title."
       );
 
@@ -943,6 +970,9 @@ export default async function handler(
         formattedDate,
         minifiedAuthorInfo
       );
+      logBuffer.push(
+        `The extracted info is: ${extractedTitle}, ${formattedDate}, ${minifiedAuthorInfo}`
+      );
 
       const abstractExists = allItems.some(
         (item) =>
@@ -961,6 +991,9 @@ export default async function handler(
       // }
 
       console.log(
+        "PASS 1-4: Fixing potential issues with references and acknowledgements"
+      );
+      logBuffer.push(
         "PASS 1-4: Fixing potential issues with references and acknowledgements"
       );
 
@@ -1028,6 +1061,7 @@ export default async function handler(
         });
       }
       console.log("PASS 1-5: filtering unnecessary item types");
+      logBuffer.push("PASS 1-5: filtering unnecessary item types");
 
       let inAcknowledgementsSection = false;
       let inReferencesSection = false;
@@ -1180,7 +1214,8 @@ export default async function handler(
 
       const parsedItemsPath = path.join(fileNameDir, "parsedItems.json");
       fs.writeFileSync(parsedItemsPath, JSON.stringify(allItems, null, 2));
-      console.log("Saved raw text extract to", parsedItemsPath);
+      console.log("Saved parsedItems to", parsedItemsPath);
+      logBuffer.push(`Saved parsedItems to ${parsedItemsPath}`);
 
       uploadStatus(runId, "Processing", {
         email: receivedEmail,
@@ -1197,9 +1232,11 @@ export default async function handler(
         minifiedAuthorInfo,
         addMethod,
         fullSourceName,
+        logBuffer: logBuffer.join("________________"),
       });
 
       console.log("PASS 2-1: detecting citations");
+      logBuffer.push("PASS 2-1: detecting citations");
       const CITATION_DETECTION_PROMPT = `Analyze the following text and determine if the text contains citations to other papers. Ignore citations to figures or images in this paper`;
 
       const citationDetectionSchema = z.object({
@@ -1238,6 +1275,9 @@ export default async function handler(
                 "Non fatal error while detecting citations:",
                 error
               );
+              logBuffer.push(
+                `Non fatal error while detecting citations: ${error}`
+              );
               item.hasCitations = false; // Default to false if there's an error
             }
           })
@@ -1245,6 +1285,7 @@ export default async function handler(
       }
 
       console.log("PASS 2-2: optimzing citations");
+      logBuffer.push("PASS 2-2: optimzing citations");
 
       const itemsWithCitations = filteredItems.filter(
         (item) => item.hasCitations
@@ -1288,6 +1329,12 @@ export default async function handler(
             i + modelConfig.citationOptimization.concurrency
           );
           console.log(
+            `processing text items ${i} through ${
+              i + modelConfig.citationOptimization.concurrency
+            }`
+          );
+
+          logBuffer.push(
             `processing text items ${i} through ${
               i + modelConfig.citationOptimization.concurrency
             }`
@@ -1340,10 +1387,16 @@ export default async function handler(
                     console.log(
                       `Reverting to original text for item due to character count difference: ${optimizedCharCount} not in range [${allowedCharCountLower}, ${allowedCharCountUpper}]`
                     );
+                    logBuffer.push(
+                      `Reverting to original text for item due to character count difference: ${optimizedCharCount} not in range [${allowedCharCountLower}, ${allowedCharCountUpper}]`
+                    );
                   }
                 }
               } catch (error) {
                 console.log(
+                  `Non fatal error while processing citations: ${error}`
+                );
+                logBuffer.push(
                   `Non fatal error while processing citations: ${error}`
                 );
               }
@@ -1354,6 +1407,7 @@ export default async function handler(
 
       //It is important to replace citations first and then optimize the math - but only in content with math.
       console.log("PASS 3-1: detecting math symbol frequency");
+      logBuffer.push("PASS 3-1: detecting math symbol frequency");
 
       const MATH_SYMBOL_FREQUENCY_PROMPT = `Analyze the following text and determine the frequency of complex math symbols and numbers. Provide a score between 0 and 5, where 0 means no complex math symbols and numbers and 5 means a high frequency of complex math symbols and numbers.`;
 
@@ -1396,6 +1450,9 @@ export default async function handler(
                   "Non fatal error while assigning math symbol frequency:",
                   error
                 );
+                logBuffer.push(
+                  `Non fatal error while assigning math symbol frequency: ${error}`
+                );
                 item.mathSymbolFrequency = 0; // Default to 0 if there's an error
               }
             }
@@ -1418,9 +1475,13 @@ export default async function handler(
         minifiedAuthorInfo,
         addMethod,
         fullSourceName,
+        logBuffer: logBuffer.join("________________"),
       });
 
       console.log("PASS 3-2: optimizing items with high math symbol frequency");
+      logBuffer.push(
+        "PASS 3-2: optimizing items with high math symbol frequency"
+      );
 
       const itemsThatCanIncludeMath = filteredItems.filter(
         (item) => item.mathSymbolFrequency && item.mathSymbolFrequency > 0
@@ -1448,6 +1509,11 @@ export default async function handler(
             i + modelConfig.mathOptimization.concurrency
           );
           console.log(
+            `processing math items ${i} through ${
+              i + modelConfig.mathOptimization.concurrency
+            }`
+          );
+          logBuffer.push(
             `processing math items ${i} through ${
               i + modelConfig.mathOptimization.concurrency
             }`
@@ -1508,10 +1574,16 @@ export default async function handler(
                     console.log(
                       `Reverting to original text for item due to character count difference: ${optimizedCharCount} not in range [${allowedCharCountLower}, ${allowedCharCountUpper}]`
                     );
+                    logBuffer.push(
+                      `Reverting to original text for item due to character count difference: ${optimizedCharCount} not in range [${allowedCharCountLower}, ${allowedCharCountUpper}]`
+                    );
                   }
                 }
               } catch (error) {
                 console.log(`Non fatal error while processing math: ${error}`);
+                logBuffer.push(
+                  `Non fatal error while processing math: ${error}`
+                );
               }
             })
           );
@@ -1533,10 +1605,12 @@ export default async function handler(
         minifiedAuthorInfo,
         addMethod,
         fullSourceName,
+        logBuffer: logBuffer.join("________________"),
       });
 
       //Process abbreviations
       console.log("PASS 4-1: Detecting abbreviations");
+      logBuffer.push("PASS 4-1: Detecting abbreviations");
       const specialAbbreviations: Abbreviation[] = [
         {
           abbreviation: "CI",
@@ -1553,11 +1627,13 @@ export default async function handler(
       ];
 
       console.log("PASS 4-2: Replacing known abbreviations");
+      logBuffer.push("PASS 4-2: Replacing known abbreviations");
       filteredItems.forEach((item) => {
         item.content = replaceAbbreviations(item.content, specialAbbreviations);
       });
 
       console.log("PASS 4-3: Tagging items with start and end cut off");
+      logBuffer.push("PASS 4-3: Tagging items with start and end cut off");
       //Tagging items with end and start cut off
       filteredItems.forEach((item) => {
         if (["abstract_content", "text"].includes(item.type)) {
@@ -1574,6 +1650,7 @@ export default async function handler(
           item.type === "code_or_algorithm"
       );
       console.log("PASS 4-4: repositioning images and figures and code");
+      logBuffer.push("PASS 4-4: repositioning images and figures and code");
       for (const item of specialItems) {
         if (item.repositioned || !item.label) {
           continue;
@@ -1581,12 +1658,16 @@ export default async function handler(
 
         const { labelType, labelNumber } = item.label;
         console.log("repositioning ", labelType, " ", labelNumber);
+        logBuffer.push(`repositioning ${labelType} ${labelNumber}`);
         let mentionIndex = -1;
         let headingIndex = -1;
         let textWithoutEndCutoffIndex = -1;
 
         if (labelNumber !== "unlabeled") {
           console.log("searching for matches for", labelType, labelNumber);
+          logBuffer.push(
+            `searching for matches for ${labelType} ${labelNumber}`
+          );
           let matchWords = [];
           if (labelType.toLocaleLowerCase() === "figure") {
             matchWords.push(
@@ -1670,6 +1751,9 @@ export default async function handler(
         console.log(
           "moving the item based on end cutoff logic or above the first heading or to the end"
         );
+        logBuffer.push(
+          "moving the item based on end cutoff logic or above the first heading or to the end"
+        );
         const currentIndex = filteredItems.indexOf(item);
         let insertIndex;
 
@@ -1702,7 +1786,7 @@ export default async function handler(
       }
 
       console.log("PASS 4-5: Adding breaks where needed");
-
+      logBuffer.push("PASS 4-5: Adding breaks where needed");
       filteredItems.forEach((item) => {
         if (
           [
@@ -1733,6 +1817,7 @@ export default async function handler(
         minifiedAuthorInfo,
         addMethod,
         fullSourceName,
+        logBuffer: logBuffer.join("________________"),
       });
 
       // console.log("PASS 5-1: Checking audio pleasantness");
@@ -1796,7 +1881,7 @@ export default async function handler(
       // }
 
       console.log("PASS 6: Summarizing the entire paper");
-
+      logBuffer.push("PASS 6: Summarizing the entire paper");
       let combinedContent = filteredItems
         .map((item) => item.content)
         .join("\n\n");
@@ -1829,8 +1914,10 @@ export default async function handler(
         summaryJson.summary =
           summaryResult?.summary || "Summary could not be generated.";
         console.log("Generated summary");
+        logBuffer.push("Generated summary");
       } catch (error) {
         console.error("Error generating summary:", error);
+        logBuffer.push(`Error generating summary: ${error}`);
       }
 
       const filteredItemsPath = path.join(fileNameDir, "filteredItems.json");
@@ -1839,10 +1926,12 @@ export default async function handler(
         JSON.stringify(filteredItems, null, 2)
       );
       console.log("Saved filtered items to", filteredItemsPath);
+      logBuffer.push(`Saved filtered items to ${filteredItemsPath}`);
 
       const summaryPath = path.join(fileNameDir, "summary.json");
       fs.writeFileSync(summaryPath, JSON.stringify(summaryJson, null, 2));
       console.log("Saved summary to", summaryPath);
+      logBuffer.push(`Saved summary to ${summaryPath}`);
 
       //return;
 
@@ -1882,6 +1971,7 @@ export default async function handler(
         minifiedAuthorInfo,
         addMethod,
         fullSourceName,
+        logBuffer: logBuffer.join("________________"),
       });
 
       await subscribeEmail(
@@ -1889,10 +1979,12 @@ export default async function handler(
         process.env.MAILCHIMP_AUDIENCE_ID || ""
       );
       console.log("Subscribed user to mailing list");
+      logBuffer.push("Subscribed user to mailing list");
 
       const { audioBuffer, audioMetadata, audioDuration, tocAudioMetadata } =
         await synthesizeSpeechInChunksOpenAI(filteredItems);
       console.log("Generated audio file");
+      logBuffer.push("Generated audio file");
 
       const summaryAudioBuffer = await synthesizeOpenAISpeechWithRetries(
         summaryJson.summary,
@@ -1947,6 +2039,7 @@ export default async function handler(
         audioDuration: `${audioDuration}`,
         addMethod,
         fullSourceName,
+        logBuffer: logBuffer.join("________________"),
       });
 
       if (shouldSendEmailToUser) {
@@ -1976,6 +2069,7 @@ export default async function handler(
         firstPageUrl: s3firstPageFilePath,
         addMethod,
         fullSourceName,
+        logBuffer: logBuffer.join("________________"),
       });
 
       if (shouldSendEmailToUser) {
@@ -1988,6 +2082,7 @@ export default async function handler(
       }
 
       console.error("Error generating audio file:", error);
+      logBuffer.push(`Error generating audio file: ${error}`);
     }
   } else {
     const errorTime = getCurrentTimestamp();
@@ -2003,6 +2098,7 @@ export default async function handler(
       firstPageUrl: s3firstPageFilePath,
       addMethod,
       fullSourceName,
+      logBuffer: logBuffer.join("________________"),
     });
 
     if (shouldSendEmailToUser) {
@@ -2020,8 +2116,10 @@ export default async function handler(
     await fs.remove(tempImageDir);
     await fs.remove(fileNameDir);
     console.log("Temporary directories deleted");
+    logBuffer.push("Temporary directories deleted");
   } catch (cleanupError) {
     console.error("Error during cleanup:", cleanupError);
+    logBuffer.push(`Error during cleanup: ${cleanupError}`);
   }
 
   return;
