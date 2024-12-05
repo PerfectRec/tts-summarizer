@@ -38,7 +38,8 @@
     "start": "yarn build:client && tsx src/server.ts",
     "dev": "concurrently \"nodemon --watch client/src --ext js,jsx,ts,tsx --exec yarn build:client\" \"nodemon --watch src --exec tsx src/server.ts\"",
     "build:client": "yarn --cwd client build",
-    "manual": "npx tsx src/manual/convertToAudio.ts"
+    "manual": "npx tsx src/manual/convertToAudio.ts",
+    "clean": "rm -rf yarn.lock && rm -rf node_modules && yarn cache clean"
   },
   "devDependencies": {
     "concurrently": "^9.0.1",
