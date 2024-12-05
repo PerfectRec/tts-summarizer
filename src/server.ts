@@ -1,8 +1,10 @@
 // Import the framework and instantiate it
 import Fastify from "fastify";
+import fastifyStatic from "@fastify/static";
+import fastifySwagger from '@fastify/swagger';
+
 import path from "path";
 import { fileURLToPath } from "url";
-import fastifyStatic from "@fastify/static";
 // Handler imports
 import highQualitySummarizeHandler from "@handlers/highQualitySummarize";
 import checkStatusHandler from "@handlers/checkStatus";
@@ -12,8 +14,9 @@ import getPapers from "@handlers/getPapers";
 import fastSummarizeHandler from "@handlers/fastSummarize";
 import healthHandler from "@handlers/healthHandler";
 
-import { linkRoutes, LinkManagerHandlers } from '@handlers/linkManger';
+import { linkRoutes, LinkManagerHandlers } from '@handlers/linkManager';
 
+// Set up environmment variables and logging
 const envToLogger = {
   development: {
     transport: {
@@ -32,7 +35,8 @@ type Environment = "development" | "production" | "test";
 
 const environment: Environment =
   (process.env.NODE_ENV as Environment) || "development";
-
+  
+// Set up the Fastify server
 const fastify = Fastify({
   logger: envToLogger[environment] ?? true,
   bodyLimit: 52428800,
@@ -77,6 +81,32 @@ fastify.post("/health", healthHandler);
 // add routes for Link Management and checking
 const lmHandlers = new LinkManagerHandlers(); 
 linkRoutes(fastify, lmHandlers); 
+
+// Add swagger documentation if in development mode
+/*
+on 12/5 we attemped it. But swagger endpoint is not registering
+if (environment === 'development') {
+
+  fastify.register(fastifySwagger, {
+    routePrefix: '/docs',
+    swagger: {
+      info: {
+        title: 'Paper2Audio API',
+        description: 'API documentation for the Paper2Audio',
+        version: '1.0.0'
+      }
+    },
+    uiConfig: {
+      docExpansion: 'full',
+      deepLinking: true
+    },
+    exposeRoute: true
+  });
+
+  console.log("Swagger documentation enabled");
+}
+*/
+
 
 // Main section of the server
 
