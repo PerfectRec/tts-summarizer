@@ -338,11 +338,7 @@ export default async function handler(
       console.log(`PASS 0 LLM: Determining which pages are relevant`);
       logBuffer.push(`PASS 0 LLM: Determining which pages are relevant`);
 
-      const pngPages = await determineRelevantPages(
-        runId,
-        logBuffer,
-        pngPagesOriginal
-      );
+      const pngPages = pngPagesOriginal;
 
       console.log(
         `Filtered out ${
