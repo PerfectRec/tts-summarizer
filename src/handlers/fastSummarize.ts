@@ -16,12 +16,9 @@ import {
   getStructuredOpenAICompletionWithRetries,
   synthesizeSpeechInChunksOpenAI,
 } from "@utils/openai";
-import {
-  collapseConsecutiveLetters,
-  isTextCutoff,
-  replaceAbbreviations,
-} from "@utils/text";
+import { collapseConsecutiveLetters } from "@utils/text";
 import { processUnstructuredBuffer } from "@utils/unstructured";
+import { replaceKnownAbbreviations, tagItemsWithCutOffs } from "@utils/core";
 
 const { db } = getDB();
 
@@ -1319,28 +1316,10 @@ export default async function handler(
       });
 
       console.log("CODE PASS: Optimzing known abbreviations");
-      const specialAbbreviations: Abbreviation[] = [
-        {
-          abbreviation: "CI",
-          replacement: "C.I.",
-          type: "initialism",
-          expansion: "confidence interval",
-        },
-      ];
-
-      filteredItems.forEach((item) => {
-        item.content = replaceAbbreviations(item.content, specialAbbreviations);
-      });
+      replaceKnownAbbreviations(filteredItems);
 
       console.log("CODE PASS: Tagging items with start and end cut off");
-      //Tagging items with end and start cut off
-      filteredItems.forEach((item) => {
-        if (["abstract_content", "text"].includes(item.type)) {
-          const { isStartCutOff, isEndCutOff } = isTextCutoff(item.content);
-          item.isStartCutOff = isStartCutOff;
-          item.isEndCutOff = isEndCutOff;
-        }
-      });
+      tagItemsWithCutOffs(filteredItems);
 
       //Repositioning Special Items
       console.log("CODE PASS: Repositioning summarized items");
