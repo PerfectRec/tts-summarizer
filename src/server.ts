@@ -12,6 +12,8 @@ import getPapers from "@handlers/getPapers";
 import fastSummarizeHandler from "@handlers/fastSummarize";
 import healthHandler from "@handlers/healthHandler";
 
+import { linkRoutes, LinkManagerHandlers } from '@handlers/linkManger';
+
 const envToLogger = {
   development: {
     transport: {
@@ -71,6 +73,12 @@ fastify.get("/getpapers", getPapers);
 fastify.post("/syncPapers", syncPapers);
 
 fastify.post("/health", healthHandler);
+
+// add routes for Link Management and checking
+const lmHandlers = new LinkManagerHandlers(); 
+linkRoutes(fastify, lmHandlers); 
+
+// Main section of the server
 
 const port = Number(process.env.PORT) || 4242;
 const host = "RENDER" in process.env ? `0.0.0.0` : `localhost`;
