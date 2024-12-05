@@ -48,3 +48,19 @@ We are using
 ## Server Tracking
 
 Use [Render]https://dashboard.render.com/web/srv-cs8172btq21c73a2hh30/logs) to look at the logs for this project
+
+## Swagger UI
+
+Fastify has a built in Swagger UI. A few steps to enable this
+
+- Install the `fastify-swagger` plugin
+
+```sh
+    yarn add @fastify/swagger @fastify/static
+    yarn upgrade   # so the version is updated in the yarn.lock (aka package-lock.json)
+```
+
+- Add the swagger documentation endpoint conditionally only for 'development' mode
+- Go to `http://localhost:4242/docs` to see the API documentation
+
+
