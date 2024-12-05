@@ -187,7 +187,7 @@ export default async function handler(
 
   if (fileBuffer.length > 100 * 1024 * 1024) {
     const errorTime = getCurrentTimestamp();
-    uploadStatus(runId, "Error", {
+    await uploadStatus(runId, "Error", {
       email: receivedEmail,
       id: id,
       errorType: "FileSizeExceeded",
@@ -251,7 +251,7 @@ export default async function handler(
     const errorTime = getCurrentTimestamp();
     console.log(error);
     logBuffer.push(`${error}`);
-    uploadStatus(runId, "Error", {
+    await uploadStatus(runId, "Error", {
       email: receivedEmail,
       id: id,
       errorType: "InvalidPDFFormat",
@@ -290,7 +290,7 @@ export default async function handler(
 
   if (pngPagesOriginal.length > 100) {
     const errorTime = getCurrentTimestamp();
-    uploadStatus(runId, "Error", {
+    await uploadStatus(runId, "Error", {
       email: receivedEmail,
       id: id,
       errorType: "FileNumberOfPagesExceeded",
