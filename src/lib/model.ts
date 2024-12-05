@@ -16,6 +16,7 @@ interface SummarizeRequestParams {
 type Model =
   | "claude-3-5-sonnet-20240620"
   | "gpt-4o-2024-08-06"
+  | "gpt-4o-2024-11-20"
   | "gpt-4o-mini-2024-07-18"
   | "claude-3-haiku-20240307";
 
