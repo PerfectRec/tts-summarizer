@@ -12,12 +12,15 @@ Processes a document for summarization and returns a run ID and received time.
 
 ### Request Parameters
 
+### Request Parameters
+
 - **Querystring**:
   - `email` (string): The user's email address.
-  - `summarizationMethod` (string): The method of summarization to use.
+  - `summarizationMethod` (string): The method of summarization to use. Supported methods are "ultimate" and "short".
   - `fileName` (string): The name of the file being summarized.
   - `sendEmailToUser` (string): Whether to send an email to the user ("true" or "false").
   - `link` (string, optional): A link to the document to be summarized.
+  - `id` (string, optional): A unique identifier for the user or session.
 
 ### Request body:
 
@@ -33,6 +36,12 @@ PDF File buffer if not passing in a link. You need to add `Content-Type: applica
     "receivedTime": "string"
   }
   ```
+
+### Additional Information
+
+- The endpoint supports two summarization methods: "ultimate" and "short".
+- If the `sendEmailToUser` parameter is set to "true", an email will be sent to the user upon completion or error.
+- The endpoint logs various stages of processing and uploads status updates to an S3 bucket.
 
 ## 2. Check Status Endpoint
 
@@ -58,18 +67,12 @@ Checks the status of a summarization process using a run ID.
   {
     "status": "Received",
     "message": "Request received",
-    "receivedTime": "string"
-  }
-  ```
-
-- **Body** (Processing):
-
-  ```json
-  {
-    "status": "Processing",
-    "message": "Started processing",
     "receivedTime": "string",
-    "startedProcessingTime": "string"
+    "email": "string",
+    "id": "string",
+    "progress": "0.1",
+    "summarizationMethod": "string",
+    "logBuffer": "string"
   }
   ```
 
@@ -78,16 +81,34 @@ Checks the status of a summarization process using a run ID.
   ```json
   {
     "status": "Completed",
-    "message": "Generated audio output and metadata",
+    "message": "Generated audio output for paper and summary",
     "receivedTime": "string",
     "startedProcessingTime": "string",
     "completedTime": "string",
+    "summarizationMethod": "string",
+    "email": "string",
+    "id": "string",
     "uploadedFileUrl": "string",
     "audioFileUrl": "string",
     "metadataFileUrl": "string",
-    "extractedTitle": "string"
+    "extractedTitle": "string",
+    "cleanedFileName": "string",
+    "firstPageUrl": "string",
+    "summaryJsonFileUrl": "string",
+    "summaryAudioFileUrl": "string",
+    "progress": "0.95",
+    "publishedMonth": "string",
+    "minifiedAuthorInfo": "string",
+    "audioDuration": "string",
+    "summaryAudioDuration": "string",
+    "addMethod": "link" | "file",
+    "fullSourceName": "string",
+    "logBuffer": "string"
   }
   ```
+
+- **Body** (Processing):
+  Objects with "Processing" status will include a subset of the "Completed" object depending on the stage of processing.
 
 - **Body** (Error):
 
@@ -97,7 +118,13 @@ Checks the status of a summarization process using a run ID.
     "errorType": "string",
     "message": "string",
     "receivedTime": "string",
-    "errorTime": "string"
+    "errorTime": "string",
+    "summarizationMethod": "string",
+    "email": "string",
+    "id": "string",
+    "addMethod": "link" | "file",
+    "fullSourceName": "string",
+    "logBuffer": "string"
   }
   ```
 
