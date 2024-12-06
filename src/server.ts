@@ -1,7 +1,7 @@
 // Import the framework and instantiate it
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
-import fastifySwagger from '@fastify/swagger';
+import fastifySwagger from "@fastify/swagger";
 
 import path from "path";
 import { fileURLToPath } from "url";
@@ -14,7 +14,7 @@ import getPapers from "@handlers/getPapers";
 import fastSummarizeHandler from "@handlers/fastSummarize";
 import healthHandler from "@handlers/healthHandler";
 
-import { linkRoutes, LinkManagerHandlers } from '@handlers/linkManager';
+import { linkRoutes, LinkManagerHandlers } from "@handlers/linkManager";
 
 // Set up environmment variables and logging
 const envToLogger = {
@@ -35,7 +35,7 @@ type Environment = "development" | "production" | "test";
 
 const environment: Environment =
   (process.env.NODE_ENV as Environment) || "development";
-  
+
 // Set up the Fastify server
 const fastify = Fastify({
   logger: envToLogger[environment] ?? true,
@@ -79,8 +79,8 @@ fastify.post("/syncPapers", syncPapers);
 fastify.post("/health", healthHandler);
 
 // add routes for Link Management and checking
-const lmHandlers = new LinkManagerHandlers(); 
-linkRoutes(fastify, lmHandlers); 
+const lmHandlers = new LinkManagerHandlers();
+linkRoutes(fastify, lmHandlers);
 
 // Add swagger documentation if in development mode
 /*
@@ -106,7 +106,6 @@ if (environment === 'development') {
   console.log("Swagger documentation enabled");
 }
 */
-
 
 // Main section of the server
 

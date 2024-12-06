@@ -2,7 +2,7 @@ import fs from "fs-extra";
 import path from "path"; // Adjust the import path as necessary
 import { uploadFile } from "@aws/s3";
 import { synthesizeSpeechInChunks } from "@utils/polly";
-import { synthesizeSpeechInChunksOpenAI } from "@utils/openai";
+import { synthesizeOpenAISpeechForItems } from "@utils/openai";
 
 async function generateAudioFromFilteredItems(
   jsonFilePath: string
@@ -13,7 +13,7 @@ async function generateAudioFromFilteredItems(
 
     // Generate audio using synthesizeSpeechInChunks
     const { audioBuffer, audioMetadata, tocAudioMetadata } =
-      await synthesizeSpeechInChunksOpenAI(filteredItems);
+      await synthesizeOpenAISpeechForItems(filteredItems);
 
     const userBucketName = "muralirk@gmail.com";
     const fileName = "Verus";

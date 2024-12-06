@@ -11,9 +11,8 @@ function App() {
   const handleEmailChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setEmail(event.target.value);
   };
-  // const [summarizationMethod, setSummarizationMethod] =
-  //   useState<string>("ultimate");
-  const summarizationMethod = "ultimate";
+  const [summarizationMethod, setSummarizationMethod] =
+    useState<string>("ultimate");
   const [submitMessage, setSubmitMessage] = useState<string>("Generate audio");
 
   const handlePdfLinkChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -30,9 +29,9 @@ function App() {
     }
   };
 
-  // const handleMethodChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-  //   setSummarizationMethod(event.target.value);
-  // };
+  const handleMethodChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setSummarizationMethod(event.target.value);
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -82,7 +81,8 @@ function App() {
       <div className="mb-4 text-sm">
         paper2audio creates an audio version of your research paper PDF. It
         narrates all the text of the paper without summarizing it, plus
-        AI-generated summaries of any tables, figures, or code.
+        AI-generated summaries of any tables, figures, or code. Or it can also
+        generate short summaries of the entire paper.
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <input
@@ -110,19 +110,19 @@ function App() {
           placeholder="Enter your email"
           className="p-2 border rounded"
         />
-        {/* <select
+        <div className="text-sm">
+          Select the processing method you want to use:
+        </div>
+        <select
           value={summarizationMethod}
           onChange={handleMethodChange}
           className="p-2 border rounded"
         >
-          <option value="betterAbstract">Better Abstract</option>
-          <option value="twoPage">Two-page Summary</option>
-          <option value="chaptered">Chaptered Summary</option>
-          <option value="tablesAndFiguresOnly">Tables and Figures Only</option>
+          <option value="short">Short summary of the entire paper</option>
           <option value="ultimate">
-            Better Abstract + Tables and Figures Only
+            Full paper text narrated + Summarized figures, tables, and code
           </option>
-        </select> */}
+        </select>
         <div className="text-sm">
           This is a new project that we’re actively improving. The audio output
           is generally good, but not perfect. AI-generated summaries may not be

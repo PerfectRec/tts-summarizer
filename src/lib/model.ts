@@ -1,10 +1,5 @@
 interface SummarizeRequestParams {
-  summarizationMethod:
-    | "betterAbstract"
-    | "twoPage"
-    | "chaptered"
-    | "tablesAndFiguresOnly"
-    | "ultimate";
+  summarizationMethod: "short" | "ultimate";
   email?: string;
   fileName: string;
   sendEmailToUser: string;

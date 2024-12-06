@@ -197,7 +197,7 @@ export async function synthesizeOpenAISpeechWithRetries(
   throw new Error("All attempts to synthesize speech failed.");
 }
 
-export async function synthesizeSpeechInChunksOpenAI(
+export async function synthesizeOpenAISpeechForItems(
   items: Item[]
 ): Promise<AudioResult> {
   const itemAudioResults: ItemAudioResult[] = [];
@@ -299,7 +299,24 @@ export async function synthesizeSpeechInChunksOpenAI(
   };
 }
 
-async function getOpenAICompletion(
+export async function synthesizeOpenAISpeechForSummary(summaryJson: {
+  summary: string;
+}) {
+  const summaryAudioBuffer = await synthesizeOpenAISpeechWithRetries(
+    summaryJson.summary,
+    "onyx",
+    1.0
+  );
+
+  const summaryMetadata = await parseBuffer(summaryAudioBuffer);
+
+  return {
+    summaryAudioBuffer: summaryAudioBuffer,
+    summaryDuration: summaryMetadata.format.duration || 0,
+  };
+}
+
+export async function getOpenAICompletion(
   systemPrompt: string,
   userPrompt: string,
   model: string,

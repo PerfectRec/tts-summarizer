@@ -14,7 +14,7 @@ import { clearDirectory, getCurrentTimestamp } from "@utils/io";
 import { synthesizeSpeechInChunks } from "@utils/polly";
 import {
   getStructuredOpenAICompletionWithRetries,
-  synthesizeSpeechInChunksOpenAI,
+  synthesizeOpenAISpeechForItems,
 } from "@utils/openai";
 import { collapseConsecutiveLetters } from "@utils/text";
 import { processUnstructuredBuffer } from "@utils/unstructured";
@@ -1509,7 +1509,7 @@ export default async function handler(
       console.log("Subscribed user to mailing list");
 
       const { audioBuffer, audioMetadata, tocAudioMetadata } =
-        await synthesizeSpeechInChunksOpenAI(filteredItems);
+        await synthesizeOpenAISpeechForItems(filteredItems);
       console.log("Generated audio file");
 
       const audioFileUrl = await uploadFile(audioBuffer, audioFilePath);

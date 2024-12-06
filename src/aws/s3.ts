@@ -68,37 +68,47 @@ export const uploadStatus = async (
 
     if (status === "Completed" && !mock) {
       await sendSlackNotification(
-        `Completed processing "${
+        `COMPLETED ${
+          combinedData.summarizationMethod &&
+          combinedData.summarizationMethod === "ultimate"
+            ? `[full paper]`
+            : combinedData.summarizationMethod === "short"
+            ? "[short summary]"
+            : ""
+        } "${
           combinedData.extractedTitle ?? combinedData.cleanedFileName
-        }" from Email: ${
+        }" email: ${
           combinedData.email && combinedData.email !== ""
             ? combinedData.email
-            : "NoEmailProvided"
-        } and ID: ${
-          combinedData.id && combinedData.id !== ""
-            ? combinedData.id
-            : "NoIdProvided"
-        }. Check ${encodeURI(
+            : "N/A"
+        } ID: ${
+          combinedData.id && combinedData.id !== "" ? combinedData.id : "N/A"
+        }. [${encodeURI(
           `https://files.paper2audio.com/runStatus/${runId}.json`
-        )} for more details.`
+        )}]`
       );
     }
 
     if (status === "Error" && !mock) {
       await sendSlackNotification(
-        `Error (${combinedData.errorType}) processing "${
+        `ERROR [${combinedData.errorType}] ${
+          combinedData.summarizationMethod &&
+          combinedData.summarizationMethod === "ultimate"
+            ? `[full paper]`
+            : combinedData.summarizationMethod === "short"
+            ? "[short summary]"
+            : ""
+        } "${
           combinedData.extractedTitle ?? combinedData.cleanedFileName
-        }" from Email: ${
+        }" email: ${
           combinedData.email && combinedData.email !== ""
             ? combinedData.email
-            : "NoEmailProvided"
-        } and ID: ${
-          combinedData.id && combinedData.id !== ""
-            ? combinedData.id
-            : "NoIdProvided"
-        }. Check ${encodeURI(
+            : "N/A"
+        } ID: ${
+          combinedData.id && combinedData.id !== "" ? combinedData.id : "N/A"
+        }. [${encodeURI(
           `https://files.paper2audio.com/runStatus/${runId}.json`
-        )} for more details.`
+        )}]`
       );
     }
 
