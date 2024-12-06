@@ -1608,7 +1608,7 @@ export async function summarizeItemGroup(
   const RETRIES = 3;
   const MAX_TOKENS = 1024;
   const USER_PROMPT = combinedContent;
-  const SYSTEM_PROMPT = `Please provide an effective summary of the following paper. Make sure to capture the main idea of the paper.`;
+  const SYSTEM_PROMPT = `Please provide an effective summary of the following paper. Make sure to capture the main idea of the paper. Do not add any mathematical expressions or equations, only use plain text in the summary.`;
 
   const SCHEMA = z.object({
     summary: z.string(),
