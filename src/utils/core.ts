@@ -27,7 +27,7 @@ export async function determineRelevantPages(
   const FREQUENCY_PENALTY = 0;
   const RETRIES = 3;
   const USER_PROMPT = ``;
-  const SYSTEM_PROMPT = `Determine if the following page is relevant and contains on topic information. If it contains meta information about journal or publisher or some other meta information, return false. For example if it a research paper anything that is not the main content of the paper is irrelevant. Accurately judge what is and what is not relevant`;
+  const SYSTEM_PROMPT = `Determine if the following page is relevant and contains on topic information. If it contains meta information about journal or publisher or some other meta information, return false. For example if it a research paper anything that is not the main content of the paper is irrelevant. If the page contains references only, return false. However, if the page contains references and other information, return true. Accurately judge what is and what is not relevant`;
   const SCHEMA = z.object({
     isRelevant: z.boolean(),
   });
@@ -1608,7 +1608,7 @@ export async function summarizeItemGroup(
   const RETRIES = 3;
   const MAX_TOKENS = 1024;
   const USER_PROMPT = combinedContent;
-  const SYSTEM_PROMPT = `Please provide an effective summary of the following paper. Make sure to capture the main idea of the paper.`;
+  const SYSTEM_PROMPT = `Please provide an effective summary of the following paper. Make sure to capture the main idea of the paper. Do not add any mathematical expressions or equations, only use plain text in the summary.`;
 
   const SCHEMA = z.object({
     summary: z.string(),

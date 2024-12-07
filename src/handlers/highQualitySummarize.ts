@@ -11,8 +11,8 @@ import { getDB } from "db/db";
 import { sendErrorEmail, sendSuccessEmail } from "@utils/email";
 import { clearDirectory, getCurrentTimestamp } from "@utils/io";
 import {
-  synthesizeOpenAISpeechWithRetries,
-  synthesizeSpeechInChunksOpenAI,
+  synthesizeOpenAISpeechForSummary,
+  synthesizeOpenAISpeechForItems,
 } from "@utils/openai";
 import {
   determineRelevantPages,
@@ -63,6 +63,7 @@ export default async function handler(
   const receivedTime = getCurrentTimestamp();
 
   await uploadStatus(runId, "Received", {
+    summarizationMethod: summarizationMethod,
     message: "Request received",
     receivedTime: receivedTime,
     email: receivedEmail,
@@ -118,6 +119,7 @@ export default async function handler(
     } catch (error) {
       const errorTime = getCurrentTimestamp();
       uploadStatus(runId, "Error", {
+        summarizationMethod: summarizationMethod,
         email: receivedEmail,
         id: id,
         errorType: "InvalidLink",
@@ -187,7 +189,8 @@ export default async function handler(
 
   if (fileBuffer.length > 100 * 1024 * 1024) {
     const errorTime = getCurrentTimestamp();
-    uploadStatus(runId, "Error", {
+    await uploadStatus(runId, "Error", {
+      summarizationMethod: summarizationMethod,
       email: receivedEmail,
       id: id,
       errorType: "FileSizeExceeded",
@@ -251,7 +254,8 @@ export default async function handler(
     const errorTime = getCurrentTimestamp();
     console.log(error);
     logBuffer.push(`${error}`);
-    uploadStatus(runId, "Error", {
+    await uploadStatus(runId, "Error", {
+      summarizationMethod: summarizationMethod,
       email: receivedEmail,
       id: id,
       errorType: "InvalidPDFFormat",
@@ -276,6 +280,7 @@ export default async function handler(
     const firstPageUrl = await uploadFile(firstPageBuffer, firstPageFilePath);
 
     await uploadStatus(runId, "Received", {
+      summarizationMethod: summarizationMethod,
       message: "Request received",
       receivedTime: receivedTime,
       email: receivedEmail,
@@ -290,7 +295,8 @@ export default async function handler(
 
   if (pngPagesOriginal.length > 100) {
     const errorTime = getCurrentTimestamp();
-    uploadStatus(runId, "Error", {
+    await uploadStatus(runId, "Error", {
+      summarizationMethod: summarizationMethod,
       email: receivedEmail,
       id: id,
       errorType: "FileNumberOfPagesExceeded",
@@ -312,6 +318,7 @@ export default async function handler(
 
   const startedProcessingTime = getCurrentTimestamp();
   uploadStatus(runId, "Processing", {
+    summarizationMethod: summarizationMethod,
     email: receivedEmail,
     id: id,
     message: "Started processing",
@@ -370,6 +377,7 @@ export default async function handler(
       );
 
       uploadStatus(runId, "Processing", {
+        summarizationMethod: summarizationMethod,
         email: receivedEmail,
         id: id,
         message: "Finished first extraction",
@@ -436,6 +444,7 @@ export default async function handler(
       logBuffer.push(`Saved parsedItems to ${parsedItemsPath}`);
 
       uploadStatus(runId, "Processing", {
+        summarizationMethod: summarizationMethod,
         email: receivedEmail,
         id: id,
         message: "Finished main title and author extraction",
@@ -464,6 +473,7 @@ export default async function handler(
       await optimizeCitations(runId, logBuffer, filteredItems);
 
       uploadStatus(runId, "Processing", {
+        summarizationMethod: summarizationMethod,
         email: receivedEmail,
         id: id,
         message: "Finished citation processing",
@@ -497,6 +507,7 @@ export default async function handler(
       await optimizeItemsWithMath(runId, logBuffer, filteredItems);
 
       uploadStatus(runId, "Processing", {
+        summarizationMethod: summarizationMethod,
         email: receivedEmail,
         id: id,
         message: "Finished processing math",
@@ -536,6 +547,7 @@ export default async function handler(
       addSSMLBreaks(filteredItems);
 
       uploadStatus(runId, "Processing", {
+        summarizationMethod: summarizationMethod,
         email: receivedEmail,
         id: id,
         message: "Finished abbreviations and repositioning",
@@ -598,6 +610,7 @@ export default async function handler(
       );
 
       uploadStatus(runId, "Processing", {
+        summarizationMethod: summarizationMethod,
         email: receivedEmail,
         id: id,
         message: "Finished generating summary",
@@ -627,13 +640,10 @@ export default async function handler(
       logBuffer.push("PASS 14 LLM: Synthesizing speech for paper and summary");
 
       const { audioBuffer, audioMetadata, audioDuration, tocAudioMetadata } =
-        await synthesizeSpeechInChunksOpenAI(filteredItems);
+        await synthesizeOpenAISpeechForItems(filteredItems);
 
-      const summaryAudioBuffer = await synthesizeOpenAISpeechWithRetries(
-        summaryJson.summary,
-        "onyx",
-        1.0
-      );
+      const { summaryAudioBuffer, summaryDuration } =
+        await synthesizeOpenAISpeechForSummary(summaryJson);
 
       console.log("Generated audio file for paper and summary");
       logBuffer.push("Generated audio file for paper and summary");
@@ -655,6 +665,7 @@ export default async function handler(
               tableOfContents: tocAudioMetadata,
               segments: audioMetadata,
               audioDuration: audioDuration,
+              summaryAudioDuration: summaryDuration,
             },
             null,
             2
@@ -665,6 +676,7 @@ export default async function handler(
 
       const completedTime = getCurrentTimestamp();
       uploadStatus(runId, "Completed", {
+        summarizationMethod: summarizationMethod,
         email: receivedEmail,
         id: id,
         message: "Generated audio output for paper and summary",
@@ -683,6 +695,7 @@ export default async function handler(
         publishedMonth: formattedDate,
         minifiedAuthorInfo,
         audioDuration: `${audioDuration}`,
+        summaryAudioDuration: `${summaryDuration}`,
         addMethod,
         fullSourceName,
         logBuffer: logBuffer.join("________________"),
@@ -703,6 +716,281 @@ export default async function handler(
 
       const errorTime = getCurrentTimestamp();
       uploadStatus(runId, "Error", {
+        summarizationMethod: summarizationMethod,
+        email: receivedEmail,
+        id: id,
+        errorType: "CoreSystemFailure",
+        message: `Error: ${error}`,
+        errorFileUrl: s3encodedErrorFilePath,
+        uploadedFileUrl: s3pdfFilePath,
+        receivedTime: receivedTime,
+        errorTime: errorTime,
+        cleanedFileName,
+        firstPageUrl: s3firstPageFilePath,
+        addMethod,
+        fullSourceName,
+        logBuffer: logBuffer.join("________________"),
+      });
+
+      if (shouldSendEmailToUser) {
+        await sendErrorEmail(
+          receivedEmail,
+          cleanedFileName,
+          runId,
+          s3encodedErrorFilePath
+        );
+      }
+
+      console.error("Error generating audio file:", error);
+      logBuffer.push(`Error generating audio file: ${error}`);
+    }
+    /**
+     * Short summarization
+     */
+  } else if (summarizationMethod === "short") {
+    try {
+      let allItems: Item[] = [];
+      let authorInfoContents = "";
+      let mainTitleContents = "";
+
+      console.log(`PASS 0 LLM: Determining which pages are relevant`);
+      logBuffer.push(`PASS 0 LLM: Determining which pages are relevant`);
+
+      const pngPages = await determineRelevantPages(
+        runId,
+        logBuffer,
+        pngPagesOriginal
+      );
+
+      console.log(
+        `Filtered out ${
+          pngPagesOriginal.length - pngPages.length
+        } irrelevant pages`
+      );
+      logBuffer.push(
+        `Filtered out ${
+          pngPagesOriginal.length - pngPages.length
+        } irrelevant pages`
+      );
+
+      //return;
+
+      console.log(
+        `PASS 1 LLM: Extracting text from the images and summarizing special items`
+      );
+      logBuffer.push(
+        `PASS 1 LLM: Extracting text from the images and summarizing special items`
+      );
+
+      await extractJsonFromImages(
+        runId,
+        logBuffer,
+        allItems,
+        pngPages,
+        authorInfoContents,
+        mainTitleContents
+      );
+
+      uploadStatus(runId, "Processing", {
+        summarizationMethod: summarizationMethod,
+        email: receivedEmail,
+        id: id,
+        message: "Finished first extraction",
+        uploadedFileUrl: s3pdfFilePath,
+        receivedTime: receivedTime,
+        startedProcessingTime: startedProcessingTime,
+        cleanedFileName: cleanedFileName,
+        firstPageUrl: s3firstPageFilePath,
+        progress: "0.5",
+        addMethod,
+        fullSourceName,
+        logBuffer: logBuffer.join("________________"),
+      });
+
+      console.log(
+        "PASS 2 LLM: Improving author section and detecting main title."
+      );
+      logBuffer.push(
+        "PASS 2 LLM: Improving author section and detecting main title."
+      );
+
+      const { extractedTitle, extractedMonth, extractedYear, formattedDate } =
+        await extractMainTitle(runId, logBuffer, mainTitleContents, pngPages);
+
+      const improvedAuthorInfo = await improveAuthorInfo(
+        runId,
+        logBuffer,
+        allItems,
+        pngPages,
+        extractedTitle,
+        authorInfoContents
+      );
+
+      //Note this also updates allItems in place
+      const minifiedAuthorInfo = await processAuthorInfo(
+        allItems,
+        improvedAuthorInfo
+      );
+
+      console.log(
+        `Extracted info: ${extractedTitle}, ${formattedDate}, ${minifiedAuthorInfo}`
+      );
+      logBuffer.push(
+        `Extracted info: ${extractedTitle}, ${formattedDate}, ${minifiedAuthorInfo}`
+      );
+
+      console.log(
+        "PASS 3 CODE: Fixing potential issues with references and acknowledgements"
+      );
+      logBuffer.push(
+        "PASS 3 CODE: Fixing potential issues with references and acknowledgements"
+      );
+
+      processReferencesAndAcknowledgements(allItems);
+
+      console.log("PASS 4 CODE: filtering unnecessary item types");
+      logBuffer.push("PASS 4 CODE: filtering unnecessary item types");
+
+      const filteredItems = filterUnnecessaryItemTypes(allItems);
+
+      uploadStatus(runId, "Processing", {
+        summarizationMethod: summarizationMethod,
+        email: receivedEmail,
+        id: id,
+        message: "Finished main title and author extraction",
+        uploadedFileUrl: s3pdfFilePath,
+        receivedTime: receivedTime,
+        startedProcessingTime: startedProcessingTime,
+        cleanedFileName: cleanedFileName,
+        firstPageUrl: s3firstPageFilePath,
+        progress: "0.7",
+        extractedTitle,
+        publishedMonth: formattedDate,
+        minifiedAuthorInfo,
+        addMethod,
+        fullSourceName,
+        logBuffer: logBuffer.join("________________"),
+      });
+
+      console.log("PASS 5 LLM: Summarizing the entire paper");
+      logBuffer.push("PASS 5 LLM: Summarizing the entire paper");
+
+      const summaryJson = await summarizeItemGroup(
+        runId,
+        logBuffer,
+        filteredItems
+      );
+
+      const summaryPath = path.join(fileNameDir, "summary.json");
+      fs.writeFileSync(summaryPath, JSON.stringify(summaryJson, null, 2));
+      console.log("Saved summary to", summaryPath);
+      logBuffer.push(`Saved summary to ${summaryPath}`);
+
+      //return;
+
+      const summaryJsonFileUrl = await uploadFile(
+        fs.readFileSync(summaryPath),
+        summaryJsonFilePath
+      );
+
+      uploadStatus(runId, "Processing", {
+        summarizationMethod: summarizationMethod,
+        email: receivedEmail,
+        id: id,
+        message: "Finished generating summary",
+        uploadedFileUrl: s3pdfFilePath,
+        receivedTime: receivedTime,
+        startedProcessingTime: startedProcessingTime,
+        cleanedFileName: cleanedFileName,
+        firstPageUrl: s3firstPageFilePath,
+        summaryJsonUrl: s3summaryJsonFilePath,
+        progress: "0.85",
+        extractedTitle,
+        publishedMonth: formattedDate,
+        minifiedAuthorInfo,
+        addMethod,
+        fullSourceName,
+        logBuffer: logBuffer.join("________________"),
+      });
+
+      await subscribeEmail(
+        receivedEmail,
+        process.env.MAILCHIMP_AUDIENCE_ID || ""
+      );
+      console.log("Subscribed user to mailing list");
+      logBuffer.push("Subscribed user to mailing list");
+
+      console.log("PASS 6 LLM: Synthesizing speech for summary");
+      logBuffer.push("PASS 6 LLM: Synthesizing speech for summary");
+
+      const { summaryAudioBuffer, summaryDuration } =
+        await synthesizeOpenAISpeechForSummary(summaryJson);
+
+      console.log("Generated audio file for summary");
+      logBuffer.push("Generated audio file for summary");
+
+      const summaryAudioFileUrl = await uploadFile(
+        summaryAudioBuffer,
+        summaryAudioFilePath
+      );
+
+      const metadataFileUrl = await uploadFile(
+        Buffer.from(
+          JSON.stringify(
+            {
+              extractedTitle: extractedTitle,
+              extractedPublishedMonth: formattedDate,
+              extractedMinifiedAuthorInfo: minifiedAuthorInfo,
+              summaryAudioDuration: summaryDuration,
+            },
+            null,
+            2
+          )
+        ),
+        metadataFilePath
+      );
+
+      const completedTime = getCurrentTimestamp();
+      uploadStatus(runId, "Completed", {
+        summarizationMethod: summarizationMethod,
+        email: receivedEmail,
+        id: id,
+        message: "Generated audio output for summary",
+        uploadedFileUrl: s3pdfFilePath,
+        metadataFileUrl: s3metadataFilePath,
+        extractedTitle,
+        receivedTime: receivedTime,
+        startedProcessingTime: startedProcessingTime,
+        completedTime: completedTime,
+        cleanedFileName,
+        firstPageUrl: s3firstPageFilePath,
+        summaryJsonFileUrl: s3summaryJsonFilePath,
+        summaryAudioFileUrl: s3summaryAudioFilePath,
+        progress: "0.95",
+        publishedMonth: formattedDate,
+        minifiedAuthorInfo,
+        summaryAudioDuration: `${summaryDuration}`,
+        addMethod,
+        fullSourceName,
+        logBuffer: logBuffer.join("________________"),
+      });
+
+      if (shouldSendEmailToUser) {
+        await sendSuccessEmail(
+          receivedEmail,
+          cleanedFileName,
+          s3summaryAudioFilePath
+        );
+      }
+    } catch (error) {
+      const errorFileUrl = await uploadFile(
+        Buffer.from(JSON.stringify(error, Object.getOwnPropertyNames(error))),
+        errorFilePath
+      );
+
+      const errorTime = getCurrentTimestamp();
+      uploadStatus(runId, "Error", {
+        summarizationMethod: summarizationMethod,
         email: receivedEmail,
         id: id,
         errorType: "CoreSystemFailure",
@@ -733,6 +1021,7 @@ export default async function handler(
   } else {
     const errorTime = getCurrentTimestamp();
     uploadStatus(runId, "Error", {
+      summarizationMethod: summarizationMethod,
       email: receivedEmail,
       id: id,
       errorType: "SummarizationMethodNotSupported",
